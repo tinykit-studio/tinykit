@@ -97,7 +97,7 @@
 			"id": "app_title",
 			"name": "App Title",
 			"type": "text",
-			"value": "Notebook"
+			"value": "Canvas"
 		},
 		{
 			"description": "Search input placeholder",
