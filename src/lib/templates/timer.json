@@ -1,0 +1,146 @@
+{
+	"id": "timer",
+	"name": "Pomodoro Timer",
+	"description": "Focus timer with work/break cycles",
+	"preview": "lucide:timer",
+	"tags": [
+		"productivity",
+		"intermediate",
+		"interactive"
+	],
+	"frontend_code": "<script>\n\timport content from '$content'\n\n\tconst WORK_TIME = 25 * 60\n\tconst BREAK_TIME = 5 * 60\n\n\tlet time_left = $state(WORK_TIME)\n\tlet is_running = $state(false)\n\tlet is_work = $state(true)\n\tlet interval = null\n\n\tfunction toggle_timer() {\n\t\tif (is_running) {\n\t\t\tclearInterval(interval)\n\t\t\tis_running = false\n\t\t} else {\n\t\t\tis_running = true\n\t\t\tinterval = setInterval(() => {\n\t\t\t\tif (time_left > 0) {\n\t\t\t\t\ttime_left--\n\t\t\t\t} else {\n\t\t\t\t\tclearInterval(interval)\n\t\t\t\t\tis_running = false\n\t\t\t\t\tis_work = !is_work\n\t\t\t\t\ttime_left = is_work ? WORK_TIME : BREAK_TIME\n\t\t\t\t}\n\t\t\t}, 1000)\n\t\t}\n\t}\n\n\tfunction reset_timer() {\n\t\tclearInterval(interval)\n\t\tis_running = false\n\t\ttime_left = is_work ? WORK_TIME : BREAK_TIME\n\t}\n\n\tfunction format_time(seconds) {\n\t\tconst mins = Math.floor(seconds / 60)\n\t\tconst secs = seconds % 60\n\t\treturn `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`\n\t}\n\n\tlet progress = $derived.by(() =>\n\t\tis_work\n\t\t\t? ((WORK_TIME - time_left) / WORK_TIME) * 100\n\t\t\t: ((BREAK_TIME - time_left) / BREAK_TIME) * 100\n\t)\n</script>\n\n<div class=\"page\">\n\t<div class=\"container\">\n\t\t<h1>{content.app_title}</h1>\n\n\t\t<div class=\"mode-indicator\" class:break={!is_work}>\n\t\t\t{is_work ? content.work_label : content.break_label}\n\t\t</div>\n\n\t\t<div class=\"timer-circle\">\n\t\t\t<svg viewBox=\"0 0 100 100\">\n\t\t\t\t<circle class=\"bg\" cx=\"50\" cy=\"50\" r=\"45\" />\n\t\t\t\t<circle\n\t\t\t\t\tclass=\"progress\"\n\t\t\t\t\tclass:break={!is_work}\n\t\t\t\t\tcx=\"50\"\n\t\t\t\t\tcy=\"50\"\n\t\t\t\t\tr=\"45\"\n\t\t\t\t\tstroke-dasharray={2 * Math.PI * 45}\n\t\t\t\t\tstroke-dashoffset={2 * Math.PI * 45 * (1 - progress / 100)}\n\t\t\t\t/>\n\t\t\t</svg>\n\t\t\t<div class=\"time\">{format_time(time_left)}</div>\n\t\t</div>\n\n\t\t<div class=\"controls\">\n\t\t\t<button class=\"primary\" onclick={toggle_timer}>\n\t\t\t\t{is_running ? content.pause_button : content.start_button}\n\t\t\t</button>\n\t\t\t<button onclick={reset_timer}>{content.reset_button}</button>\n\t\t</div>\n\t</div>\n\t<footer class=\"footer\">built with <a\\n\\t\\t\\thref=\"https://tinykit.studio\"\\n\\t\\t\\ttarget=\"_blank\">tinykit.studio</a></footer>\n</div>\n\n<style>\n\t.page {\n\t\tbackground: var(--page-background, #f5f5f5);\n\t\tmin-height: 100vh;\n\t\tpadding: 2rem;\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tfont-family: var(--body-font, system-ui, sans-serif);\n\t}\n\n\t.container {\n\t\tmax-width: 350px;\n\t\ttext-align: center;\n\t\tbackground: var(--card-background, #ffffff);\n\t\tpadding: 2rem;\n\t\tborder-radius: var(--card-radius, 16px);\n\t\tbox-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);\n\t\tborder: 1px solid var(--border-color, #e5e5e5);\n\t}\n\n\th1 {\n\t\tcolor: var(--heading-text-color, #1a1a1a);\n\t\tmargin-bottom: 1rem;\n\t\tfont-size: 1.5rem;\n\t\tfont-weight: 600;\n\t}\n\n\t.mode-indicator {\n\t\tbackground: var(--work-color, #3b82f6);\n\t\tcolor: #ffffff;\n\t\tpadding: 6px 16px;\n\t\tborder-radius: var(--badge-radius, 20px);\n\t\tdisplay: inline-block;\n\t\tmargin-bottom: 2rem;\n\t\tfont-weight: 500;\n\t\tfont-size: 0.875rem;\n\t}\n\n\t.mode-indicator.break {\n\t\tbackground: var(--break-color, #10b981);\n\t}\n\n\t.timer-circle {\n\t\tposition: relative;\n\t\twidth: 220px;\n\t\theight: 220px;\n\t\tmargin: 0 auto 2rem;\n\t}\n\n\t.timer-circle svg {\n\t\ttransform: rotate(-90deg);\n\t}\n\n\t.timer-circle circle {\n\t\tfill: none;\n\t\tstroke-width: 6;\n\t}\n\n\t.timer-circle .bg {\n\t\tstroke: var(--track-color, #e5e5e5);\n\t}\n\n\t.timer-circle .progress {\n\t\tstroke: var(--work-color, #3b82f6);\n\t\tstroke-linecap: round;\n\t\ttransition: stroke-dashoffset 0.5s ease;\n\t}\n\n\t.timer-circle .progress.break {\n\t\tstroke: var(--break-color, #10b981);\n\t}\n\n\t.time {\n\t\tposition: absolute;\n\t\ttop: 50%;\n\t\tleft: 50%;\n\t\ttransform: translate(-50%, -50%);\n\t\tfont-size: 3rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--timer-text-color, #1a1a1a);\n\t\tfont-family: 'SF Mono', 'Consolas', monospace;\n\t}\n\n\t.controls {\n\t\tdisplay: flex;\n\t\tgap: 0.75rem;\n\t\tjustify-content: center;\n\t}\n\n\tbutton {\n\t\tpadding: 12px 28px;\n\t\tborder: 1px solid var(--border-color, #e5e5e5);\n\t\tborder-radius: var(--button-radius, 8px);\n\t\tfont-size: 0.95rem;\n\t\tfont-weight: 500;\n\t\tcursor: pointer;\n\t\tbackground: var(--secondary-button-background, #f5f5f5);\n\t\tcolor: var(--body-text-color, #1a1a1a);\n\t\ttransition: all 0.15s;\n\t}\n\n\tbutton.primary {\n\t\tbackground: var(--button-background, #3b82f6);\n\t\tcolor: #ffffff;\n\t\tborder-color: var(--button-background, #3b82f6);\n\t}\n\n\tbutton:hover {\n\t\topacity: 0.9;\n\t}\n\n\t.footer {\n\t\tmargin-top: 2rem;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--secondary-text-color, #9ca3af);\n\t}\n\n\t.footer a {\n\t\tcolor: inherit;\n\t\ttext-decoration: none;\n\t}\n\n\t.footer a:hover {\n\t\ttext-decoration: underline;\n\t}\n</style>",
+	"design": [
+		{
+			"id": "body-font",
+			"name": "Body Font",
+			"css_var": "--body-font",
+			"value": "system-ui, sans-serif",
+			"type": "font",
+			"description": "Main font for all text"
+		},
+		{
+			"id": "page-background",
+			"name": "Page Background",
+			"css_var": "--page-background",
+			"value": "#f5f5f5",
+			"type": "color",
+			"description": "Overall page background"
+		},
+		{
+			"id": "card-background",
+			"name": "Card Background",
+			"css_var": "--card-background",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Container background"
+		},
+		{
+			"id": "border-color",
+			"name": "Border Color",
+			"css_var": "--border-color",
+			"value": "#e5e5e5",
+			"type": "color",
+			"description": "Border and divider color"
+		},
+		{
+			"id": "heading-text-color",
+			"name": "Heading Text Color",
+			"css_var": "--heading-text-color",
+			"value": "#1a1a1a",
+			"type": "color",
+			"description": "Color for headings"
+		},
+		{
+			"id": "timer-text-color",
+			"name": "Timer Text Color",
+			"css_var": "--timer-text-color",
+			"value": "#1a1a1a",
+			"type": "color",
+			"description": "Color for timer numbers"
+		},
+		{
+			"id": "work-color",
+			"name": "Work Color",
+			"css_var": "--work-color",
+			"value": "#3b82f6",
+			"type": "color",
+			"description": "Color for work mode"
+		},
+		{
+			"id": "break-color",
+			"name": "Break Color",
+			"css_var": "--break-color",
+			"value": "#10b981",
+			"type": "color",
+			"description": "Color for break mode"
+		},
+		{
+			"id": "track-color",
+			"name": "Track Color",
+			"css_var": "--track-color",
+			"value": "#e5e5e5",
+			"type": "color",
+			"description": "Background track of progress ring"
+		},
+		{
+			"id": "button-background",
+			"name": "Button Background",
+			"css_var": "--button-background",
+			"value": "#3b82f6",
+			"type": "color",
+			"description": "Primary button color"
+		},
+		{
+			"id": "button-radius",
+			"name": "Button Radius",
+			"css_var": "--button-radius",
+			"value": "8px",
+			"type": "radius",
+			"description": "Roundness of buttons"
+		}
+	],
+	"content": [
+		{
+			"id": "app_title",
+			"name": "App Title",
+			"type": "text",
+			"value": "Pomodoro Timer",
+			"description": "Main heading"
+		},
+		{
+			"id": "work_label",
+			"name": "Work Label",
+			"type": "text",
+			"value": "Work Time",
+			"description": "Label for work mode"
+		},
+		{
+			"id": "break_label",
+			"name": "Break Label",
+			"type": "text",
+			"value": "Break Time",
+			"description": "Label for break mode"
+		},
+		{
+			"id": "start_button",
+			"name": "Start Button",
+			"type": "text",
+			"value": "Start",
+			"description": "Start button label"
+		},
+		{
+			"id": "pause_button",
+			"name": "Pause Button",
+			"type": "text",
+			"value": "Pause",
+			"description": "Pause button label"
+		},
+		{
+			"id": "reset_button",
+			"name": "Reset Button",
+			"type": "text",
+			"value": "Reset",
+			"description": "Reset button label"
+		}
+	]
+}

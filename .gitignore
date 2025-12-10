@@ -1,0 +1,46 @@
+.DS_Store
+node_modules
+/build
+/.svelte-kit
+/package
+.env
+.env.*
+!.env.example
+!.env.railway
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Workspace (user project files)
+/workspace/*
+!/workspace/example.js
+!/workspace/spec.md
+!/workspace/data/
+/workspace/data/*.json
+!/workspace/starters/
+!/workspace/demo-project/
+/workspace/demo-project/*
+!/workspace/demo-project/api/
+!/workspace/demo-project/background/
+!/workspace/demo-project/scheduled/
+!/workspace/demo-project/src/
+/workspace/demo-project/src/*
+!/workspace/demo-project/src/lib/
+!/workspace/demo-project/*.config.js
+!/workspace/demo-project/*.html
+!/workspace/demo-project/package.json
+!/workspace/demo-project/package-lock.json
+/workspace/demo-project/node_modules/
+/workspace/demo-project/dist/
+
+static
+
+# Local directories
+/palacms/
+
+# PocketBase binary and data (downloaded/generated at runtime)
+/pocketbase/pocketbase
+/pocketbase/pb_data/
+/pocketbase/CHANGELOG.md
+/pocketbase/LICENSE.md
+# Keep migrations in git
+!/pocketbase/pb_migrations/

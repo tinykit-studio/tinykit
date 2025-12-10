@@ -1,0 +1,198 @@
+{
+	"id": "notes",
+	"name": "Notes",
+	"description": "Note-taking app with persistent data and search",
+	"preview": "lucide:file-text",
+	"tags": [
+		"productivity",
+		"intermediate",
+		"data"
+	],
+	"frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet notes = $state([])\n\tlet selected_id = $state(null)\n\tlet search = $state('')\n\tlet loading = $state(true)\n\tlet editor_el = $state(null)\n\tlet pell_editor = null\n\tlet save_timeout = null\n\tlet last_note_id = null\n\tlet is_updating = false\n\tlet pell_ready = $state(false)\n\n\t// Mobile state\n\tlet show_sidebar = $state(true)\n\tlet is_mobile = $state(false)\n\n\t$effect(() => {\n\t\treturn data.notes.subscribe(items => {\n\t\t\tnotes = items\n\t\t\tif (!items.find(n => n.id === selected_id)) {\n\t\t\t\tselected_id = items[0]?.id ?? null\n\t\t\t}\n\t\t\tloading = false\n\t\t})\n\t})\n\n\t// Load Pell via script tag\n\t$effect(() => {\n\t\tif (typeof window === 'undefined') return\n\t\tif (window.pell) { pell_ready = true; return }\n\t\t\n\t\tconst script = document.createElement('script')\n\t\tscript.src = 'https://cdn.jsdelivr.net/npm/pell@1.0.6/dist/pell.min.js'\n\t\tscript.onload = () => { pell_ready = true }\n\t\tdocument.head.appendChild(script)\n\t})\n\n\t// Check if mobile\n\t$effect(() => {\n\t\tif (typeof window === 'undefined') return\n\t\tconst check = () => {\n\t\t\tis_mobile = window.innerWidth < 768\n\t\t\tif (!is_mobile) show_sidebar = true\n\t\t}\n\t\tcheck()\n\t\twindow.addEventListener('resize', check)\n\t\treturn () => window.removeEventListener('resize', check)\n\t})\n\n\t// Initialize Pell when ready\n\t$effect(() => {\n\t\tif (!pell_ready || !editor_el || !selected_note) return\n\t\tif (typeof window === 'undefined' || !window.pell) return\n\t\t\n\t\tif (!pell_editor) {\n\t\t\tpell_editor = window.pell.init({\n\t\t\t\telement: editor_el,\n\t\t\t\tonChange: (html) => {\n\t\t\t\t\tif (!is_updating) debounced_save(html)\n\t\t\t\t},\n\t\t\t\tactions: ['bold', 'italic', 'underline', 'strikethrough', 'heading1', 'heading2', 'olist', 'ulist', 'quote', 'code', 'link']\n\t\t\t})\n\t\t}\n\n\t\tif (last_note_id !== selected_note.id) {\n\t\t\tis_updating = true\n\t\t\tpell_editor.content.innerHTML = selected_note.content || ''\n\t\t\tlast_note_id = selected_note.id\n\t\t\tsetTimeout(() => is_updating = false, 0)\n\t\t}\n\t})\n\n\tlet selected_note = $derived.by(() => notes.find(n => n.id === selected_id))\n\n\tlet filtered_notes = $derived.by(() =>\n\t\tnotes.filter(n =>\n\t\t\tn.title.toLowerCase().includes(search.toLowerCase()) ||\n\t\t\t(n.content || '').toLowerCase().includes(search.toLowerCase())\n\t\t).sort((a, b) => new Date(b.updated) - new Date(a.updated))\n\t)\n\n\tasync function create_note() {\n\t\tconst new_note = await data.notes.create({\n\t\t\ttitle: 'Untitled',\n\t\t\tcontent: '',\n\t\t\tupdated: new Date().toISOString()\n\t\t})\n\t\tselected_id = new_note.id\n\t\tif (is_mobile) show_sidebar = false\n\t}\n\n\tasync function update_note(field, value) {\n\t\tif (!selected_id) return\n\t\tawait data.notes.update(selected_id, { [field]: value, updated: new Date().toISOString() })\n\t}\n\n\tfunction debounced_save(html) {\n\t\tif (save_timeout) clearTimeout(save_timeout)\n\t\tsave_timeout = setTimeout(() => {\n\t\t\tif (selected_id) update_note('content', html)\n\t\t}, 500)\n\t}\n\n\tasync function delete_note(id) {\n\t\tawait data.notes.delete(id)\n\t\tif (is_mobile) show_sidebar = true\n\t}\n\n\tfunction select_note(id) {\n\t\tselected_id = id\n\t\tif (is_mobile) show_sidebar = false\n\t}\n\n\tfunction go_back() {\n\t\tshow_sidebar = true\n\t}\n\n\tfunction format_date(ts) {\n\t\tif (!ts) return ''\n\t\treturn new Date(ts).toLocaleDateString()\n\t}\n</script>\n\n<svelte:head>\n\t<link href=\"https://cdn.jsdelivr.net/npm/pell@1.0.6/dist/pell.min.css\" rel=\"stylesheet\" />\n</svelte:head>\n\n<div class=\"app\">\n\t<div class=\"sidebar\" class:hide={is_mobile && !show_sidebar}>\n\t\t<div class=\"sidebar-header\">\n\t\t\t<input type=\"text\" bind:value={search} placeholder={content.search_placeholder} />\n\t\t\t<button onclick={create_note}><Icon icon=\"lucide:plus\" width={18} /></button>\n\t\t</div>\n\n\t\t<div class=\"notes-list\">\n\t\t\t{#if loading}\n\t\t\t\t<p class=\"empty\">{content.loading_message}</p>\n\t\t\t{:else if filtered_notes.length === 0}\n\t\t\t\t<p class=\"empty\">{content.empty_sidebar}</p>\n\t\t\t{:else}\n\t\t\t\t{#each filtered_notes as note (note.id)}\n\t\t\t\t\t<button\\n\\t\\t\\t\\t\\t\\tclass=\"note-item\"\\n\\t\\t\\t\\t\\t\\tclass:selected={note.id === selected_id}\\n\\t\\t\\t\\t\\t\\tonclick={() => select_note(note.id)}>\n\t\t\t\t\t\t<span class=\"note-title\">{note.title || 'Untitled'}</span>\n\t\t\t\t\t\t<span class=\"note-date\">{format_date(note.updated)}</span>\n\t\t\t\t\t</button>\n\t\t\t\t{/each}\n\t\t\t{/if}\n\t\t</div>\n\t\t<footer class=\"footer\">built with <a\\n\\t\\t\\thref=\"https://tinykit.studio\"\\n\\t\\t\\ttarget=\"_blank\">tinykit.studio</a></footer>\n\t</div>\n\n\t<div class=\"editor\">\n\t\t{#if selected_note}\n\t\t\t<div class=\"editor-header\">\n\t\t\t\t{#if is_mobile}\n\t\t\t\t\t<button class=\"back-btn\" onclick={go_back}><Icon icon=\"lucide:chevron-left\" width={20} /></button>\n\t\t\t\t{/if}\n\t\t\t\t<input\\n\\t\\t\\t\\t\\ttype=\"text\"\\n\\t\\t\\t\\t\\tclass=\"title-input\"\\n\\t\\t\\t\\t\\tvalue={selected_note.title}\\n\\t\\t\\t\\t\\toninput={(e) => update_note('title', e.target.value)}\\n\\t\\t\\t\\t\\tplaceholder={content.title_placeholder} />\n\t\t\t\t<button\\n\\t\\t\\t\\t\\tclass=\"delete-btn\"\\n\\t\\t\\t\\t\\tonclick={() => delete_note(selected_note.id)}\\n\\t\\t\\t\\t\\ttitle=\"Delete note\"><Icon icon=\"lucide:trash-2\" width={18} /></button>\n\t\t\t</div>\n\n\t\t\t<div class=\"editor-container\">\n\t\t\t\t<div bind:this={editor_el} class=\"pell-wrapper\"></div>\n\t\t\t</div>\n\t\t{:else}\n\t\t\t<div class=\"empty-state\">\n\t\t\t\t{#if is_mobile}\n\t\t\t\t\t<button class=\"back-btn-large\" onclick={go_back}><Icon icon=\"lucide:chevron-left\" width={20} /><span>Notes</span></button>\n\t\t\t\t{/if}\n\t\t\t\t<p>{content.empty_editor}</p>\n\t\t\t</div>\n\t\t{/if}\n\t</div>\n</div>\n\n<style>\n\t.app { display: flex; height: 100vh; height: 100dvh; background: var(--page-background); font-family: var(--body-font); overflow: hidden; }\n\t\n\t.sidebar { width: 280px; background: var(--sidebar-background); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; flex-shrink: 0; }\n\t.sidebar-header { display: flex; gap: 8px; padding: 16px; border-bottom: 1px solid var(--border-color); }\n\t.sidebar-header input { flex: 1; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--input-background); color: var(--body-text-color); font-size: 16px; }\n\t.sidebar-header input:focus { outline: none; border-color: var(--accent-color); }\n\t.sidebar-header input::placeholder { color: var(--placeholder-color); }\n\t.sidebar-header button { width: 36px; height: 36px; border: none; border-radius: 6px; background: var(--accent-color); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; }\n\t\n\t.notes-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }\n\t.note-item { width: 100%; padding: 14px 16px; border: none; border-bottom: 1px solid var(--border-color); background: transparent; text-align: left; cursor: pointer; }\n\t.note-item:hover { background: var(--hover-background); }\n\t.note-item.selected { background: var(--hover-background); border-left: 3px solid var(--accent-color); padding-left: 13px; }\n\t.note-title { display: block; color: var(--body-text-color); font-weight: 500; font-size: 15px; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }\n\t.note-date { color: var(--muted-color); font-size: 13px; }\n\t\n\t.editor { flex: 1; display: flex; flex-direction: column; background: var(--editor-background); min-width: 0; }\n\t.editor-header { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border-color); }\n\t.back-btn { width: 36px; height: 36px; border: none; border-radius: 6px; background: transparent; color: var(--accent-color); cursor: pointer; display: flex; align-items: center; justify-content: center; margin-left: -8px; }\n\t.back-btn-large { display: flex; align-items: center; gap: 4px; padding: 8px 12px; border: none; background: transparent; color: var(--accent-color); font-size: 16px; cursor: pointer; margin-bottom: 16px; }\n\t.title-input { flex: 1; font-size: 18px; font-weight: 600; padding: 8px 0; border: none; background: transparent; color: var(--body-text-color); min-width: 0; }\n\t.title-input:focus { outline: none; }\n\t.title-input::placeholder { color: var(--placeholder-color); }\n\t.delete-btn { width: 36px; height: 36px; border: none; border-radius: 6px; background: transparent; color: var(--muted-color); cursor: pointer; display: flex; align-items: center; justify-content: center; }\n\t.delete-btn:hover { background: #fef2f2; color: #dc2626; }\n\n\t.editor-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; }\n\n\t/* Pell overrides */\n\t.pell-wrapper { flex: 1; display: flex; flex-direction: column; }\n\t.pell-wrapper :global(.pell) { flex: 1; display: flex; flex-direction: column; border: none; }\n\t.pell-wrapper :global(.pell-actionbar) { border-bottom: 1px solid var(--border-color); background: var(--toolbar-background); padding: 8px; }\n\t.pell-wrapper :global(.pell-button) { background: transparent; border: none; border-radius: 4px; width: 32px; height: 32px; cursor: pointer; color: var(--muted-color); }\n\t.pell-wrapper :global(.pell-button:hover) { background: var(--hover-background); }\n\t.pell-wrapper :global(.pell-button-selected) { background: var(--hover-background); color: var(--accent-color); }\n\t.pell-wrapper :global(.pell-content) { flex: 1; padding: 16px; font-size: 16px; line-height: 1.7; color: var(--body-text-color); overflow-y: auto; -webkit-overflow-scrolling: touch; }\n\t.pell-wrapper :global(.pell-content:focus) { outline: none; }\n\t.pell-wrapper :global(.pell-content h1) { font-size: 1.6em; font-weight: 700; margin: 0.5em 0; }\n\t.pell-wrapper :global(.pell-content h2) { font-size: 1.3em; font-weight: 600; margin: 0.5em 0; }\n\t.pell-wrapper :global(.pell-content blockquote) { border-left: 3px solid var(--accent-color); padding-left: 1em; margin: 1em 0; color: var(--muted-color); }\n\t.pell-wrapper :global(.pell-content pre) { background: var(--code-background); padding: 12px; border-radius: 6px; overflow-x: auto; }\n\t\n\t.empty-state, .empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted-color); padding: 1rem; }\n\t.footer { padding: 12px 16px; font-size: 12px; color: var(--muted-color); text-align: center; border-top: 1px solid var(--border-color); }\n\t.footer a { color: inherit; text-decoration: none; }\n\n\t@media (max-width: 767px) {\n\t\t.sidebar { position: absolute; inset: 0; width: 100%; z-index: 50; transform: translateX(0); transition: transform 0.25s ease-out; }\n\t\t.sidebar.hide { transform: translateX(-100%); pointer-events: none; }\n\t\t.editor { position: absolute; inset: 0; width: 100%; }\n\t\t.editor-header { padding-top: max(12px, env(safe-area-inset-top)); }\n\t\t.sidebar-header { padding-top: max(16px, env(safe-area-inset-top)); }\n\t}\n\n\t@media (min-width: 1024px) {\n\t\t.sidebar { width: 320px; }\n\t\t.pell-wrapper :global(.pell-content) { padding: 24px 32px; max-width: 720px; }\n\t}\n</style>",
+	"design": [
+		{
+			"id": "body-font",
+			"name": "Body Font",
+			"css_var": "--body-font",
+			"value": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+			"type": "font",
+			"description": "Main font"
+		},
+		{
+			"id": "page-background",
+			"name": "Page Background",
+			"css_var": "--page-background",
+			"value": "#f8f9fa",
+			"type": "color",
+			"description": "Page background"
+		},
+		{
+			"id": "sidebar-background",
+			"name": "Sidebar Background",
+			"css_var": "--sidebar-background",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Sidebar background"
+		},
+		{
+			"id": "editor-background",
+			"name": "Editor Background",
+			"css_var": "--editor-background",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Editor background"
+		},
+		{
+			"id": "toolbar-background",
+			"name": "Toolbar Background",
+			"css_var": "--toolbar-background",
+			"value": "#fafbfc",
+			"type": "color",
+			"description": "Toolbar background"
+		},
+		{
+			"id": "border-color",
+			"name": "Border Color",
+			"css_var": "--border-color",
+			"value": "#e5e7eb",
+			"type": "color",
+			"description": "Borders"
+		},
+		{
+			"id": "body-text-color",
+			"name": "Text Color",
+			"css_var": "--body-text-color",
+			"value": "#1f2937",
+			"type": "color",
+			"description": "Body text"
+		},
+		{
+			"id": "muted-color",
+			"name": "Muted Color",
+			"css_var": "--muted-color",
+			"value": "#6b7280",
+			"type": "color",
+			"description": "Secondary text"
+		},
+		{
+			"id": "placeholder-color",
+			"name": "Placeholder Color",
+			"css_var": "--placeholder-color",
+			"value": "#9ca3af",
+			"type": "color",
+			"description": "Placeholders"
+		},
+		{
+			"id": "input-background",
+			"name": "Input Background",
+			"css_var": "--input-background",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Input fields"
+		},
+		{
+			"id": "hover-background",
+			"name": "Hover Background",
+			"css_var": "--hover-background",
+			"value": "#f3f4f6",
+			"type": "color",
+			"description": "Hover states"
+		},
+		{
+			"id": "accent-color",
+			"name": "Accent Color",
+			"css_var": "--accent-color",
+			"value": "#2563eb",
+			"type": "color",
+			"description": "Accent color"
+		},
+		{
+			"id": "code-background",
+			"name": "Code Background",
+			"css_var": "--code-background",
+			"value": "#f3f4f6",
+			"type": "color",
+			"description": "Code blocks"
+		}
+	],
+	"content": [
+		{
+			"id": "search_placeholder",
+			"name": "Search Placeholder",
+			"type": "text",
+			"value": "Search notes...",
+			"description": "Placeholder in search input"
+		},
+		{
+			"id": "title_placeholder",
+			"name": "Title Placeholder",
+			"type": "text",
+			"value": "Note title",
+			"description": "Placeholder for note title"
+		},
+		{
+			"id": "content_placeholder",
+			"name": "Content Placeholder",
+			"type": "text",
+			"value": "Start writing...",
+			"description": "Placeholder for note content"
+		},
+		{
+			"id": "empty_sidebar",
+			"name": "Empty Sidebar",
+			"type": "text",
+			"value": "No notes yet",
+			"description": "Message when no notes in sidebar"
+		},
+		{
+			"id": "empty_editor",
+			"name": "Empty Editor",
+			"type": "text",
+			"value": "Select a note or create a new one",
+			"description": "Message when no note selected"
+		},
+		{
+			"id": "loading_message",
+			"name": "Loading Message",
+			"type": "text",
+			"value": "Loading...",
+			"description": "Shown while loading"
+		}
+	],
+	"data": {
+		"notes": {
+			"schema": [
+				{
+					"name": "id",
+					"type": "text"
+				},
+				{
+					"name": "title",
+					"type": "text"
+				},
+				{
+					"name": "content",
+					"type": "text"
+				},
+				{
+					"name": "updated",
+					"type": "text"
+				}
+			],
+			"records": [
+				{
+					"id": "m4h8z",
+					"title": "Welcome to Notes",
+					"content": "<p>This is your personal note-taking app. Create, edit, and organize your thoughts.</p><h2>Features</h2><ul><li>Search through all your notes</li><li>Auto-saves as you type</li><li>Clean, distraction-free interface</li><li>Rich text formatting</li></ul>",
+					"updated": "2024-12-06T10:00:00Z"
+				},
+				{
+					"id": "b2k6x",
+					"title": "Quick Tips",
+					"content": "<p>Use the toolbar above to format your text. Your notes are saved automatically as you type.</p>",
+					"updated": "2024-12-05T10:00:00Z"
+				}
+			]
+		}
+	}
+}

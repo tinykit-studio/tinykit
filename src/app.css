@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+	/* Legacy vars */
+	--bg-primary: #0d0d0d;
+	--bg-secondary: #1a1a1a;
+	--bg-tertiary: #2a2a2a;
+	--text-primary: #ffffff;
+	--text-secondary: #a0a0a0;
+	--accent: #3b82f6;
+	--border: #333333;
+
+	/* Builder theme (customizable) */
+	--builder-bg-primary: #0d0d0d;
+	--builder-bg-secondary: #1e1e1e;
+	--builder-bg-tertiary: #2a2a2a;
+	--builder-bg-hover: #333333;
+	--builder-accent: #22c55e;
+	--builder-accent-hover: #16a34a;
+	--builder-text-primary: #ffffff;
+	--builder-text-secondary: #999999;
+	--builder-text-muted: #666666;
+	--builder-border: #2a2a2a;
+
+	/* Tool button colors - accent-derived variations */
+	/* Base accent is orange (24° hue). These shift hue while maintaining cohesion */
+	--tool-code: #f97316;
+	/* orange - primary accent (code/default) */
+	--tool-content: #22c55e;
+	/* green - shifted +120° (content) */
+	--tool-design: #a855f7;
+	/* purple (design) */
+	--tool-data: #06b6d4;
+	/* cyan (data) - clearly distinct from purple */
+	--tool-success: #10b981;
+	/* emerald - confirmations */
+
+	/* shadcn/ui theme (dark) */
+	--background: 0 0% 4%;
+	--foreground: 0 0% 98%;
+	--card: 0 0% 7%;
+	--card-foreground: 0 0% 98%;
+	--popover: 0 0% 7%;
+	--popover-foreground: 0 0% 98%;
+	--primary: 217 91% 60%;
+	--primary-foreground: 0 0% 100%;
+	--secondary: 0 0% 15%;
+	--secondary-foreground: 0 0% 98%;
+	--muted: 0 0% 15%;
+	--muted-foreground: 0 0% 64%;
+	--accent: 0 0% 15%;
+	--accent-foreground: 0 0% 98%;
+	--destructive: 0 84% 60%;
+	--destructive-foreground: 0 0% 98%;
+	--border: 0 0% 20%;
+	--input: 0 0% 20%;
+	--ring: 217 91% 60%;
+	--radius: 0.25rem;
+}
+
+html, body {
+	margin: 0;
+	padding: 0;
+	background-color: var(--bg-primary);
+	color: var(--text-primary);
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+/* iOS safe area support */
+.safe-area-top {
+	padding-top: env(safe-area-inset-top);
+}
+
+.safe-area-bottom {
+	padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Dynamic viewport height for iOS - accounts for browser chrome */
+.h-dvh {
+	height: 100dvh;
+}
+
+/* Prevent page scroll on builder pages (full-screen app) */
+html.no-scroll,
+html.no-scroll body {
+	height: 100%;
+	overflow: hidden;
+	/* Prevent iOS bounce scroll */
+	overscroll-behavior: none;
+	/* Disable pull-to-refresh */
+	-webkit-overflow-scrolling: touch;
+}
+
+/* Allow scrolling within specific containers */
+html.no-scroll .overflow-auto,
+html.no-scroll .overflow-y-auto,
+html.no-scroll .overflow-x-auto,
+html.no-scroll .overflow-y-scroll,
+html.no-scroll .overflow-x-scroll {
+	touch-action: pan-x pan-y;
+	-webkit-overflow-scrolling: touch;
+}
+
+* {
+	box-sizing: border-box;
+}

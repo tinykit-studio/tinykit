@@ -1,0 +1,19 @@
+# Ignore local development files
+node_modules/
+.svelte-kit/
+build/
+.env
+.env.*
+!.env.example
+
+# Ignore local Pocketbase data (will be on volume in production)
+pocketbase/pb_data/
+
+# Ignore development artifacts
+*.log
+.DS_Store
+.vscode/
+.idea/
+
+# Ignore workspace (user projects - will be on volume)
+workspace/

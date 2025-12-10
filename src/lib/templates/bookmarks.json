@@ -1,0 +1,253 @@
+{
+	"id": "bookmarks",
+	"name": "Bookmark Manager",
+	"description": "Save and organize your favorite links",
+	"preview": "lucide:bookmark",
+	"tags": [
+		"productivity",
+		"intermediate",
+		"data"
+	],
+	"frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport { flip } from 'svelte/animate'\n\timport { proxy } from '$tinykit'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet bookmarks = $state([])\n\tlet loading = $state(true)\n\tlet search = $state('')\n\tlet filter_tag = $state('')\n\tlet show_form = $state(false)\n\tlet fetching_meta = $state(false)\n\t\n\t// Form state\n\tlet new_url = $state('')\n\tlet new_title = $state('')\n\tlet new_description = $state('')\n\tlet new_tags = $state('')\n\tlet new_favicon = $state('')\n\n\t// Drag state\n\tlet dragging_id = $state(null)\n\tlet drag_over_id = $state(null)\n\n\t$effect(() => {\n\t\treturn data.bookmarks.subscribe(items => {\n\t\t\tbookmarks = items.sort((a, b) => (a.order ?? 999) - (b.order ?? 999))\n\t\t\tloading = false\n\t\t})\n\t})\n\n\tlet all_tags = $derived.by(() => {\n\t\tconst tags = new Set()\n\t\tbookmarks.forEach(b => {\n\t\t\tif (b.tags) {\n\t\t\t\tb.tags.split(',').forEach(t => tags.add(t.trim()))\n\t\t\t}\n\t\t})\n\t\treturn Array.from(tags).sort()\n\t})\n\n\tlet filtered_bookmarks = $derived.by(() => {\n\t\treturn bookmarks.filter(b => {\n\t\t\tconst matches_search = !search || \n\t\t\t\tb.title?.toLowerCase().includes(search.toLowerCase()) ||\n\t\t\t\tb.url?.toLowerCase().includes(search.toLowerCase()) ||\n\t\t\t\tb.description?.toLowerCase().includes(search.toLowerCase())\n\t\t\t\n\t\t\tconst matches_tag = !filter_tag || \n\t\t\t\t(b.tags && b.tags.split(',').map(t => t.trim()).includes(filter_tag))\n\t\t\t\n\t\t\treturn matches_search && matches_tag\n\t\t})\n\t})\n\n\tfunction get_domain(url) {\n\t\ttry {\n\t\t\treturn new URL(url).hostname.replace('www.', '')\n\t\t} catch {\n\t\t\treturn url\n\t\t}\n\t}\n\n\tasync function add_bookmark() {\n\t\tif (!new_url.trim()) return\n\t\t\n\t\tawait data.bookmarks.create({\n\t\t\tid: crypto.randomUUID(),\n\t\t\turl: new_url.trim(),\n\t\t\ttitle: new_title.trim() || get_domain(new_url),\n\t\t\tdescription: new_description.trim(),\n\t\t\ttags: new_tags.trim(),\n\t\t\tfavicon: new_favicon || new URL(new_url.trim()).origin + '/favicon.ico',\n\t\t\torder: bookmarks.length,\n\t\t\tcreated_at: new Date().toISOString()\n\t\t})\n\t\t\n\t\tnew_url = ''\n\t\tnew_title = ''\n\t\tnew_description = ''\n\t\tnew_tags = ''\n\t\tnew_favicon = ''\n\t\tshow_form = false\n\t}\n\n\tasync function delete_bookmark(id) {\n\t\tawait data.bookmarks.delete(id)\n\t}\n\n\tfunction handle_keydown(e) {\n\t\tif (e.key === 'Enter' && e.metaKey) add_bookmark()\n\t\tif (e.key === 'Escape') show_form = false\n\t}\n\n\tasync function handle_url_paste(e) {\n\t\tconst pasted = e.clipboardData?.getData('text') || ''\n\t\tif (!pasted.match(/^https?:\\/\\//)) return\n\t\tif (fetching_meta) return\n\t\t\n\t\tsetTimeout(async () => {\n\t\t\ttry {\n\t\t\t\tfetching_meta = true\n\t\t\t\tconst html = await proxy.text(pasted)\n\t\t\t\tconst doc = new DOMParser().parseFromString(html, 'text/html')\n\t\t\t\t\n\t\t\t\tconst title = doc.querySelector('meta[property=\"og:title\"]')?.content || doc.querySelector('title')?.textContent\n\t\t\t\tconst desc = doc.querySelector('meta[property=\"og:description\"]')?.content || doc.querySelector('meta[name=\"description\"]')?.content\n\t\t\t\tconst icon = doc.querySelector('link[rel=\"icon\"]')?.href || doc.querySelector('link[rel=\"shortcut icon\"]')?.href || doc.querySelector('link[rel*=\"icon\"]')?.href\n\t\t\t\t\n\t\t\t\tif (title && !new_title) new_title = title.trim()\n\t\t\t\tif (desc && !new_description) new_description = desc.trim()\n\t\t\t\tif (icon) {\n\t\t\t\t\tconst base = new URL(pasted)\n\t\t\t\t\tnew_favicon = icon.startsWith('http') ? icon : new URL(icon, base.origin).href\n\t\t\t\t} else {\n\t\t\t\t\tnew_favicon = new URL(pasted).origin + '/favicon.ico'\n\t\t\t\t}\n\t\t\t} catch (err) {\n\t\t\t\tconsole.warn('Failed to fetch metadata:', err)\n\t\t\t} finally {\n\t\t\t\tfetching_meta = false\n\t\t\t}\n\t\t}, 100)\n\t}\n\n\tfunction handle_drag_start(e, id) {\n\t\tdragging_id = id\n\t\te.dataTransfer.effectAllowed = 'move'\n\t}\n\n\tfunction handle_drag_over(e, id) {\n\t\te.preventDefault()\n\t\tif (id !== dragging_id) drag_over_id = id\n\t}\n\n\tfunction handle_drag_leave() {\n\t\tdrag_over_id = null\n\t}\n\n\tasync function handle_drop(e, target_id) {\n\t\te.preventDefault()\n\t\tif (!dragging_id || dragging_id === target_id) return\n\t\t\n\t\tconst from_idx = bookmarks.findIndex(b => b.id === dragging_id)\n\t\tconst to_idx = bookmarks.findIndex(b => b.id === target_id)\n\t\tif (from_idx === -1 || to_idx === -1) return\n\t\t\n\t\tconst reordered = [...bookmarks]\n\t\tconst [moved] = reordered.splice(from_idx, 1)\n\t\treordered.splice(to_idx, 0, moved)\n\t\t\n\t\t// Update order for all affected items\n\t\tfor (let i = 0; i < reordered.length; i++) {\n\t\t\tif (reordered[i].order !== i) {\n\t\t\t\tawait data.bookmarks.update(reordered[i].id, { order: i })\n\t\t\t}\n\t\t}\n\t\t\n\t\tdragging_id = null\n\t\tdrag_over_id = null\n\t}\n\n\tfunction handle_drag_end() {\n\t\tdragging_id = null\n\t\tdrag_over_id = null\n\t}\n</script>\n\n<div class=\"page\">\n\t<header class=\"header\">\n\t\t<div class=\"header-left\">\n\t\t\t<Icon icon=\"lucide:bookmark\" width={24} />\n\t\t\t<h1>{content.app_title}</h1>\n\t\t</div>\n\t\t<button class=\"add-btn\" onclick={() => show_form = !show_form}>\n\t\t\t<Icon icon={show_form ? 'lucide:x' : 'lucide:plus'} width={20} />\n\t\t\t{show_form ? content.cancel_button : content.add_button}\n\t\t</button>\n\t</header>\n\n\t{#if show_form}\n\t\t<div class=\"form-container\">\n\t\t\t<div class=\"form\" onkeydown={handle_keydown}>\n\t\t\t\t<input\n\t\t\t\t\ttype=\"url\"\n\t\t\t\t\tbind:value={new_url}\n\t\t\t\t\tplaceholder={fetching_meta ? 'Fetching page info...' : content.url_placeholder}\n\t\t\t\t\tonpaste={handle_url_paste}\n\t\t\t\t\tautofocus\n\t\t\t\t/>\n\t\t\t\t<input\n\t\t\t\t\ttype=\"text\"\n\t\t\t\t\tbind:value={new_title}\n\t\t\t\t\tplaceholder={content.title_placeholder}\n\t\t\t\t/>\n\t\t\t\t<input\n\t\t\t\t\ttype=\"text\"\n\t\t\t\t\tbind:value={new_description}\n\t\t\t\t\tplaceholder={content.description_placeholder}\n\t\t\t\t/>\n\t\t\t\t<input\n\t\t\t\t\ttype=\"text\"\n\t\t\t\t\tbind:value={new_tags}\n\t\t\t\t\tplaceholder={content.tags_placeholder}\n\t\t\t\t/>\n\t\t\t\t<button class=\"submit-btn\" onclick={add_bookmark}>{content.save_button}</button>\n\t\t\t</div>\n\t\t</div>\n\t{/if}\n\n\t<div class=\"filters\">\n\t\t<div class=\"search-box\">\n\t\t\t<Icon icon=\"lucide:search\" width={18} />\n\t\t\t<input\n\t\t\t\ttype=\"text\"\n\t\t\t\tbind:value={search}\n\t\t\t\tplaceholder={content.search_placeholder}\n\t\t\t/>\n\t\t</div>\n\t\t{#if all_tags.length > 0}\n\t\t\t<div class=\"tags\">\n\t\t\t\t<button \n\t\t\t\t\tclass=\"tag\" \n\t\t\t\t\tclass:active={!filter_tag}\n\t\t\t\t\tonclick={() => filter_tag = ''}\n\t\t\t\t>\n\t\t\t\t\tAll\n\t\t\t\t</button>\n\t\t\t\t{#each all_tags as tag}\n\t\t\t\t\t<button \n\t\t\t\t\t\tclass=\"tag\" \n\t\t\t\t\t\tclass:active={filter_tag === tag}\n\t\t\t\t\t\tonclick={() => filter_tag = tag}\n\t\t\t\t\t>\n\t\t\t\t\t\t{tag}\n\t\t\t\t\t</button>\n\t\t\t\t{/each}\n\t\t\t</div>\n\t\t{/if}\n\t</div>\n\n\t<main class=\"bookmarks\">\n\t\t{#if loading}\n\t\t\t<div class=\"loading\">\n\t\t\t\t<Icon icon=\"lucide:loader-2\" width={24} class=\"spin\" />\n\t\t\t</div>\n\t\t{:else if filtered_bookmarks.length === 0}\n\t\t\t<div class=\"empty\">\n\t\t\t\t<Icon icon=\"lucide:bookmark-plus\" width={48} />\n\t\t\t\t<p>{search || filter_tag ? content.no_results : content.empty_state}</p>\n\t\t\t</div>\n\t\t{:else}\n\t\t\t{#each filtered_bookmarks as bookmark (bookmark.id)}\n\t\t\t\t<a \n\t\t\t\t\thref={bookmark.url} \n\t\t\t\t\ttarget=\"_blank\" \n\t\t\t\t\trel=\"noopener\" \n\t\t\t\t\tclass=\"bookmark\"\n\t\t\t\t\tclass:dragging={dragging_id === bookmark.id}\n\t\t\t\t\tclass:drag-over={drag_over_id === bookmark.id}\n\t\t\t\t\tdraggable=\"true\"\n\t\t\t\t\tondragstart={(e) => handle_drag_start(e, bookmark.id)}\n\t\t\t\t\tondragover={(e) => handle_drag_over(e, bookmark.id)}\n\t\t\t\t\tondragleave={handle_drag_leave}\n\t\t\t\t\tondrop={(e) => handle_drop(e, bookmark.id)}\n\t\t\t\t\tondragend={handle_drag_end}\n\t\t\t\t\tanimate:flip={{ duration: 200 }}\n\t\t\t\t>\n\t\t\t\t\t<div class=\"drag-handle\">\n\t\t\t\t\t\t<Icon icon=\"lucide:grip-vertical\" width={16} />\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"favicon\">\n\t\t\t\t\t\t{#if bookmark.favicon}\n\t\t\t\t\t\t\t<img src={bookmark.favicon} alt=\"\" onerror={(e) => e.target.style.display = 'none'} />\n\t\t\t\t\t\t{:else}\n\t\t\t\t\t\t\t<Icon icon=\"lucide:link\" width={16} />\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"bookmark-content\">\n\t\t\t\t\t\t<span class=\"bookmark-title\">{bookmark.title}</span>\n\t\t\t\t\t\t<span class=\"bookmark-url\">{get_domain(bookmark.url)}</span>\n\t\t\t\t\t\t{#if bookmark.description}\n\t\t\t\t\t\t\t<span class=\"bookmark-desc\">{bookmark.description}</span>\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t{#if bookmark.tags}\n\t\t\t\t\t\t\t<div class=\"bookmark-tags\">\n\t\t\t\t\t\t\t\t{#each bookmark.tags.split(',') as tag}\n\t\t\t\t\t\t\t\t\t<span class=\"mini-tag\">{tag.trim()}</span>\n\t\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t</div>\n\t\t\t\t\t<button \n\t\t\t\t\t\tclass=\"delete-btn\" \n\t\t\t\t\t\tonclick={(e) => { e.preventDefault(); e.stopPropagation(); delete_bookmark(bookmark.id) }}\n\t\t\t\t\t>\n\t\t\t\t\t\t<Icon icon=\"lucide:trash-2\" width={16} />\n\t\t\t\t\t</button>\n\t\t\t\t</a>\n\t\t\t{/each}\n\t\t{/if}\n\t</main>\n\n\t<footer class=\"footer\">built with <a\\n\\t\\t\\thref=\"https://tinykit.studio\"\\n\\t\\t\\ttarget=\"_blank\">tinykit.studio</a></footer>\n</div>\n\n<style>\n\t.page {\n\t\tmin-height: 100vh;\n\t\tbackground: var(--page-background, #f8fafc);\n\t\tfont-family: var(--body-font, system-ui, sans-serif);\n\t}\n\n\t.header {\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: center;\n\t\tpadding: 1.25rem 1.5rem;\n\t\tbackground: var(--header-background, #ffffff);\n\t\tborder-bottom: 1px solid var(--border-color, #e2e8f0);\n\t}\n\n\t.header-left {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 10px;\n\t\tcolor: var(--accent-color, #6366f1);\n\t}\n\n\t.header h1 {\n\t\tmargin: 0;\n\t\tfont-size: 1.125rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-text-color, #1e293b);\n\t}\n\n\t.add-btn {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 6px;\n\t\tpadding: 8px 16px;\n\t\tbackground: var(--accent-color, #6366f1);\n\t\tcolor: #ffffff;\n\t\tborder: none;\n\t\tborder-radius: 8px;\n\t\tfont-weight: 500;\n\t\tfont-size: 0.875rem;\n\t\tcursor: pointer;\n\t\ttransition: opacity 0.15s;\n\t}\n\n\t.add-btn:hover {\n\t\topacity: 0.9;\n\t}\n\n\t.form-container {\n\t\tbackground: var(--header-background, #ffffff);\n\t\tborder-bottom: 1px solid var(--border-color, #e2e8f0);\n\t\tpadding: 1rem 1.5rem 1.5rem;\n\t}\n\n\t.form {\n\t\tmax-width: 600px;\n\t\tmargin: 0 auto;\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tgap: 10px;\n\t}\n\n\t.form input {\n\t\tpadding: 10px 14px;\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: 8px;\n\t\tfont-size: 0.95rem;\n\t\tcolor: var(--body-text-color, #334155);\n\t\tbackground: var(--input-background, #ffffff);\n\t}\n\n\t.form input:focus {\n\t\toutline: none;\n\t\tborder-color: var(--accent-color, #6366f1);\n\t\tbox-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);\n\t}\n\n\t.form input::placeholder {\n\t\tcolor: var(--placeholder-color, #94a3b8);\n\t}\n\n\t.submit-btn {\n\t\tpadding: 10px 20px;\n\t\tbackground: var(--accent-color, #6366f1);\n\t\tcolor: #ffffff;\n\t\tborder: none;\n\t\tborder-radius: 8px;\n\t\tfont-weight: 500;\n\t\tcursor: pointer;\n\t\ttransition: opacity 0.15s;\n\t}\n\n\t.submit-btn:hover {\n\t\topacity: 0.9;\n\t}\n\n\t.filters {\n\t\tpadding: 1rem 1.5rem;\n\t\tmax-width: 800px;\n\t\tmargin: 0 auto;\n\t}\n\n\t.search-box {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 10px;\n\t\tpadding: 10px 14px;\n\t\tbackground: var(--input-background, #ffffff);\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: 10px;\n\t\tcolor: var(--placeholder-color, #94a3b8);\n\t}\n\n\t.search-box input {\n\t\tflex: 1;\n\t\tborder: none;\n\t\toutline: none;\n\t\tfont-size: 0.95rem;\n\t\tcolor: var(--body-text-color, #334155);\n\t\tbackground: transparent;\n\t}\n\n\t.search-box input::placeholder {\n\t\tcolor: var(--placeholder-color, #94a3b8);\n\t}\n\n\t.tags {\n\t\tdisplay: flex;\n\t\tflex-wrap: wrap;\n\t\tgap: 8px;\n\t\tmargin-top: 12px;\n\t}\n\n\t.tag {\n\t\tpadding: 6px 12px;\n\t\tbackground: var(--tag-background, #f1f5f9);\n\t\tcolor: var(--secondary-text-color, #64748b);\n\t\tborder: none;\n\t\tborder-radius: 6px;\n\t\tfont-size: 0.8rem;\n\t\tcursor: pointer;\n\t\ttransition: all 0.15s;\n\t}\n\n\t.tag:hover {\n\t\tbackground: var(--tag-hover, #e2e8f0);\n\t}\n\n\t.tag.active {\n\t\tbackground: var(--accent-color, #6366f1);\n\t\tcolor: #ffffff;\n\t}\n\n\t.bookmarks {\n\t\tmax-width: 800px;\n\t\tmargin: 0 auto;\n\t\tpadding: 0 1.5rem 2rem;\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tgap: 8px;\n\t}\n\n\t.bookmark {\n\t\tdisplay: flex;\n\t\talign-items: flex-start;\n\t\tgap: 12px;\n\t\tpadding: 14px 16px;\n\t\tbackground: var(--card-background, #ffffff);\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: 10px;\n\t\ttext-decoration: none;\n\t\ttransition: all 0.15s;\n\t\tcursor: grab;\n\t}\n\n\t.bookmark:hover {\n\t\tborder-color: var(--accent-color, #6366f1);\n\t\tbox-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);\n\t}\n\n\t.bookmark.dragging {\n\t\topacity: 0.5;\n\t\tcursor: grabbing;\n\t}\n\n\t.bookmark.drag-over {\n\t\tborder-color: var(--accent-color, #6366f1);\n\t\tbackground: var(--tag-background, #f1f5f9);\n\t}\n\n\t.drag-handle {\n\t\tcolor: var(--secondary-text-color, #94a3b8);\n\t\tcursor: grab;\n\t\tpadding: 2px;\n\t\topacity: 0.5;\n\t\ttransition: opacity 0.15s;\n\t}\n\n\t.bookmark:hover .drag-handle {\n\t\topacity: 1;\n\t}\n\n\t.favicon {\n\t\twidth: 32px;\n\t\theight: 32px;\n\t\tbackground: var(--favicon-background, #f1f5f9);\n\t\tborder-radius: 8px;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tflex-shrink: 0;\n\t\tcolor: var(--secondary-text-color, #94a3b8);\n\t}\n\n\t.favicon img {\n\t\twidth: 20px;\n\t\theight: 20px;\n\t}\n\n\t.bookmark-content {\n\t\tflex: 1;\n\t\tmin-width: 0;\n\t}\n\n\t.bookmark-title {\n\t\tdisplay: block;\n\t\tcolor: var(--heading-text-color, #1e293b);\n\t\tfont-weight: 500;\n\t\tmargin-bottom: 2px;\n\t}\n\n\t.bookmark-url {\n\t\tdisplay: block;\n\t\tcolor: var(--secondary-text-color, #64748b);\n\t\tfont-size: 0.8rem;\n\t}\n\n\t.bookmark-desc {\n\t\tdisplay: block;\n\t\tcolor: var(--body-text-color, #475569);\n\t\tfont-size: 0.85rem;\n\t\tmargin-top: 6px;\n\t\tline-height: 1.4;\n\t}\n\n\t.bookmark-tags {\n\t\tdisplay: flex;\n\t\tgap: 6px;\n\t\tmargin-top: 8px;\n\t}\n\n\t.mini-tag {\n\t\tpadding: 2px 8px;\n\t\tbackground: var(--tag-background, #f1f5f9);\n\t\tcolor: var(--secondary-text-color, #64748b);\n\t\tborder-radius: 4px;\n\t\tfont-size: 0.7rem;\n\t}\n\n\t.delete-btn {\n\t\tbackground: none;\n\t\tborder: none;\n\t\tcolor: var(--secondary-text-color, #94a3b8);\n\t\tcursor: pointer;\n\t\tpadding: 4px;\n\t\topacity: 0;\n\t\ttransition: all 0.15s;\n\t}\n\n\t.bookmark:hover .delete-btn {\n\t\topacity: 1;\n\t}\n\n\t.delete-btn:hover {\n\t\tcolor: var(--danger-color, #ef4444);\n\t}\n\n\t.loading, .empty {\n\t\ttext-align: center;\n\t\tpadding: 4rem 2rem;\n\t\tcolor: var(--secondary-text-color, #64748b);\n\t}\n\n\t.empty p {\n\t\tmargin-top: 1rem;\n\t}\n\n\t.loading :global(.spin) {\n\t\tanimation: spin 1s linear infinite;\n\t}\n\n\t@keyframes spin {\n\t\tfrom { transform: rotate(0deg); }\n\t\tto { transform: rotate(360deg); }\n\t}\n\n\t.footer {\n\t\ttext-align: center;\n\t\tpadding: 2rem 1rem;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--secondary-text-color, #94a3b8);\n\t}\n\n\t.footer a {\n\t\tcolor: inherit;\n\t\ttext-decoration: none;\n\t}\n\n\t.footer a:hover {\n\t\ttext-decoration: underline;\n\t}\n</style>",
+	"design": [
+		{
+			"id": "body-font",
+			"name": "Font",
+			"css_var": "--body-font",
+			"value": "system-ui, sans-serif",
+			"type": "font",
+			"description": "Main font for all text"
+		},
+		{
+			"id": "page-background",
+			"name": "Page Background",
+			"css_var": "--page-background",
+			"value": "#f8fafc",
+			"type": "color",
+			"description": "Overall page background"
+		},
+		{
+			"id": "header-background",
+			"name": "Header Background",
+			"css_var": "--header-background",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Header bar background"
+		},
+		{
+			"id": "card-background",
+			"name": "Card Background",
+			"css_var": "--card-background",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Bookmark card background"
+		},
+		{
+			"id": "heading-text-color",
+			"name": "Heading Color",
+			"css_var": "--heading-text-color",
+			"value": "#1e293b",
+			"type": "color",
+			"description": "Color for headings"
+		},
+		{
+			"id": "body-text-color",
+			"name": "Body Text",
+			"css_var": "--body-text-color",
+			"value": "#334155",
+			"type": "color",
+			"description": "Color for body text"
+		},
+		{
+			"id": "secondary-text-color",
+			"name": "Secondary Text",
+			"css_var": "--secondary-text-color",
+			"value": "#64748b",
+			"type": "color",
+			"description": "Color for muted text"
+		},
+		{
+			"id": "accent-color",
+			"name": "Accent Color",
+			"css_var": "--accent-color",
+			"value": "#6366f1",
+			"type": "color",
+			"description": "Primary accent color"
+		},
+		{
+			"id": "border-color",
+			"name": "Border Color",
+			"css_var": "--border-color",
+			"value": "#e2e8f0",
+			"type": "color",
+			"description": "Border and divider color"
+		},
+		{
+			"id": "tag-background",
+			"name": "Tag Background",
+			"css_var": "--tag-background",
+			"value": "#f1f5f9",
+			"type": "color",
+			"description": "Tag badge background"
+		}
+	],
+	"content": [
+		{
+			"id": "app_title",
+			"name": "App Title",
+			"type": "text",
+			"value": "Bookmarks",
+			"description": "Title shown in header"
+		},
+		{
+			"id": "add_button",
+			"name": "Add Button",
+			"type": "text",
+			"value": "Add",
+			"description": "Add bookmark button text"
+		},
+		{
+			"id": "cancel_button",
+			"name": "Cancel Button",
+			"type": "text",
+			"value": "Cancel",
+			"description": "Cancel button text"
+		},
+		{
+			"id": "url_placeholder",
+			"name": "URL Placeholder",
+			"type": "text",
+			"value": "https://...",
+			"description": "URL input placeholder"
+		},
+		{
+			"id": "title_placeholder",
+			"name": "Title Placeholder",
+			"type": "text",
+			"value": "Title (optional)",
+			"description": "Title input placeholder"
+		},
+		{
+			"id": "description_placeholder",
+			"name": "Description Placeholder",
+			"type": "text",
+			"value": "Description (optional)",
+			"description": "Description input placeholder"
+		},
+		{
+			"id": "tags_placeholder",
+			"name": "Tags Placeholder",
+			"type": "text",
+			"value": "Tags (comma-separated)",
+			"description": "Tags input placeholder"
+		},
+		{
+			"id": "save_button",
+			"name": "Save Button",
+			"type": "text",
+			"value": "Save Bookmark",
+			"description": "Save button text"
+		},
+		{
+			"id": "search_placeholder",
+			"name": "Search Placeholder",
+			"type": "text",
+			"value": "Search bookmarks...",
+			"description": "Search input placeholder"
+		},
+		{
+			"id": "empty_state",
+			"name": "Empty State",
+			"type": "text",
+			"value": "No bookmarks yet. Add your first one!",
+			"description": "Message when no bookmarks"
+		},
+		{
+			"id": "no_results",
+			"name": "No Results",
+			"type": "text",
+			"value": "No bookmarks match your search",
+			"description": "Message when search has no results"
+		}
+	],
+	"data": {
+		"bookmarks": {
+			"schema": [
+				{
+					"name": "id",
+					"type": "text"
+				},
+				{
+					"name": "url",
+					"type": "text"
+				},
+				{
+					"name": "title",
+					"type": "text"
+				},
+				{
+					"name": "description",
+					"type": "text"
+				},
+				{
+					"name": "tags",
+					"type": "text"
+				},
+				{
+					"name": "favicon",
+					"type": "text"
+				},
+				{
+					"name": "order",
+					"type": "number"
+				},
+				{
+					"name": "created_at",
+					"type": "text"
+				}
+			],
+			"records": [
+				{
+					"id": "b1",
+					"url": "https://github.com",
+					"title": "GitHub",
+					"description": "Where the world builds software",
+					"tags": "dev,tools",
+					"favicon": "https://github.com/favicon.ico",
+					"order": 0,
+					"created_at": "2024-12-01T10:00:00Z"
+				},
+				{
+					"id": "b2",
+					"url": "https://news.ycombinator.com",
+					"title": "Hacker News",
+					"description": "Tech news and discussions",
+					"tags": "news,tech",
+					"favicon": "https://news.ycombinator.com/favicon.ico",
+					"order": 1,
+					"created_at": "2024-12-02T10:00:00Z"
+				},
+				{
+					"id": "b3",
+					"url": "https://svelte.dev",
+					"title": "Svelte",
+					"description": "Cybernetically enhanced web apps",
+					"tags": "dev,framework",
+					"favicon": "https://svelte.dev/favicon.png",
+					"order": 2,
+					"created_at": "2024-12-03T10:00:00Z"
+				},
+				{
+					"id": "b4",
+					"url": "https://tinykit.studio",
+					"title": "Tinykit",
+					"description": "Build your digital homestead",
+					"tags": "dev,tools",
+					"favicon": "https://pala-pullzone.b-cdn.net/slash-tk.png",
+					"order": 3,
+					"created_at": "2024-12-04T10:00:00Z"
+				}
+			]
+		}
+	}
+}

@@ -1,0 +1,13 @@
+[build]
+builder = "nixpacks"
+buildCommand = "npm install && npm run build"
+
+[deploy]
+startCommand = "chmod +x ./deploy/railway/start.sh && ./deploy/railway/start.sh"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
+
+[healthcheck]
+path = "/tinykit"
+timeout = 100
+interval = 10
