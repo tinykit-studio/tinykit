@@ -45,6 +45,15 @@ migrate((app) => {
 		name: "_tk_settings",
 		type: "base",
 		fields: [
+			{
+				name: "id",
+				type: "text",
+				primaryKey: true,
+				required: true,
+				min: 0,
+				max: 0,
+				pattern: ""
+			},
 			{ name: "value", type: "json", required: false }
 		],
 		listRule: "@request.auth.id != ''",
