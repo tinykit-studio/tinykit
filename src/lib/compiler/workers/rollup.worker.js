@@ -13,9 +13,9 @@ const sveltePromiseWorker = new PromiseWorker(new svelteWorker())
 
 // Based on https://github.com/pngwn/REPLicant & the Svelte REPL package (https://github.com/sveltejs/sites/tree/master/packages/repl)
 
-// Use jsDelivr for npm packages, esm.sh for Svelte (handles subpaths better)
-const CDN_URL = 'https://cdn.jsdelivr.net/npm'
-const SVELTE_CDN = `https://esm.sh/svelte@${SVELTE_VERSION}`
+// Use esm.sh for all npm packages (better ESM support, handles subpaths correctly)
+const CDN_URL = 'https://esm.sh'
+const SVELTE_CDN = `${CDN_URL}/svelte@${SVELTE_VERSION}`
 
 // In-memory cache for external modules (persists for worker lifetime)
 const module_cache = new Map()
@@ -167,8 +167,8 @@ async function rollup_worker({ component, head = { code: '', data: {} }, hydrate
 					return false
 				},
 				onwarn(warning, warn) {
-					// Suppress circular dependency warnings from CDN Svelte modules
-					if (warning.code === 'CIRCULAR_DEPENDENCY' && warning.ids?.some((id) => id.includes('jsdelivr.net') || id.includes('esm.sh'))) {
+					// Suppress circular dependency warnings from CDN modules
+					if (warning.code === 'CIRCULAR_DEPENDENCY' && warning.ids?.some((id) => id.includes('esm.sh'))) {
 						return
 					}
 					// Use default warning handler for other warnings
@@ -212,24 +212,24 @@ async function rollup_worker({ component, head = { code: '', data: {} }, hydrate
 								return `${origin}${importee}`
 							}
 
-							// 7) Handle jsDelivr internal imports
+							// 7) Handle esm.sh internal imports
 							if (importer && importer.startsWith(`${CDN_URL}/`)) {
 								if (importee.startsWith(`${CDN_URL}/`)) return importee
 							}
 
-							// 8) Svelte runtime pinned (use esm.sh for Svelte - handles subpaths correctly)
+							// 8) Svelte runtime pinned
 							if (importee === 'svelte') return SVELTE_CDN
-							if (importee.startsWith('svelte/')) return `https://esm.sh/svelte@${SVELTE_VERSION}/${importee.slice('svelte/'.length)}`
+							if (importee.startsWith('svelte/')) return `${CDN_URL}/svelte@${SVELTE_VERSION}/${importee.slice('svelte/'.length)}`
 
 							// 9) Iconify shim
 							if (importee === '@iconify/svelte') return 'virtual:IconifyIcon.svelte'
 
-							// 10) Bare package → let jsDelivr resolve (but not if it looks like a file path)
+							// 10) Bare package → resolve via esm.sh
 							if (importee.includes('.mjs') || importee.includes('.js')) {
 								// Already a resolved module path, return as-is
 								return importee
 							}
-							return `${CDN_URL}/${importee}/+esm`
+							return `${CDN_URL}/${importee}`
 						},
 						async load(id) {
 							if (id === 'virtual:esm-env') {
