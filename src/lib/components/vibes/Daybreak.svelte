@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Icon from "@iconify/svelte";
+
   let isMuted = $state(true); // Start muted so autoplay works (browser requirement)
 </script>
 
@@ -13,7 +15,7 @@
     <iframe
       width="600"
       height="340"
-      src="https://www.youtube.com/embed/3TX_W_CMwT8?autoplay=1&mute={isMuted
+      src="https://www.youtube-nocookie.com/embed/3TX_W_CMwT8?autoplay=1&mute={isMuted
         ? '1'
         : '0'}&loop=1&playlist=3TX_W_CMwT8"
       title="Daybreak"
@@ -27,15 +29,19 @@
   <div class="flex items-center space-x-4">
     <button
       onclick={() => (isMuted = !isMuted)}
-      class="px-6 py-3 border border-[var(--builder-border)] text-[var(--builder-text-secondary)] font-sans hover:border-[var(--builder-accent)] hover:text-[var(--builder-accent)] transition-colors rounded"
+      class="flex items-center gap-2 px-6 py-3 border border-[var(--builder-border)] text-[var(--builder-text-secondary)] font-sans hover:border-[var(--builder-accent)] hover:text-[var(--builder-accent)] transition-colors rounded"
     >
-      {isMuted ? "🔇 Unmute" : "🔊 Mute"}
+      <Icon icon={isMuted ? "heroicons:speaker-x-mark-20-solid" : "heroicons:speaker-wave-20-solid"} class="w-4 h-4" />
+      {isMuted ? "Unmute" : "Mute"}
     </button>
   </div>
 
   <!-- Info -->
   <div class="text-[var(--builder-text-muted)] text-xs font-sans text-center space-y-1">
-    <p>🌅 Chill vibes while you wait</p>
-    <p class="text-[var(--builder-text-muted)] mt-2">Click unmute to hear the music ✨</p>
+    <div class="flex items-center justify-center gap-2">
+      <Icon icon="heroicons:sun-20-solid" class="w-3.5 h-3.5" />
+      <span>Chill vibes while you wait</span>
+    </div>
+    <p class="text-[var(--builder-text-muted)] mt-2">Click unmute to hear the music</p>
   </div>
 </div>

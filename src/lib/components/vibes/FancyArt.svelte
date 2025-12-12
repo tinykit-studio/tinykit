@@ -28,8 +28,8 @@
 	const ART_DEPARTMENTS = [
 		11, // European Paintings
 		21, // Modern and Contemporary Art
-		6,  // Asian Art
-		1,  // American Decorative Arts
+		6, // Asian Art
+		1, // American Decorative Arts
 		13, // Greek and Roman Art
 	];
 
@@ -42,26 +42,32 @@
 		"painting",
 		"sculpture",
 		"landscape",
-		"portrait"
+		"portrait",
 	];
 
 	async function fetchDescription(metUrl: string) {
 		loadingDescription = true;
 		try {
 			// Use proxy to fetch the Met Museum page
-			const response = await fetch(`/api/proxy?url=${encodeURIComponent(metUrl)}`);
+			const response = await fetch(
+				`/api/proxy?url=${encodeURIComponent(metUrl)}`,
+			);
 
 			if (response.ok) {
 				const html = await response.text();
 
 				// Parse HTML and use querySelector
 				const parser = new DOMParser();
-				const doc = parser.parseFromString(html, 'text/html');
-				const wrapper = doc.querySelector('[data-sentry-component="ReadMoreWrapper"]');
-				const markdown = wrapper?.querySelector('[data-sentry-element="Markdown"]');
+				const doc = parser.parseFromString(html, "text/html");
+				const wrapper = doc.querySelector(
+					'[data-sentry-component="ReadMoreWrapper"]',
+				);
+				const markdown = wrapper?.querySelector(
+					'[data-sentry-element="Markdown"]',
+				);
 
 				let description = markdown?.textContent
-					?.replace(/\[(\d+)\]/g, '') // Remove footnote markers like [1]
+					?.replace(/\[(\d+)\]/g, "") // Remove footnote markers like [1]
 					.trim();
 
 				if (artwork && description) {
@@ -121,11 +127,17 @@
 	async function loadAvailableArtworks() {
 		try {
 			// Pick a random search query and department
-			const query = SEARCH_QUERIES[Math.floor(Math.random() * SEARCH_QUERIES.length)];
-			const deptId = ART_DEPARTMENTS[Math.floor(Math.random() * ART_DEPARTMENTS.length)];
+			const query =
+				SEARCH_QUERIES[
+					Math.floor(Math.random() * SEARCH_QUERIES.length)
+				];
+			const deptId =
+				ART_DEPARTMENTS[
+					Math.floor(Math.random() * ART_DEPARTMENTS.length)
+				];
 
 			const response = await fetch(
-				`https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&departmentId=${deptId}&q=${encodeURIComponent(query)}`
+				`https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&departmentId=${deptId}&q=${encodeURIComponent(query)}`,
 			);
 
 			if (!response.ok) throw new Error("Search failed");
@@ -161,7 +173,9 @@
 		// Try up to 3 times to find a valid artwork
 		for (let i = 0; i < 3; i++) {
 			try {
-				const randomIndex = Math.floor(Math.random() * availableArtworks.length);
+				const randomIndex = Math.floor(
+					Math.random() * availableArtworks.length,
+				);
 				const objectId = availableArtworks[randomIndex];
 				await fetchArtworkById(objectId);
 				return; // Success!
@@ -206,7 +220,7 @@
 			</div>
 		</div>
 	{:else if artwork}
-		<div class="flex-1 flex flex-col md:flex-row overflow-hidden">
+		<div class="flex-1 flex flex-col md:flex-row flex-wrap overflow-hidden">
 			<!-- Image -->
 			<div
 				class="flex-1 flex items-center justify-center p-8 bg-[#0d0d0d]"
@@ -223,14 +237,21 @@
 				<h2 class="text-2xl font-bold mb-2">{artwork.title}</h2>
 				<p class="text-xl text-gray-300 mb-1">{artwork.artist}</p>
 				{#if artwork.artistBio}
-					<p class="text-sm text-gray-500 mb-4">{artwork.artistBio}</p>
+					<p class="text-sm text-gray-500 mb-4">
+						{artwork.artistBio}
+					</p>
 				{/if}
 				<p class="text-gray-400 mb-6">{artwork.date}</p>
 
 				<!-- Description -->
 				{#if artwork.description}
-					<div class="mb-6 p-4 bg-gray-800/50 rounded border border-gray-700" transition:fade={{ duration: 300 }}>
-						<p class="text-sm text-gray-300 leading-relaxed">{artwork.description}</p>
+					<div
+						class="mb-6 p-4 bg-gray-800/50 rounded border border-gray-700"
+						transition:fade={{ duration: 300 }}
+					>
+						<p class="text-sm text-gray-300 leading-relaxed">
+							{artwork.description}
+						</p>
 					</div>
 				{/if}
 
@@ -238,42 +259,56 @@
 					{#if artwork.classification}
 						<div>
 							<span class="text-gray-500 font-medium">Type:</span>
-							<p class="text-gray-300">{artwork.classification}</p>
+							<p class="text-gray-300">
+								{artwork.classification}
+							</p>
 						</div>
 					{/if}
 
 					{#if artwork.medium}
 						<div>
-							<span class="text-gray-500 font-medium">Medium:</span>
+							<span class="text-gray-500 font-medium"
+								>Medium:</span
+							>
 							<p class="text-gray-300">{artwork.medium}</p>
 						</div>
 					{/if}
 
 					{#if artwork.dimensions}
 						<div>
-							<span class="text-gray-500 font-medium">Dimensions:</span>
+							<span class="text-gray-500 font-medium"
+								>Dimensions:</span
+							>
 							<p class="text-gray-300">{artwork.dimensions}</p>
 						</div>
 					{/if}
 
 					{#if artwork.culture}
 						<div>
-							<span class="text-gray-500 font-medium">Culture:</span>
+							<span class="text-gray-500 font-medium"
+								>Culture:</span
+							>
 							<p class="text-gray-300">{artwork.culture}</p>
 						</div>
 					{/if}
 
 					{#if artwork.department}
 						<div>
-							<span class="text-gray-500 font-medium">Department:</span>
+							<span class="text-gray-500 font-medium"
+								>Department:</span
+							>
 							<p class="text-gray-300">{artwork.department}</p>
 						</div>
 					{/if}
 
 					{#if artwork.creditLine}
 						<div class="pt-2 border-t border-gray-700">
-							<span class="text-gray-500 font-medium text-xs">Acquired:</span>
-							<p class="text-gray-400 text-xs mt-1">{artwork.creditLine}</p>
+							<span class="text-gray-500 font-medium text-xs"
+								>Acquired:</span
+							>
+							<p class="text-gray-400 text-xs mt-1">
+								{artwork.creditLine}
+							</p>
 						</div>
 					{/if}
 				</div>

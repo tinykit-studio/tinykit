@@ -378,67 +378,69 @@
   }
 </script>
 
-<div class="flex flex-col items-center justify-center space-y-4 relative">
-  <!-- Stats -->
-  <div class="flex items-center space-x-6 font-sans text-sm">
-    <div class="text-center">
-      <div class="text-gray-500 text-xs">Score</div>
-      <div class="text-white">{score}</div>
+<div class="w-full h-full relative">
+  <div class="flex flex-col items-center justify-center space-y-4 relative">
+    <!-- Stats -->
+    <div class="flex items-center space-x-6 font-sans text-sm">
+      <div class="text-center">
+        <div class="text-gray-500 text-xs">Score</div>
+        <div class="text-white">{score}</div>
+      </div>
+      <div class="text-center">
+        <div class="text-gray-500 text-xs">Best</div>
+        <div class="text-yellow-500">{highScore}</div>
+      </div>
+      <div class="text-center">
+        <div class="text-gray-500 text-xs">Level</div>
+        <div class="text-orange-500">{level}</div>
+      </div>
+      <div class="text-center">
+        <div class="text-gray-500 text-xs">Lines</div>
+        <div class="text-green-500">{lines}</div>
+      </div>
+      {#if isPaused}
+        <div class="text-yellow-500 text-xs">PAUSED</div>
+      {/if}
     </div>
-    <div class="text-center">
-      <div class="text-gray-500 text-xs">Best</div>
-      <div class="text-yellow-500">{highScore}</div>
-    </div>
-    <div class="text-center">
-      <div class="text-gray-500 text-xs">Level</div>
-      <div class="text-orange-500">{level}</div>
-    </div>
-    <div class="text-center">
-      <div class="text-gray-500 text-xs">Lines</div>
-      <div class="text-green-500">{lines}</div>
-    </div>
-    {#if isPaused}
-      <div class="text-yellow-500 text-xs">PAUSED</div>
-    {/if}
-  </div>
 
-  <!-- Game Grid -->
-  <div class="border-2 border-[#2a2a2a] bg-black p-1">
-    <div
-      class="grid"
-      style="grid-template-columns: repeat({COLS}, {CELL_SIZE}px); gap: 1px;"
-    >
-      {#each Array(ROWS) as _, y}
-        {#each Array(COLS) as _, x}
-          <div
-            class="{getCellColor(x, y)} transition-colors"
-            style="width: {CELL_SIZE}px; height: {CELL_SIZE}px;"
-          />
+    <!-- Game Grid -->
+    <div class="border-2 border-[#2a2a2a] bg-black p-1">
+      <div
+        class="grid"
+        style="grid-template-columns: repeat({COLS}, {CELL_SIZE}px); gap: 1px;"
+      >
+        {#each Array(ROWS) as _, y}
+          {#each Array(COLS) as _, x}
+            <div
+              class="{getCellColor(x, y)} transition-colors"
+              style="width: {CELL_SIZE}px; height: {CELL_SIZE}px;"
+            />
+          {/each}
         {/each}
-      {/each}
+      </div>
     </div>
-  </div>
 
-  <!-- Controls -->
-  <div class="flex items-center space-x-4">
-    <button
-      onclick={initGame}
-      class="px-4 py-2 bg-orange-500 text-black font-sans hover:bg-orange-600 transition-colors text-sm"
-    >
-      New Game
-    </button>
-  </div>
+    <!-- Controls -->
+    <div class="flex items-center space-x-4">
+      <button
+        onclick={initGame}
+        class="px-4 py-2 bg-orange-500 text-black font-sans hover:bg-orange-600 transition-colors text-sm"
+      >
+        New Game
+      </button>
+    </div>
 
-  <!-- Instructions -->
-  <div class="text-gray-500 text-xs font-sans text-center space-y-1">
-    <p>← → Move | ↑ Hard Drop | ↓ Soft Drop</p>
-    <p>SPACE Rotate | P Pause</p>
+    <!-- Instructions -->
+    <div class="text-gray-500 text-xs font-sans text-center space-y-1">
+      <p>← → Move | ↑ Hard Drop | ↓ Soft Drop</p>
+      <p>SPACE Rotate | P Pause</p>
+    </div>
   </div>
 
   <!-- Game Over -->
   {#if gameOver}
     <div
-      class="absolute inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50"
+      class="absolute inset-0 mt-0 bg-black bg-opacity-80 flex items-center justify-center z-50"
     >
       <div class="text-center space-y-4">
         <div class="text-red-500 text-5xl font-sans">GAME OVER</div>
