@@ -145,9 +145,6 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 			return json({ error: 'AI not configured. Add your API key in Settings.' }, { status: 500 })
 		}
 
-		// Create snapshot before agent makes changes
-		await createSnapshot(params.id, 'Before agent changes')
-
 		// Build conversation history
 		const agentMessages = project.agent_chat || []
 		agentMessages.push({
@@ -160,6 +157,11 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 		const conversationHistory: AgentMessage[] = agentMessages
 			.filter((m: any) => m.role === 'user' || m.role === 'assistant')
 			.map((m: any) => ({ role: m.role, content: m.content }))
+
+		// Create snapshot before agent makes changes
+		// Truncate prompt if too long for snapshot label
+		const truncatedPrompt = userPrompt.length > 60 ? userPrompt.slice(0, 60) + '...' : userPrompt
+		await createSnapshot(params.id, `Before: ${truncatedPrompt}`)
 
 		// Create streaming response
 		const encoder = new TextEncoder()
@@ -216,6 +218,9 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 						timestamp: Date.now()
 					})
 					await updateProject(params.id, { agent_chat: agentMessages })
+
+					// Create snapshot after agent makes changes
+					await createSnapshot(params.id, `After: ${truncatedPrompt}`)
 
 					// Send usage with cost
 					const cost = calculateCost(llmConfig.model, {
