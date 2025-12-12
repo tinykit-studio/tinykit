@@ -1,38 +1,9 @@
-// LLM Provider Types
-export interface LLMMessage {
-	role: 'system' | 'user' | 'assistant';
-	content: string;
-}
-
+// Usage tracking for cost calculation
 export interface LLMUsage {
-	promptTokens: number;
-	completionTokens: number;
-	totalTokens: number;
-	webSearches?: number;
-}
-
-export interface LLMResponse {
-	content: string;
-	usage?: LLMUsage;
-}
-
-export interface LLMStreamChunk {
-	content?: string;
-	usage?: LLMUsage;
-}
-
-export interface LLMProvider {
-	generate(messages: LLMMessage[]): Promise<LLMResponse>;
-	stream?(messages: LLMMessage[]): AsyncGenerator<LLMStreamChunk>;
-	model: string;
-}
-
-export interface LLMConfig {
-	provider: 'openai' | 'anthropic' | 'gemini' | 'deepseek';
-	apiKey?: string;
-	model: string;
-	baseUrl?: string;
-	webSearch?: boolean;
+	promptTokens: number
+	completionTokens: number
+	totalTokens: number
+	webSearches?: number
 }
 
 // Web search pricing per search (in USD)
@@ -41,7 +12,7 @@ export const WEB_SEARCH_PRICING: Record<string, number> = {
 	anthropic: 0.01,
 	gemini: 0.035,
 	deepseek: 0.01
-};
+}
 
 // Token pricing per 1M tokens (in USD)
 export const TOKEN_PRICING: Record<string, { input: number; output: number }> = {
@@ -70,13 +41,15 @@ export const TOKEN_PRICING: Record<string, { input: number; output: number }> = 
 	'o1': { input: 15.00, output: 60.00 },
 	'o1-pro': { input: 150.00, output: 600.00 },
 	'gpt-5.1': { input: 1.25, output: 10.00 },
+	'gpt-5.1-codex': { input: 1.25, output: 10.00 },
+	'gpt-5.2-2025-12-11': { input: 1.75, output: 14.00 },
 	'gpt-5-mini': { input: 0.25, output: 2.00 },
 	'o3': { input: 10.00, output: 40.00 },
-	'o4-mini': { input: 1.10, output: 4.40 },
+	'o4-mini': { input: 0.15, output: 0.60 },
 	// Gemini models - https://ai.google.dev/pricing
-	'gemini-3-pro-preview': { input: 1.25, output: 10.00 },
+	'gemini-3-pro-preview': { input: 2.00, output: 12.00 },
 	'gemini-2.5-pro': { input: 1.25, output: 10.00 },
-	'gemini-2.5-flash': { input: 0.15, output: 0.60 },
+	'gemini-2.5-flash': { input: 0.30, output: 2.50 },
 	'gemini-2.5-flash-lite': { input: 0.075, output: 0.30 },
 	'gemini-2.0-flash': { input: 0.10, output: 0.40 },
 	'gemini-2.0-flash-lite': { input: 0.075, output: 0.30 },
@@ -84,19 +57,19 @@ export const TOKEN_PRICING: Record<string, { input: number; output: number }> = 
 	'gemini-1.5-flash': { input: 0.075, output: 0.30 },
 	'gemini-1.5-flash-8b': { input: 0.0375, output: 0.15 },
 	// DeepSeek models - https://platform.deepseek.com/api-docs/pricing
-	'deepseek-chat': { input: 0.27, output: 1.10 },
-	'deepseek-reasoner': { input: 0.55, output: 2.19 }
-};
+	'deepseek-chat': { input: 0.28, output: 0.42 },
+	'deepseek-reasoner': { input: 0.28, output: 0.42 }
+}
 
 export function calculateCost(model: string, usage: LLMUsage, provider?: string): number {
-	const pricing = TOKEN_PRICING[model];
+	const pricing = TOKEN_PRICING[model]
 	const tokenCost = pricing
 		? (usage.promptTokens / 1_000_000) * pricing.input + (usage.completionTokens / 1_000_000) * pricing.output
-		: 0;
+		: 0
 
 	const searchCost = usage.webSearches && provider
 		? (WEB_SEARCH_PRICING[provider] || 0) * usage.webSearches
-		: 0;
+		: 0
 
-	return tokenCost + searchCost;
+	return tokenCost + searchCost
 }

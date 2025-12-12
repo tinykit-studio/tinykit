@@ -14,7 +14,7 @@
 			{ id: "claude-haiku-4-5-20251001", label: "claude-haiku-4.5 — fast" }
 		]},
 		{ id: "openai", name: "OpenAI", models: [
-			{ id: "gpt-5.1", label: "gpt-5.1 — best" },
+			{ id: "gpt-5.2-2025-12-11", label: "gpt-5.2-2025-12-11 — best" },
 			{ id: "gpt-4o-mini", label: "gpt-4o-mini — fast" }
 		]},
 		{ id: "deepseek", name: "DeepSeek", models: [
