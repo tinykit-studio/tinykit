@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
+	import { watch } from "runed";
 	import { page } from "$app/stores";
 	import { goto, replaceState } from "$app/navigation";
 	import {
@@ -127,7 +128,7 @@
 	let project_domain = $state("");
 	let project_title_loaded = $state(false);
 	let is_deploying = $state(false);
-	let vibe_zone_enabled = $state(false);
+	let vibe_zone_enabled = $state(true);
 	let vibe_zone_loaded = $state(false);
 	let vibe_zone_visible = $state(false);
 	let vibe_user_prompt = $state("");
@@ -144,7 +145,6 @@
 	let file_content = $state("");
 	let editor_language = $state<EditorLanguage>("javascript");
 	let is_loading_file = $state(false);
-	let file_being_written = $state<string | null>(null);
 
 	// Content state
 	let content_fields = $state<ContentField[]>([]);
@@ -312,14 +312,14 @@
 					messages = [];
 				}
 
-				// Load vibe zone setting from project settings (defaults to false)
+				// Load vibe zone setting from project settings (defaults to true)
 				vibe_zone_enabled =
-					project.settings?.vibe_zone_enabled ?? false;
+					project.settings?.vibe_zone_enabled ?? true;
 				vibe_zone_loaded = true;
 			} catch (err) {
 				console.error("Failed to load project:", err);
 				messages = [];
-				vibe_zone_enabled = false;
+				vibe_zone_enabled = true;
 				vibe_zone_loaded = true;
 			} finally {
 				is_loading_messages = false;
@@ -429,6 +429,25 @@
 			load_snapshots();
 		}
 	});
+
+	// Track previous processing state to detect when agent finishes
+	let was_processing = $state(false);
+
+	// Reload code from database when agent finishes processing
+	watch(
+		() => is_processing,
+		(processing) => {
+			if (was_processing && !processing) {
+				// Agent just finished - reload code from database to ensure editor is in sync
+				api.read_code(project_id).then((code) => {
+					if (code && code.length > 0) {
+						file_content = code;
+					}
+				}).catch(console.error);
+			}
+			was_processing = processing;
+		}
+	);
 
 	// Functions
 	async function load_initial_file() {
@@ -692,7 +711,6 @@
 				bind:file_content
 				{editor_language}
 				is_loading={is_loading_file}
-				{file_being_written}
 				on_content_change={() => {}}
 				on_refresh_preview={refresh_preview}
 				on_save_status_change={(status) => (save_status = status)}
@@ -739,21 +757,12 @@
 
 	<!-- Snippet: Preview Pane (reused across layouts) -->
 	{#snippet preview_pane()}
-		<div class="relative w-full h-full">
-			<Preview
-				code={file_content}
-				language={editor_language}
-				{project_id}
-				agent_working={is_processing}
-			/>
-			<VibeZone
-				visible={vibe_zone_visible}
-				userPrompt={vibe_user_prompt}
-				enabled={vibe_zone_enabled}
-				onDismiss={() => agent_panel?.dismiss_vibe()}
-				onToggleEnabled={toggle_vibe_lounge}
-			/>
-		</div>
+		<Preview
+			code={file_content}
+			language={editor_language}
+			{project_id}
+			agent_working={is_processing}
+		/>
 	{/snippet}
 
 	<!-- Desktop: Configurable layout based on preview_position -->
@@ -1129,3 +1138,12 @@
 		/>
 	{/if}
 </div>
+
+<!-- Vibe Zone (rendered at root level for proper fullscreen) -->
+<VibeZone
+	visible={vibe_zone_visible}
+	userPrompt={vibe_user_prompt}
+	enabled={vibe_zone_enabled}
+	onDismiss={() => agent_panel?.dismiss_vibe()}
+	onToggleEnabled={toggle_vibe_lounge}
+/>
