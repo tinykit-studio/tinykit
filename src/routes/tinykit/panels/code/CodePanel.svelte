@@ -93,7 +93,6 @@ export const daily_cleanup = {
     file_content: string;
     editor_language: EditorLanguage;
     is_loading: boolean;
-    file_being_written: string | null;
     on_content_change: (content: string) => void;
     on_refresh_preview: () => void;
     on_save_status_change?: (status: {
@@ -108,7 +107,6 @@ export const daily_cleanup = {
     file_content = $bindable(),
     editor_language,
     is_loading,
-    file_being_written,
     on_content_change,
     on_refresh_preview,
     on_save_status_change,
@@ -244,16 +242,6 @@ export const daily_cleanup = {
         cache_key={current_file}
         on:save={save_file}
       />
-      {#if file_being_written === current_file}
-        <div
-          class="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center pointer-events-none"
-        >
-          <div class="flex flex-col items-center gap-3">
-            <Spinner size="lg" class="text-blue-400" />
-            <div class="text-blue-400 text-sm font-sans">Writing file...</div>
-          </div>
-        </div>
-      {/if}
     {:else}
       <CodeMirror
         value={backend_placeholder}

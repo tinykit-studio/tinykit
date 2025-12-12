@@ -5,7 +5,7 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { z } from 'zod'
 import { getProject, updateProject } from '$lib/server/pb'
 
-export type LLMProvider = 'openai' | 'anthropic' | 'gemini' | 'deepseek'
+export type LLMProvider = 'openai' | 'anthropic' | 'gemini'
 
 export interface AgentConfig {
 	provider: LLMProvider
@@ -169,15 +169,6 @@ function get_model(config: AgentConfig) {
 			const openai = createOpenAI({
 				apiKey: config.apiKey,
 				compatibility: 'strict'
-			})
-			return openai(config.model)
-		}
-		case 'deepseek': {
-			// DeepSeek uses OpenAI-compatible chat completions API
-			// No compatibility mode - let SDK use default behavior
-			const openai = createOpenAI({
-				apiKey: config.apiKey,
-				baseURL: 'https://api.deepseek.com'
 			})
 			return openai(config.model)
 		}
@@ -441,23 +432,20 @@ export async function run_agent(
 		return { role: m.role as 'user' | 'assistant', content: m.content }
 	})
 
-	// DeepSeek doesn't support 'developer' role, so we need to add system message manually
-	const is_deepseek = config.provider === 'deepseek'
-	const final_messages: CoreMessage[] = is_deepseek
-		? [{ role: 'system' as const, content: system }, ...core_messages]
-		: core_messages
+	// OpenAI reasoning models (o1, o3) don't support temperature
+	const is_reasoning_model = /^(o1|o3)/.test(config.model)
 
 	const result = streamText({
 		model,
-		system: is_deepseek ? undefined : system, // DeepSeek: system in messages array, others: system parameter
-		messages: final_messages,
+		system,
+		messages: core_messages,
 		tools,
 		maxSteps: 100, // High limit to allow model to finish completely (default is 1 when tools present)
 		toolCallStreaming: true,
 		// Encourage text output before tool calls
 		experimental_toolCallParallel: false, // Force sequential execution (think → act)
-		// Temperature: balanced for reliable code + natural language
-		temperature: 0.3
+		// Temperature: balanced for reliable code + natural language (not supported by reasoning models)
+		temperature: is_reasoning_model ? undefined : 0.3
 	} as any)
 
 	// Stream both text and tool calls using fullStream

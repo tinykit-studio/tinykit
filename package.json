@@ -35,6 +35,9 @@
     "vite": "^6.0.3"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^2.0.54",
+    "@ai-sdk/google": "^2.0.45",
+    "@ai-sdk/openai": "^2.0.80",
     "@anthropic-ai/sdk": "^0.70.0",
     "@codemirror/autocomplete": "^6.20.0",
     "@codemirror/commands": "^6.10.0",

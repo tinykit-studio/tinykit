@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Logo from "$lib/assets/Logo.svelte";
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import {
@@ -91,9 +92,7 @@
   <header class="border-b border-[var(--builder-border)] px-6 py-4">
     <div class="max-w-6xl mx-auto flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <span class="text-xl font-semibold text-[var(--builder-text-primary)]"
-          >tinykit</span
-        >
+        <Logo width="4rem" />
       </div>
       <div class="flex items-center gap-3">
         <a

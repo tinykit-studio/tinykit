@@ -32,9 +32,21 @@ export type TabId = "agent" | "code" | "content" | "design" | "data" | "history"
 export type PreviewPosition = "right" | "left" | "bottom"
 
 // Agent/Chat types
+export type ToolCall = {
+	name: string
+	args?: Record<string, any>
+	result?: string
+}
+
+export type StreamItem =
+	| { type: 'text'; content: string }
+	| { type: 'tool'; name: string; args?: Record<string, any>; result?: string }
+
 export type Message = {
 	role: "user" | "assistant"
-	content: string
+	content: string // For user messages, or full text for completed assistant messages
+	stream_items?: StreamItem[] // For assistant messages: ordered list of text chunks and tool calls
+	tool_calls?: ToolCall[] // Legacy: still used for backwards compat
 	usage?: TokenUsage | null
 }
 

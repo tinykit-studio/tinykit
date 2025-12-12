@@ -15,55 +15,24 @@
 
   let { usage }: TokenCostProps = $props()
 
-  // Map model names/IDs to iconify icons
-  const model_icons: Record<string, string> = {
-    // Anthropic Claude models
+  // Map provider prefixes to iconify icons (partial matching via get_model_icon)
+  const provider_icons: Record<string, string> = {
     "claude": "simple-icons:anthropic",
-    "claude-3": "simple-icons:anthropic",
-    "claude-3.5": "simple-icons:anthropic",
-    "claude-3-opus": "simple-icons:anthropic",
-    "claude-3-sonnet": "simple-icons:anthropic",
-    "claude-3-haiku": "simple-icons:anthropic",
-    "claude-3.5-sonnet": "simple-icons:anthropic",
-    "claude-3-5-sonnet": "simple-icons:anthropic",
-    "claude-sonnet-4": "simple-icons:anthropic",
-    // OpenAI models
-    "gpt-4": "simple-icons:openai",
-    "gpt-4o": "simple-icons:openai",
-    "gpt-4o-mini": "simple-icons:openai",
-    "gpt-4-turbo": "simple-icons:openai",
-    "gpt-3.5": "simple-icons:openai",
-    "gpt-3.5-turbo": "simple-icons:openai",
+    "gpt": "simple-icons:openai",
     "o1": "simple-icons:openai",
-    "o1-mini": "simple-icons:openai",
-    "o1-preview": "simple-icons:openai",
-    // Google Gemini models
+    "o3": "simple-icons:openai",
     "gemini": "simple-icons:googlegemini",
-    "gemini-pro": "simple-icons:googlegemini",
-    "gemini-1.5": "simple-icons:googlegemini",
-    "gemini-1.5-pro": "simple-icons:googlegemini",
-    "gemini-1.5-flash": "simple-icons:googlegemini",
-    "gemini-2.0-flash": "simple-icons:googlegemini",
-    // Meta Llama models
     "llama": "simple-icons:meta",
-    "llama-2": "simple-icons:meta",
-    "llama-3": "simple-icons:meta",
-    // Mistral models
     "mistral": "simple-icons:mistral",
     "mixtral": "simple-icons:mistral",
-    // DeepSeek models
-    "deepseek": "ri:deepseek-fill",
-    "deepseek-chat": "ri:deepseek-fill",
-    "deepseek-reasoner": "ri:deepseek-fill",
+    "deepseek": "simple-icons:deepseek"
   }
 
   function get_model_icon(model: string | undefined): string {
     if (!model) return "lucide:bot"
     const model_lower = model.toLowerCase()
-    // Check for exact match first
-    if (model_icons[model_lower]) return model_icons[model_lower]
     // Check for partial match (e.g., "claude-3-5-sonnet-20241022" matches "claude")
-    for (const [key, icon] of Object.entries(model_icons)) {
+    for (const [key, icon] of Object.entries(provider_icons)) {
       if (model_lower.includes(key)) return icon
     }
     return "lucide:bot"

@@ -10,8 +10,7 @@
   import LofiGirl from "./lobby/LofiGirl.svelte";
   import Chillhop from "./lobby/Chillhop.svelte";
   import Daybreak from "./lobby/Daybreak.svelte";
-  import MuseumMasterpiece from "./lobby/MuseumMasterpiece.svelte";
-  import PhotographyShowcase from "./lobby/PhotographyShowcase.svelte";
+  import FancyArt from "./lobby/FancyArt.svelte";
 
   let {
     visible = false,
@@ -37,8 +36,7 @@
     | "lofigirl"
     | "chillhop"
     | "daybreak"
-    | "museum"
-    | "photography";
+    | "museum";
 
   const vibeNames: Record<VibeId, string> = {
     snake: "Snake",
@@ -50,13 +48,11 @@
     lofigirl: "Lo-fi Girl",
     chillhop: "Chillhop",
     daybreak: "Daybreak",
-    museum: "Museum Masterpiece",
-    photography: "Photography",
+    museum: "Fancy Art",
   };
 
   let currentVibeIndex = $state(0);
   let isLoading = $state(true);
-  let isFullscreen = $state(false);
   const allVibes: VibeId[] = [
     "snake",
     "2048",
@@ -68,7 +64,6 @@
     "chillhop",
     "daybreak",
     "museum",
-    "photography",
   ];
 
   let hiddenVibes = $state<string[]>([]);
@@ -115,7 +110,9 @@
 
   function loadCurrentVibe() {
     if (typeof window === "undefined") return;
-    const savedVibe = localStorage.getItem("vibezone-current-vibe") as VibeId | null;
+    const savedVibe = localStorage.getItem(
+      "vibezone-current-vibe",
+    ) as VibeId | null;
     if (savedVibe && shuffledVibes.includes(savedVibe)) {
       const index = shuffledVibes.indexOf(savedVibe);
       if (index !== -1) {
@@ -138,24 +135,11 @@
     saveCurrentVibe();
   }
 
-  function toggleFullscreen() {
-    isFullscreen = !isFullscreen;
-    if (typeof window !== "undefined") {
-      localStorage.setItem("vibezone-fullscreen", isFullscreen.toString());
-    }
-  }
-
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === "Escape" && visible) {
       e.preventDefault();
       e.stopPropagation();
-      if (isFullscreen) {
-        // Exit fullscreen first
-        toggleFullscreen();
-      } else {
-        // Close vibe lounge
-        onDismiss();
-      }
+      onDismiss();
     }
   }
 
@@ -164,12 +148,6 @@
     loadHiddenVibes();
     updateShuffledVibes();
     loadCurrentVibe();
-
-    // Load fullscreen preference
-    if (typeof window !== "undefined") {
-      const savedFullscreen = localStorage.getItem("vibezone-fullscreen");
-      isFullscreen = savedFullscreen === "true";
-    }
 
     // Small delay to ensure components are ready
     setTimeout(() => {
@@ -184,14 +162,10 @@
 </script>
 
 {#if visible}
-  <!-- Vibe Overlay - chat mode (absolute) or fullscreen mode (fixed) -->
+  <!-- Vibe Overlay -->
   <div
     transition:fade={{ duration: 200 }}
-    class="{isFullscreen
-      ? 'fixed'
-      : 'absolute'} inset-0 bg-[var(--builder-bg-secondary)] {isFullscreen
-      ? 'z-50'
-      : 'z-10'} flex flex-col"
+    class="fixed inset-0 bg-[var(--builder-bg-secondary)] z-50 flex flex-col"
   >
     <!-- Top controls -->
     <div
@@ -206,13 +180,6 @@
           class="px-2 py-1 text-xs border border-[var(--builder-border)] hover:border-red-500 text-[var(--builder-text-secondary)] hover:text-red-500 transition-colors rounded"
         >
           Hide
-        </button>
-        <button
-          onclick={toggleFullscreen}
-          class="px-2 py-1 text-xs border border-[var(--builder-border)] hover:border-[var(--builder-accent)] text-[var(--builder-text-secondary)] hover:text-[var(--builder-accent)] transition-colors rounded"
-          title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-        >
-          {isFullscreen ? "⛶" : "⛶"}
         </button>
         <button
           onclick={nextVibe}
@@ -253,57 +220,55 @@
     <!-- Vibe content (scrollable, centered) -->
     <div class="flex-1 overflow-y-auto p-4 flex items-center justify-center">
       {#key currentVibe}
-      {#if isLoading}
-        <div class="flex flex-col items-center space-y-4 py-8">
-          <div class="text-[var(--builder-accent)] text-3xl animate-spin">
-            ⚡
+        {#if isLoading}
+          <div class="flex flex-col items-center space-y-4 py-8">
+            <div class="text-[var(--builder-accent)] text-3xl animate-spin">
+              ⚡
+            </div>
+            <div
+              class="text-[var(--builder-text-secondary)] font-sans text-sm animate-pulse"
+            >
+              Loading vibe...
+            </div>
           </div>
-          <div
-            class="text-[var(--builder-text-secondary)] font-sans text-sm animate-pulse"
-          >
-            Loading vibe...
+        {:else if shuffledVibes.length === 0}
+          <div class="flex flex-col items-center space-y-4 py-8">
+            <div class="text-[var(--builder-accent)] text-3xl">🫥</div>
+            <div class="text-[var(--builder-text-secondary)] font-sans text-sm">
+              All vibes hidden!
+            </div>
+            <button
+              onclick={() => {
+                hiddenVibes = [];
+                saveHiddenVibes();
+                updateShuffledVibes();
+              }}
+              class="px-4 py-2 bg-[var(--builder-accent)] text-[var(--builder-bg-primary)] font-sans text-sm hover:opacity-90 transition-opacity rounded"
+            >
+              Restore All Vibes
+            </button>
           </div>
-        </div>
-      {:else if shuffledVibes.length === 0}
-        <div class="flex flex-col items-center space-y-4 py-8">
-          <div class="text-[var(--builder-accent)] text-3xl">🫥</div>
-          <div class="text-[var(--builder-text-secondary)] font-sans text-sm">
-            All vibes hidden!
-          </div>
-          <button
-            onclick={() => {
-              hiddenVibes = [];
-              saveHiddenVibes();
-              updateShuffledVibes();
-            }}
-            class="px-4 py-2 bg-[var(--builder-accent)] text-[var(--builder-bg-primary)] font-sans text-sm hover:opacity-90 transition-opacity rounded"
-          >
-            Restore All Vibes
-          </button>
-        </div>
-      {:else if currentVibe === "snake"}
-        <SnakeGame />
-      {:else if currentVibe === "2048"}
-        <Game2048 />
-      {:else if currentVibe === "tetris"}
-        <Tetris />
-      {:else if currentVibe === "wordle"}
-        <Wordle />
-      {:else if currentVibe === "art"}
-        <GenerativeArt />
-      {:else if currentVibe === "video"}
-        <CatVideo />
-      {:else if currentVibe === "lofigirl"}
-        <LofiGirl />
-      {:else if currentVibe === "chillhop"}
-        <Chillhop />
-      {:else if currentVibe === "daybreak"}
-        <Daybreak />
-      {:else if currentVibe === "museum"}
-        <MuseumMasterpiece />
-      {:else if currentVibe === "photography"}
-        <PhotographyShowcase />
-      {/if}
+        {:else if currentVibe === "snake"}
+          <SnakeGame />
+        {:else if currentVibe === "2048"}
+          <Game2048 />
+        {:else if currentVibe === "tetris"}
+          <Tetris />
+        {:else if currentVibe === "wordle"}
+          <Wordle />
+        {:else if currentVibe === "art"}
+          <GenerativeArt />
+        {:else if currentVibe === "video"}
+          <CatVideo />
+        {:else if currentVibe === "lofigirl"}
+          <LofiGirl />
+        {:else if currentVibe === "chillhop"}
+          <Chillhop />
+        {:else if currentVibe === "daybreak"}
+          <Daybreak />
+        {:else if currentVibe === "museum"}
+          <FancyArt />
+        {/if}
       {/key}
     </div>
   </div>

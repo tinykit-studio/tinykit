@@ -41,7 +41,6 @@
 			name: "OpenAI",
 			models: [
 				{ id: "gpt-5.2-2025-12-11", label: "gpt-5.2-2025-12-11 — best" },
-				{ id: "gpt-4o-mini", label: "gpt-4o-mini — fast" },
 			],
 		},
 		{
@@ -51,19 +50,6 @@
 				{
 					id: "gemini-3-pro-preview",
 					label: "gemini-3-pro-preview — best",
-				},
-				{ id: "gemini-2.5-flash", label: "gemini-2.5-flash — fast" },
-			],
-		},
-
-		{
-			id: "deepseek",
-			name: "DeepSeek",
-			models: [
-				{ id: "deepseek-chat", label: "deepseek-chat — best" },
-				{
-					id: "deepseek-reasoner",
-					label: "deepseek-reasoner — reasoning",
 				},
 			],
 		},

@@ -73,8 +73,13 @@
     on_target_consumed?: () => void;
   };
 
-  let { data_files, table_icons, target_field = null, on_refresh_preview, on_target_consumed }: DataPanelProps =
-    $props();
+  let {
+    data_files,
+    table_icons,
+    target_field = null,
+    on_refresh_preview,
+    on_target_consumed,
+  }: DataPanelProps = $props();
 
   // Watch for target_field changes to auto-select collection
   watch(
@@ -82,13 +87,16 @@
     ([field_name, files_count]) => {
       if (field_name && files_count > 0) {
         // Find matching collection (exact match or case-insensitive)
-        const match = data_files.find(f => f === field_name || f.toLowerCase() === field_name.toLowerCase());
+        const match = data_files.find(
+          (f) =>
+            f === field_name || f.toLowerCase() === field_name.toLowerCase(),
+        );
         if (match) {
           select_file(match);
           on_target_consumed?.();
         }
       }
-    }
+    },
   );
 
   let selected_file = $state<string | null>(null);
@@ -120,7 +128,7 @@
 
   // Get column names from schema, sorted with id first
   function get_column_names(schema: ColumnSchema[]): string[] {
-    return sort_columns(schema).map(c => c.name);
+    return sort_columns(schema).map((c) => c.name);
   }
 
   // Column type options
@@ -130,28 +138,28 @@
     { value: "boolean", label: "Boolean" },
     { value: "date", label: "Date" },
     { value: "email", label: "Email" },
-    { value: "url", label: "URL" }
+    { value: "url", label: "URL" },
   ] as const;
 
   function get_type_label(type: string): string {
-    return COLUMN_TYPES.find(t => t.value === type)?.label || "Text";
+    return COLUMN_TYPES.find((t) => t.value === type)?.label || "Text";
   }
 
   // Infer schema from records if missing
   function infer_schema_from_records(records: DataRecord[]): ColumnSchema[] {
-    if (!records || records.length === 0) return []
+    if (!records || records.length === 0) return [];
 
-    const first_record = records[0]
-    const schema: ColumnSchema[] = []
+    const first_record = records[0];
+    const schema: ColumnSchema[] = [];
 
     for (const [key, value] of Object.entries(first_record)) {
-      let type = "text"
-      if (typeof value === "number") type = "number"
-      else if (typeof value === "boolean") type = "boolean"
-      schema.push({ name: key, type })
+      let type = "text";
+      if (typeof value === "number") type = "number";
+      else if (typeof value === "boolean") type = "boolean";
+      schema.push({ name: key, type });
     }
 
-    return schema
+    return schema;
   }
 
   async function select_file(filename: string) {
@@ -160,27 +168,31 @@
       const raw_data = await api.read_data_file(project_id, filename);
 
       // Handle different data formats
-      if (raw_data && typeof raw_data === "object" && !Array.isArray(raw_data)) {
+      if (
+        raw_data &&
+        typeof raw_data === "object" &&
+        !Array.isArray(raw_data)
+      ) {
         // New format: { schema, records }
-        let schema = raw_data.schema || []
-        const records = raw_data.records || []
+        let schema = raw_data.schema || [];
+        const records = raw_data.records || [];
 
         // If schema is missing/empty but we have records, infer schema
         if (schema.length === 0 && records.length > 0) {
-          schema = infer_schema_from_records(records)
+          schema = infer_schema_from_records(records);
         }
 
         file_content = {
           schema: sort_columns(schema),
-          records
+          records,
         };
       } else if (Array.isArray(raw_data)) {
         // Legacy format: just an array of records
-        const records = raw_data
-        const schema = infer_schema_from_records(records)
+        const records = raw_data;
+        const schema = infer_schema_from_records(records);
         file_content = {
           schema: sort_columns(schema),
-          records
+          records,
         };
       } else {
         file_content = { schema: [], records: [] };
@@ -193,16 +205,22 @@
 
   function generate_id() {
     const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-    return Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+    return Array.from(
+      { length: 5 },
+      () => chars[Math.floor(Math.random() * chars.length)],
+    ).join("");
   }
 
   function start_add_record() {
     if (!file_content) return;
     const columns = get_column_names(file_content.schema);
-    new_record = columns.reduce((acc, col) => ({
-      ...acc,
-      [col]: col === "id" ? generate_id() : ""
-    }), {});
+    new_record = columns.reduce(
+      (acc, col) => ({
+        ...acc,
+        [col]: col === "id" ? generate_id() : "",
+      }),
+      {},
+    );
     show_add_form = true;
   }
 
@@ -210,7 +228,7 @@
     if (!selected_file || !file_content) return;
     const updated: CollectionData = {
       schema: file_content.schema,
-      records: [...file_content.records, new_record]
+      records: [...file_content.records, new_record],
     };
     await save_collection(updated);
     show_add_form = false;
@@ -224,12 +242,18 @@
   }
 
   async function save_edit_record() {
-    if (!selected_file || !file_content || editing_record_index === null || !editing_record) return;
+    if (
+      !selected_file ||
+      !file_content ||
+      editing_record_index === null ||
+      !editing_record
+    )
+      return;
     const new_records = [...file_content.records];
     new_records[editing_record_index] = editing_record;
     const updated: CollectionData = {
       schema: file_content.schema,
-      records: new_records
+      records: new_records,
     };
     await save_collection(updated);
     editing_record_index = null;
@@ -244,11 +268,12 @@
   }
 
   async function delete_record(index: number) {
-    if (!selected_file || !file_content || !confirm("Delete this record?")) return;
+    if (!selected_file || !file_content || !confirm("Delete this record?"))
+      return;
     const new_records = file_content.records.filter((_, i) => i !== index);
     const updated: CollectionData = {
       schema: file_content.schema,
-      records: new_records
+      records: new_records,
     };
     await save_collection(updated);
   }
@@ -289,13 +314,13 @@
     try {
       // Filter out columns with empty names and create schema
       const schema = new_columns
-        .filter(col => col.name.trim())
-        .map(col => ({ name: col.name.trim(), type: col.type }));
+        .filter((col) => col.name.trim())
+        .map((col) => ({ name: col.name.trim(), type: col.type }));
 
       // Create collection with schema and empty records
       const collection_data: CollectionData = {
         schema: sort_columns(schema),
-        records: []
+        records: [],
       };
 
       await api.write_data_file(project_id, collection_id, collection_data);
@@ -347,9 +372,12 @@
 
   function get_default_value(type: string): any {
     switch (type) {
-      case "number": return 0;
-      case "boolean": return false;
-      default: return "";
+      case "number":
+        return 0;
+      case "boolean":
+        return false;
+      default:
+        return "";
     }
   }
 
@@ -359,12 +387,12 @@
     try {
       // Filter out columns with empty names
       const new_schema = new_columns
-        .filter(col => col.name.trim())
-        .map(col => ({ name: col.name.trim(), type: col.type }));
+        .filter((col) => col.name.trim())
+        .map((col) => ({ name: col.name.trim(), type: col.type }));
 
       // Get old schema column names for comparison
-      const old_column_names = new Set(file_content.schema.map(c => c.name));
-      const new_column_names = new Set(new_schema.map(c => c.name));
+      const old_column_names = new Set(file_content.schema.map((c) => c.name));
+      const new_column_names = new Set(new_schema.map((c) => c.name));
 
       // Transform existing records to match new schema
       const new_records = file_content.records.map((old_record) => {
@@ -383,7 +411,7 @@
 
       const updated: CollectionData = {
         schema: sort_columns(new_schema),
-        records: new_records
+        records: new_records,
       };
 
       await save_collection(updated);
@@ -586,7 +614,9 @@
                     </td>
                   </tr>
                 {:else}
-                  <tr class="hover:bg-[var(--builder-bg-secondary)] group transition-colors">
+                  <tr
+                    class="hover:bg-[var(--builder-bg-secondary)] group transition-colors"
+                  >
                     {#each columns as col}
                       {@const val = record[col]}
                       <td
@@ -598,11 +628,16 @@
                             >null</span
                           >
                         {:else if typeof val === "object"}
-                          <span class="text-[var(--builder-text-secondary)] font-mono text-xs"
+                          <span
+                            class="text-[var(--builder-text-secondary)] font-mono text-xs"
                             >{JSON.stringify(val)}</span
                           >
                         {:else if typeof val === "boolean"}
-                          <span class="{val ? 'text-orange-400' : 'text-[var(--builder-text-secondary)]'}">{val}</span
+                          <span
+                            class={val
+                              ? "text-orange-400"
+                              : "text-[var(--builder-text-secondary)]"}
+                            >{val}</span
                           >
                         {:else}
                           {val}
@@ -713,7 +748,10 @@
                   </Select.Trigger>
                   <Select.Content>
                     {#each COLUMN_TYPES as type_option (type_option.value)}
-                      <Select.Item value={type_option.value} label={type_option.label}>
+                      <Select.Item
+                        value={type_option.value}
+                        label={type_option.label}
+                      >
                         {type_option.label}
                       </Select.Item>
                     {/each}
@@ -800,7 +838,10 @@
                   </Select.Trigger>
                   <Select.Content>
                     {#each COLUMN_TYPES as type_option (type_option.value)}
-                      <Select.Item value={type_option.value} label={type_option.label}>
+                      <Select.Item
+                        value={type_option.value}
+                        label={type_option.label}
+                      >
                         {type_option.label}
                       </Select.Item>
                     {/each}

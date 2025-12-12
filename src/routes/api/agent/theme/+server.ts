@@ -1,7 +1,9 @@
 import { json } from '@sveltejs/kit'
+import { generateText } from 'ai'
+import { createOpenAI } from '@ai-sdk/openai'
+import { createAnthropic } from '@ai-sdk/anthropic'
+import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import type { RequestHandler } from './$types'
-import { createLLMProvider } from '$lib/ai'
-import { Agent } from '$lib/ai/agent'
 import { env } from '$env/dynamic/private'
 import { validateUserToken, unauthorizedResponse } from '$lib/server/pb'
 
@@ -9,6 +11,29 @@ const LLM_PROVIDER = (env.LLM_PROVIDER as 'openai' | 'anthropic' | 'gemini' | 'd
 const LLM_API_KEY = env.LLM_API_KEY || ''
 const LLM_MODEL = env.LLM_MODEL || 'gpt-4'
 const LLM_BASE_URL = env.LLM_BASE_URL
+
+function get_model(provider: string, apiKey: string, model: string, baseUrl?: string) {
+	switch (provider) {
+		case 'openai':
+		case 'deepseek': {
+			const openai = createOpenAI({
+				apiKey,
+				baseURL: baseUrl || (provider === 'deepseek' ? 'https://api.deepseek.com/v1' : undefined)
+			})
+			return openai(model)
+		}
+		case 'anthropic': {
+			const anthropic = createAnthropic({ apiKey })
+			return anthropic(model)
+		}
+		case 'gemini': {
+			const google = createGoogleGenerativeAI({ apiKey })
+			return google(model)
+		}
+		default:
+			throw new Error(`Unknown provider: ${provider}`)
+	}
+}
 
 const THEME_SYSTEM_PROMPT = `You are a theme generation expert. Generate a complete design system theme based on the user's description.
 
@@ -39,7 +64,6 @@ Rules:
 - Make colors harmonious and accessible`
 
 export const POST: RequestHandler = async ({ request }) => {
-	// Require authentication
 	const user = await validateUserToken(request)
 	if (!user) {
 		return unauthorizedResponse('Authentication required')
@@ -59,46 +83,30 @@ export const POST: RequestHandler = async ({ request }) => {
 			)
 		}
 
-		// Create a dedicated agent instance for theme generation
-		const provider = createLLMProvider({
-			provider: LLM_PROVIDER,
-			apiKey: LLM_API_KEY,
-			model: LLM_MODEL,
-			baseUrl: LLM_BASE_URL
+		const model = get_model(LLM_PROVIDER, LLM_API_KEY, LLM_MODEL, LLM_BASE_URL)
+		const result = await generateText({
+			model,
+			system: THEME_SYSTEM_PROMPT,
+			prompt: `Generate a theme: ${prompt}`
 		})
-
-		const theme_agent = new Agent(provider, 'theme-generator')
-
-		// Override the system prompt for theme generation
-		const history = theme_agent.getHistory()
-		history[0] = {
-			role: 'system',
-			content: THEME_SYSTEM_PROMPT
-		}
-
-		// Generate theme
-		const result = await theme_agent.processPrompt(`Generate a theme: ${prompt}`)
 
 		// Parse the JSON response
 		let theme_data
 		try {
-			// Extract JSON from markdown code blocks if present
-			const json_match = result.response.match(/```json\n([\s\S]*?)\n```/) ||
-			                   result.response.match(/```\n([\s\S]*?)\n```/)
-			const json_str = json_match ? json_match[1] : result.response
+			const json_match = result.text.match(/```json\n([\s\S]*?)\n```/) ||
+			                   result.text.match(/```\n([\s\S]*?)\n```/)
+			const json_str = json_match ? json_match[1] : result.text
 			theme_data = JSON.parse(json_str.trim())
-		} catch (parse_err) {
-			console.error('Failed to parse AI response:', result.response)
+		} catch {
+			console.error('Failed to parse AI response:', result.text)
 			throw new Error('AI generated invalid theme format')
 		}
 
-		// Validate the theme structure
 		if (!theme_data.fields || !Array.isArray(theme_data.fields)) {
 			throw new Error('Invalid theme structure')
 		}
 
 		return json(theme_data)
-
 	} catch (err) {
 		console.error('Theme generation error:', err)
 		return json(

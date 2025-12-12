@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Logo from "$lib/assets/Logo.svelte";
   import { fade } from "svelte/transition";
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
@@ -64,10 +65,14 @@
     is_mobile = false,
   }: HeaderProps = $props();
 
-  const position_options: { id: PreviewPosition; label: string; icon: typeof PanelRight }[] = [
+  const position_options: {
+    id: PreviewPosition;
+    label: string;
+    icon: typeof PanelRight;
+  }[] = [
     { id: "left", label: "Left", icon: PanelLeft },
     { id: "bottom", label: "Bottom", icon: PanelBottom },
-    { id: "right", label: "Right", icon: PanelRight }
+    { id: "right", label: "Right", icon: PanelRight },
   ];
 
   let mod_key_held = writable(false);
@@ -119,29 +124,34 @@
     return is_mobile === is_mobile_screen;
   }
 
-  watch(() => is_deploying, (current_deploying) => {
-    if (was_deploying && !current_deploying) {
-      // Deploy just finished - show popover immediately
-      // Use project's domain if available, otherwise fall back to current origin
-      if (project_domain) {
-        // Check if the domain already has a protocol
-        deploy_url = project_domain.startsWith('http') ? project_domain : `https://${project_domain}`;
-      } else {
-        deploy_url = window.location.origin;
+  watch(
+    () => is_deploying,
+    (current_deploying) => {
+      if (was_deploying && !current_deploying) {
+        // Deploy just finished - show popover immediately
+        // Use project's domain if available, otherwise fall back to current origin
+        if (project_domain) {
+          // Check if the domain already has a protocol
+          deploy_url = project_domain.startsWith("http")
+            ? project_domain
+            : `https://${project_domain}`;
+        } else {
+          deploy_url = window.location.origin;
+        }
+        deploy_success = true;
+        // Only show popover on the header that matches current screen size
+        if (should_show_popover()) {
+          show_deploy_popover = true;
+        }
+        // Reset everything after 10 seconds
+        setTimeout(() => {
+          show_deploy_popover = false;
+          deploy_success = false;
+        }, 10000);
       }
-      deploy_success = true;
-      // Only show popover on the header that matches current screen size
-      if (should_show_popover()) {
-        show_deploy_popover = true;
-      }
-      // Reset everything after 10 seconds
-      setTimeout(() => {
-        show_deploy_popover = false;
-        deploy_success = false;
-      }, 10000);
-    }
-    was_deploying = current_deploying;
-  });
+      was_deploying = current_deploying;
+    },
+  );
 
   let show_help_dialog = $state(false);
   let expanded_sections = $state({
@@ -205,11 +215,8 @@
     class="h-14 border-t border-[var(--builder-border)] bg-[var(--builder-bg-primary)] flex items-center justify-between px-4 flex-shrink-0 relative z-30"
   >
     <!-- Left: Logo -->
-    <a
-      href="/tinykit/dashboard"
-      class="text-base text-sans font-medium text-[var(--builder-text-primary)] hover:text-[var(--builder-accent)] transition-colors"
-    >
-      tinykit
+    <a href="/tinykit/dashboard" class="logo">
+      <Logo />
     </a>
 
     <!-- Center: Tab Dropdown -->
@@ -235,7 +242,10 @@
           {@const Icon = tab.icon}
           <DropdownMenu.Item
             onclick={() => on_tab_change(tab.id)}
-            class="cursor-pointer hover:bg-[var(--builder-bg-secondary)] flex items-center gap-3 py-3 text-base {current_tab === tab.id ? 'bg-[var(--builder-bg-secondary)]' : ''}"
+            class="cursor-pointer hover:bg-[var(--builder-bg-secondary)] flex items-center gap-3 py-3 text-base {current_tab ===
+            tab.id
+              ? 'bg-[var(--builder-bg-secondary)]'
+              : ''}"
           >
             <Icon class="w-5 h-5" />
             <span>{tab.label}</span>
@@ -252,7 +262,9 @@
         size="sm"
         class="font-sans relative"
       >
-        <span class={is_deploying || deploy_success ? "invisible" : ""}>Deploy</span>
+        <span class={is_deploying || deploy_success ? "invisible" : ""}
+          >Deploy</span
+        >
         {#if is_deploying}
           <span class="absolute inset-0 flex items-center justify-center">
             <Loader2 size={16} class="animate-spin" />
@@ -296,11 +308,8 @@
   >
     <!-- Left: Logo -->
     <div class="flex items-center space-x-3 flex-shrink-0">
-      <a
-        href="/tinykit/dashboard"
-        class="text-base text-sans font-medium text-[var(--builder-text-primary)] hover:text-[var(--builder-accent)] transition-colors"
-      >
-        tinykit
+      <a href="/tinykit/dashboard" class="logo">
+        <Logo />
       </a>
       <!-- Project name and save status -->
       <span class="text-[var(--builder-text-secondary)]">·</span>
@@ -330,72 +339,77 @@
                   class="w-2 h-2 rounded-full bg-amber-400 animate-pulse cursor-help"
                 ></span>
               {:else if save_status.has_unsaved}
-                <span class="w-2 h-2 rounded-full bg-amber-400 cursor-help"></span>
+                <span class="w-2 h-2 rounded-full bg-amber-400 cursor-help"
+                ></span>
               {:else}
-                <span class="w-2 h-2 rounded-full bg-green-400 cursor-help"></span>
+                <span class="w-2 h-2 rounded-full bg-green-400 cursor-help"
+                ></span>
               {/if}
             </Popover.Trigger>
             <Popover.Content class="w-auto px-3 py-2 text-xs">
               {#if save_status.is_saving}
-              <span class="text-amber-400">Saving...</span>
-            {:else if save_status.has_unsaved}
-              <span class="text-amber-400">Unsaved changes</span>
-            {:else if save_status.last_saved_at}
-              <span class="text-green-400"
-                >Saved at {format_time(save_status.last_saved_at)}</span
-              >
-            {/if}
-          </Popover.Content>
-        </Popover.Root>
-      {/if}
+                <span class="text-amber-400">Saving...</span>
+              {:else if save_status.has_unsaved}
+                <span class="text-amber-400">Unsaved changes</span>
+              {:else if save_status.last_saved_at}
+                <span class="text-green-400"
+                  >Saved at {format_time(save_status.last_saved_at)}</span
+                >
+              {/if}
+            </Popover.Content>
+          </Popover.Root>
+        {/if}
+      </div>
     </div>
-  </div>
 
-  <!-- Center: Horizontal Tabs -->
-  <nav class="flex flex-1 justify-center">
-    <div class="flex items-center">
-      {#each tabs as tab}
-        {@const Icon = tab.icon}
-        <button
-          data-tab-id={tab.id}
-          class="pl-3 pr-4 h-12 flex items-center gap-1.5 text-xs font-sans relative transition-colors whitespace-nowrap {current_tab ===
-          tab.id
-            ? 'text-[var(--builder-text-primary)]'
-            : 'text-[var(--builder-text-secondary)] hover:text-[var(--builder-text-primary)]'}"
-          onclick={() => on_tab_change(tab.id)}
-        >
-          <span class="flex items-center gap-2" class:invisible={$mod_key_held}>
-            <Icon class="w-3 h-3" />
-            <span>{tab.label}</span>
-          </span>
-          {#if $mod_key_held}
+    <!-- Center: Horizontal Tabs -->
+    <nav class="flex flex-1 justify-center">
+      <div class="flex items-center">
+        {#each tabs as tab}
+          {@const Icon = tab.icon}
+          <button
+            data-tab-id={tab.id}
+            class="pl-3 pr-4 h-12 flex items-center gap-1.5 text-xs font-sans relative transition-colors whitespace-nowrap {current_tab ===
+            tab.id
+              ? 'text-[var(--builder-text-primary)]'
+              : 'text-[var(--builder-text-secondary)] hover:text-[var(--builder-text-primary)]'}"
+            onclick={() => on_tab_change(tab.id)}
+          >
             <span
-              class="absolute inset-0 flex items-center justify-center text-xs"
+              class="flex items-center gap-2"
+              class:invisible={$mod_key_held}
             >
-              ⌘{tab.shortcut}
+              <Icon class="w-3 h-3" />
+              <span>{tab.label}</span>
             </span>
-          {/if}
-          {#if current_tab === tab.id}
-            <div
-              in:fade={{ duration: 100 }}
-              class="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--builder-accent)]"
-            ></div>
-          {/if}
-        </button>
-      {/each}
-    </div>
-  </nav>
+            {#if $mod_key_held}
+              <span
+                class="absolute inset-0 flex items-center justify-center text-xs"
+              >
+                ⌘{tab.shortcut}
+              </span>
+            {/if}
+            {#if current_tab === tab.id}
+              <div
+                in:fade={{ duration: 100 }}
+                class="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--builder-accent)]"
+              ></div>
+            {/if}
+          </button>
+        {/each}
+      </div>
+    </nav>
 
-  <!-- Right: Actions -->
-  <div class="flex items-center space-x-2 flex-shrink-0">
-    <button
-      onclick={() => (show_help_dialog = true)}
-      class="p-1.5 rounded text-[var(--builder-text-secondary)] hover:text-[var(--builder-text-primary)] hover:bg-[var(--builder-bg-secondary)] transition-colors"
-      title="Help"
-    >
-      <HelpCircle size={18} />
-    </button>
-    <DropdownMenu.Root>
+    <!-- Right: Actions -->
+    <div class="flex items-center space-x-2 flex-shrink-0">
+      <button
+        onclick={() => (show_help_dialog = true)}
+        class="p-1.5 rounded text-[var(--builder-text-secondary)] hover:text-[var(--builder-text-primary)] hover:bg-[var(--builder-bg-secondary)] transition-colors"
+        title="Help"
+      >
+        <HelpCircle size={18} />
+      </button>
+      <DropdownMenu.Root>
         <DropdownMenu.Trigger>
           <Button
             variant="ghost"
@@ -436,14 +450,18 @@
           <DropdownMenu.Separator />
           <!-- Preview Position Selector -->
           <div class="px-2 py-2">
-            <span class="text-xs text-[var(--builder-text-secondary)] mb-2 block">Preview Position</span>
+            <span
+              class="text-xs text-[var(--builder-text-secondary)] mb-2 block"
+              >Preview Position</span
+            >
             <div class="flex gap-1">
               {#each position_options as option}
                 {@const Icon = option.icon}
                 <button
                   type="button"
                   onclick={() => (preview_position = option.id)}
-                  class="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs transition-colors {preview_position === option.id
+                  class="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs transition-colors {preview_position ===
+                  option.id
                     ? 'bg-[var(--builder-accent)] text-white'
                     : 'bg-[var(--builder-bg-tertiary)] text-[var(--builder-text-secondary)] hover:bg-[var(--builder-bg-secondary)] hover:text-[var(--builder-text-primary)]'}"
                   title="Preview on {option.label}"
@@ -486,52 +504,52 @@
           </DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Root>
-    <div class="relative">
-      <Button
-        onclick={on_deploy}
-        disabled={is_deploying}
-        size="sm"
-        class="font-sans relative"
-      >
-        <span class={is_deploying || deploy_success ? "invisible" : ""}
-          >Deploy</span
+      <div class="relative">
+        <Button
+          onclick={on_deploy}
+          disabled={is_deploying}
+          size="sm"
+          class="font-sans relative"
         >
-        {#if is_deploying}
-          <span class="absolute inset-0 flex items-center justify-center">
-            <Loader2 size={16} class="animate-spin" />
-          </span>
-        {:else if deploy_success}
-          <span class="absolute inset-0 flex items-center justify-center">
-            <Check size={16} class="text-green-400" />
-          </span>
-        {/if}
-      </Button>
-      <Popover.Root bind:open={show_deploy_popover}>
-        <Popover.Trigger
-          class="absolute inset-0 opacity-0 pointer-events-none"
-        />
-        <Popover.Content
-          class="w-auto p-3 bg-[var(--builder-bg-secondary)] border-[var(--builder-border)]"
-          align="end"
-        >
-          <div class="flex items-center gap-2 text-sm">
-            <Rocket size={16} class="text-[var(--builder-accent)]" />
-            <span class="text-[var(--builder-text-primary)]">Deployed!</span>
-          </div>
-          <a
-            href={deploy_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="mt-2 flex items-center gap-1.5 text-xs text-[var(--builder-accent)] hover:underline"
+          <span class={is_deploying || deploy_success ? "invisible" : ""}
+            >Deploy</span
           >
-            <ExternalLink size={12} />
-            {deploy_url}
-          </a>
-        </Popover.Content>
-      </Popover.Root>
+          {#if is_deploying}
+            <span class="absolute inset-0 flex items-center justify-center">
+              <Loader2 size={16} class="animate-spin" />
+            </span>
+          {:else if deploy_success}
+            <span class="absolute inset-0 flex items-center justify-center">
+              <Check size={16} class="text-green-400" />
+            </span>
+          {/if}
+        </Button>
+        <Popover.Root bind:open={show_deploy_popover}>
+          <Popover.Trigger
+            class="absolute inset-0 opacity-0 pointer-events-none"
+          />
+          <Popover.Content
+            class="w-auto p-3 bg-[var(--builder-bg-secondary)] border-[var(--builder-border)]"
+            align="end"
+          >
+            <div class="flex items-center gap-2 text-sm">
+              <Rocket size={16} class="text-[var(--builder-accent)]" />
+              <span class="text-[var(--builder-text-primary)]">Deployed!</span>
+            </div>
+            <a
+              href={deploy_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="mt-2 flex items-center gap-1.5 text-xs text-[var(--builder-accent)] hover:underline"
+            >
+              <ExternalLink size={12} />
+              {deploy_url}
+            </a>
+          </Popover.Content>
+        </Popover.Root>
+      </div>
     </div>
-  </div>
-</header>
+  </header>
 {/if}
 
 <!-- Help Dialog -->
@@ -826,5 +844,13 @@
     font-family: ui-monospace, monospace;
     font-size: 11px;
     color: var(--builder-text-primary);
+  }
+
+  .logo {
+    transition: opacity;
+  }
+
+  .logo:hover {
+    opacity: 0.8;
   }
 </style>
