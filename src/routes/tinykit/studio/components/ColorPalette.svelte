@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { generate_smart_palette } from "$lib/utils/color-utils"
-	import * as Popover from "$lib/components/ui/popover"
 
 	type Props = {
 		value: string
@@ -13,16 +12,15 @@
 	let { value = $bindable(), label = "", compact = false, theme_colors = [], onchange }: Props = $props()
 
 	let expanded = $state(false)
-	let picker_open = $state(false)
 
-	// Generate palette from theme colors only (stays 100% stable as you pick)
+	// Generate palette from theme colors
 	let palette = $derived(generate_smart_palette(theme_colors, 24))
 
+	// Check if current value is custom (not in palette)
 	let is_custom = $derived(!palette.includes(value.toLowerCase()))
 
 	function select(color: string) {
 		value = color
-		picker_open = false
 		if (compact) expanded = false
 		onchange(color)
 	}
@@ -85,36 +83,33 @@
 						></button>
 					{/each}
 
-					<!-- Custom button with native color picker -->
-					<Popover.Root bind:open={picker_open}>
-						<Popover.Trigger
-							class="swatch custom {is_custom || picker_open ? 'selected' : ''}"
-							style="background-color: {is_custom ? value : 'transparent'}"
-							title="Custom color"
-							aria-label="Pick custom color"
-						>
-							{#if !is_custom}
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<path d="M12 5v14M5 12h14" />
-								</svg>
-							{/if}
-						</Popover.Trigger>
-						<Popover.Content class="picker-popup" side="top" align="end" sideOffset={8}>
-							<input
-								type="color"
-								class="native-color-picker"
-								value={value}
-								oninput={handle_native_picker}
-							/>
-							<input
-								type="text"
-								class="hex-input"
-								value={value}
-								onchange={handle_hex_input}
-								placeholder="#000000"
-							/>
-						</Popover.Content>
-					</Popover.Root>
+					<!-- Show custom color as separate swatch if not in palette -->
+					{#if is_custom}
+						<button
+							type="button"
+							class="swatch selected"
+							style:background-color={value}
+							onclick={() => select(value)}
+							title={value}
+							aria-label="Current custom color {value}"
+						></button>
+					{/if}
+
+					<!-- Plus button with native picker overlay -->
+					<div class="picker-wrapper">
+						<div class="swatch custom">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M12 5v14M5 12h14" />
+							</svg>
+						</div>
+						<input
+							type="color"
+							class="picker-overlay"
+							value={value}
+							oninput={handle_native_picker}
+							title="Pick custom color"
+						/>
+					</div>
 				</div>
 			</div>
 		{/if}
@@ -140,36 +135,33 @@
 				></button>
 			{/each}
 
-			<!-- Custom button with native color picker -->
-			<Popover.Root bind:open={picker_open}>
-				<Popover.Trigger
-					class="swatch custom {is_custom || picker_open ? 'selected' : ''}"
-					style="background-color: {is_custom ? value : 'transparent'}"
-					title="Custom color"
-					aria-label="Pick custom color"
-				>
-					{#if !is_custom}
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<path d="M12 5v14M5 12h14" />
-						</svg>
-					{/if}
-				</Popover.Trigger>
-				<Popover.Content class="picker-popup" side="top" align="end" sideOffset={8}>
-					<input
-						type="color"
-						class="native-color-picker"
-						value={value}
-						oninput={handle_native_picker}
-					/>
-					<input
-						type="text"
-						class="hex-input"
-						value={value}
-						onchange={handle_hex_input}
-						placeholder="#000000"
-					/>
-				</Popover.Content>
-			</Popover.Root>
+			<!-- Show custom color as separate swatch if not in palette -->
+			{#if is_custom}
+				<button
+					type="button"
+					class="swatch selected"
+					style:background-color={value}
+					onclick={() => select(value)}
+					title={value}
+					aria-label="Current custom color {value}"
+				></button>
+			{/if}
+
+			<!-- Plus button with native picker overlay -->
+			<div class="picker-wrapper">
+				<div class="swatch custom">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M12 5v14M5 12h14" />
+					</svg>
+				</div>
+				<input
+					type="color"
+					class="picker-overlay"
+					value={value}
+					oninput={handle_native_picker}
+					title="Pick custom color"
+				/>
+			</div>
 		</div>
 	</div>
 {/if}
@@ -295,63 +287,34 @@
 		border-color: var(--builder-text-secondary);
 	}
 
-	.swatch.custom.selected {
-		border-style: solid;
-		border-color: var(--builder-accent);
-	}
-
 	.swatch.custom svg {
 		width: 14px;
 		height: 14px;
 	}
 
-	/* Popover content styling - positioning handled by Floating UI */
-	:global(.picker-popup) {
-		padding: 12px !important;
-		background: var(--builder-bg-secondary) !important;
-		border-radius: 8px !important;
-		border: 1px solid var(--builder-border) !important;
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
-		display: flex !important;
-		flex-direction: column !important;
-		gap: 8px !important;
-		width: auto !important;
-		min-width: 180px !important;
+	/* Picker wrapper - positions overlay on top of the + button */
+	.picker-wrapper {
+		position: relative;
+		aspect-ratio: 1;
+		width: 100%;
 	}
 
-	.native-color-picker {
+	.picker-wrapper .swatch {
 		width: 100%;
-		height: 120px;
-		border: none;
-		border-radius: 4px;
+		height: 100%;
+	}
+
+	.picker-wrapper:hover .swatch {
+		transform: scale(1.1);
+		z-index: 1;
+	}
+
+	.picker-overlay {
+		position: absolute;
+		inset: 0;
+		opacity: 0;
 		cursor: pointer;
-		padding: 0;
-		background: transparent;
-	}
-
-	.native-color-picker::-webkit-color-swatch-wrapper {
-		padding: 0;
-	}
-
-	.native-color-picker::-webkit-color-swatch {
-		border: 1px solid var(--builder-border);
-		border-radius: 4px;
-	}
-
-	.hex-input {
 		width: 100%;
-		padding: 8px;
-		font-size: 12px;
-		font-family: ui-monospace, monospace;
-		background: var(--builder-bg-tertiary);
-		border: 1px solid var(--builder-border);
-		border-radius: 4px;
-		color: var(--builder-text-primary);
-		text-align: center;
-	}
-
-	.hex-input:focus {
-		outline: none;
-		border-color: var(--builder-accent);
+		height: 100%;
 	}
 </style>

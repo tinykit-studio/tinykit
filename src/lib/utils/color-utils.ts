@@ -1,6 +1,9 @@
 /**
  * Color utilities for generating harmonious color palettes
+ * Uses OKLCH for perceptually uniform color generation
  */
+
+import { oklch, formatHex, parse } from 'culori'
 
 export type HSL = { h: number; s: number; l: number }
 
@@ -213,7 +216,31 @@ export function generate_smart_palette(
 		}
 	}
 
-	// 3. Add neutrals if still need more
+	// 3. Generate varied hues using OKLCH for perceptual uniformity
+	// Convert theme colors to OKLCH to extract lightness and chroma
+	const theme_oklch = base_colors
+		.map(c => oklch(parse(c)))
+		.filter((c): c is NonNullable<typeof c> => c !== undefined)
+
+	const avg_lightness = theme_oklch.length > 0
+		? theme_oklch.reduce((sum, c) => sum + (c.l ?? 0.65), 0) / theme_oklch.length
+		: 0.65
+	const avg_chroma = theme_oklch.length > 0
+		? theme_oklch.reduce((sum, c) => sum + (c.c ?? 0.15), 0) / theme_oklch.length
+		: 0.15
+
+	// Clamp to reasonable ranges for vibrant but not oversaturated colors
+	const lightness = Math.max(0.5, Math.min(0.75, avg_lightness))
+	const chroma = Math.max(0.1, Math.min(0.2, avg_chroma))
+
+	// Generate 16 colors distributed across the hue wheel (OKLCH)
+	for (let i = 0; i < 16; i++) {
+		const hue = (i * 360) / 16
+		const hex = formatHex({ mode: 'oklch', l: lightness, c: chroma, h: hue })
+		if (hex) add_color(hex)
+	}
+
+	// 4. Add neutrals if still need more
 	const neutrals = [
 		'#000000', '#1a1a1a', '#333333', '#4d4d4d', '#666666',
 		'#808080', '#999999', '#b3b3b3', '#cccccc', '#e6e6e6', '#ffffff'

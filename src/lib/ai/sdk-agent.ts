@@ -140,9 +140,9 @@ const rss = await proxy.text('https://hnrss.org/frontpage')
 ## Design Fields
 Use CSS vars with fallbacks in code, then create fields:
 \`\`\`css
-.card { background: var(--card-background, #ffffff); }
+.card { background: var(--card-bg, #ffffff); }
 \`\`\`
-Types: color, font, radius, shadow, size, text. Name descriptively (not "Primary" or "Surface").
+Types: color, font, radius, shadow, size, text.
 
 ## Content Fields
 Reference in code, then create:
@@ -245,20 +245,23 @@ function create_tools(project_id: string, project_name: string) {
 			description: `Create a design field (CSS variable) for styling the app. Design fields appear in the Design tab with specialized editors based on type.
 
 Field types: color, size, font, radius, shadow, text
-CSS variable is auto-generated from name: "Card Background" → --card-background`,
+
+IMPORTANT: Always pass the exact css_var you used in code to avoid mismatches.
+Example: If code uses var(--font-main), pass css_var: "--font-main"`,
 			inputSchema: z.object({
-				name: z.string().describe('Human-readable field name (e.g., "Page Background", "Card Border Color")'),
+				name: z.string().describe('Human-readable field name (e.g., "Main Font", "Card Background")'),
+				css_var: z.string().optional().describe('Exact CSS variable name used in code (e.g., "--font-main"). Must match what you wrote in the code.'),
 				type: z.enum(['color', 'size', 'font', 'radius', 'shadow', 'text']).describe('Field type determines the editor UI'),
 				value: z.string().describe('Initial CSS value (e.g., "#3b82f6" for color, "16px" for size, "Inter" for font)'),
 				description: z.string().optional().describe('Optional description of what this design field controls')
 			}),
-			execute: async ({ name, type, value, description }: { name: string; type: string; value: string; description?: string }) => {
+			execute: async ({ name, css_var: explicit_css_var, type, value, description }: { name: string; css_var?: string; type: string; value: string; description?: string }) => {
 				const project = await getProject(project_id)
 				if (!project) throw new Error('Project not found')
 				const design = project.design || []
 
-				// Auto-generate CSS variable from name
-				const css_var = '--' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+				// Use explicit css_var if provided, otherwise auto-generate from name
+				const css_var = explicit_css_var || ('--' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''))
 
 				// Check for duplicates
 				if (design.find((f: any) => f.css_var === css_var)) {
