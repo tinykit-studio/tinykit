@@ -4,9 +4,7 @@ type VibeId =
 	| "tetris"
 	| "wordle"
 	| "video"
-	| "lofigirl"
-	| "chillhop"
-	| "daybreak"
+	| "lofi"
 	| "museum"
 	| "music";
 
@@ -16,9 +14,7 @@ const allVibes: VibeId[] = [
 	"tetris",
 	"wordle",
 	"video",
-	"lofigirl",
-	"chillhop",
-	"daybreak",
+	"lofi",
 	"museum",
 	"music"
 ];

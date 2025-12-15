@@ -6,9 +6,7 @@
   import Tetris from "./vibes/Tetris.svelte";
   import Wordle from "./vibes/Wordle.svelte";
   import CatVideo from "./vibes/CatVideo.svelte";
-  import LofiGirl from "./vibes/LofiGirl.svelte";
-  import Chillhop from "./vibes/Chillhop.svelte";
-  import Daybreak from "./vibes/Daybreak.svelte";
+  import LofiMusic from "./vibes/LofiMusic.svelte";
   import FancyArt from "./vibes/FancyArt.svelte";
   import MusicVibe from "./vibes/MusicVibe.svelte";
   import { vibe_zone_state } from "$lib/stores/vibe_zone.svelte";
@@ -33,9 +31,7 @@
     | "tetris"
     | "wordle"
     | "video"
-    | "lofigirl"
-    | "chillhop"
-    | "daybreak"
+    | "lofi"
     | "museum"
     | "music";
 
@@ -45,9 +41,7 @@
     tetris: "Tetris",
     wordle: "Wordle",
     video: "Cat Video",
-    lofigirl: "Lo-fi Girl",
-    chillhop: "Chillhop",
-    daybreak: "Daybreak",
+    lofi: "Lo-fi Music",
     museum: "Fancy Art",
     music: "Music Maker",
   };
@@ -182,12 +176,8 @@
         <Wordle />
       {:else if vibe_zone_state.current_vibe === "video"}
         <CatVideo />
-      {:else if vibe_zone_state.current_vibe === "lofigirl"}
-        <LofiGirl />
-      {:else if vibe_zone_state.current_vibe === "chillhop"}
-        <Chillhop />
-      {:else if vibe_zone_state.current_vibe === "daybreak"}
-        <Daybreak />
+      {:else if vibe_zone_state.current_vibe === "lofi"}
+        <LofiMusic />
       {:else if vibe_zone_state.current_vibe === "museum"}
         <FancyArt />
       {:else if vibe_zone_state.current_vibe === "music"}

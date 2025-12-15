@@ -70,8 +70,11 @@ RIGHT: Brief text → then tools ✅
 let count = $state(0)                                      // reactive state
 let doubled = $derived(count * 2)                          // simple expressions ONLY
 let filtered = $derived.by(() => items.filter(x => x.done)) // use .by() for callbacks/filters
+let sorted = $derived.by(() => [...items].sort((a,b) => a.name.localeCompare(b.name))) // COPY before sort!
 $effect(() => { /* side effects, return cleanup fn */ })
 \`\`\`
+
+**NEVER use .sort() directly on $state arrays** - it mutates. Always copy first: \`[...arr].sort()\`
 
 Events: \`onclick={fn}\` (not on:click). No pipe modifiers - call e.preventDefault() in handler.
 Bindings: \`bind:value\` works in Svelte 5.
@@ -101,8 +104,10 @@ Common icons: plus, x, edit, trash-2, search, settings, user, home, heart, star,
 \`\`\`javascript
 import data from '$data'
 
-// All data persists to the database - survives page refreshes and server restarts
-// Subscribe for realtime updates
+let todos = $state([])
+let loading = $state(true)
+
+// Subscribe at top level - NO onMount, NO $effect wrapper needed
 data.todos.subscribe(items => { todos = items; loading = false })
 
 // CRUD operations - changes save to database, realtime auto-updates UI
@@ -111,7 +116,41 @@ await data.todos.update(id, { done: true })
 await data.todos.delete(id)
 \`\`\`
 
+**IMPORTANT:** Call subscribe() directly at top level. Do NOT wrap in onMount() or $effect().
+
 **When to use:** ANY app data that needs to persist (todos, users, posts, notes, bookmarks, settings, etc.)
+
+## File Fields in Data Collections
+When creating collections with images/files, define schema with type "file" or "files":
+\`\`\`javascript
+// Create collection with explicit file field schema
+create_data_file({
+  filename: 'products',
+  schema: [
+    { name: 'name', type: 'text' },
+    { name: 'price', type: 'number' },
+    { name: 'image', type: 'file' }
+  ],
+  initial_data: JSON.stringify([
+    { name: 'Widget', price: 29.99, image: 'placeholder.jpg' }
+  ]),
+  icon: 'lucide:shopping-bag'
+})
+\`\`\`
+**Always include an icon** (e.g., \`lucide:users\`, \`lucide:check-square\`, \`lucide:file-text\`).
+
+**Placeholders:** Use for demo data - "placeholder.jpg" (square), "placeholder-avatar.jpg" (avatar), "placeholder-wide.jpg" (16:9)
+
+**Display images:** File field values are filenames, use asset URL pattern:
+\`\`\`svelte
+<img src="/_tk/assets/{product.image}" alt={product.name} />
+\`\`\`
+
+**File uploads in app UI:** Use a file input, then pass File object to create/update - auto-uploaded:
+\`\`\`svelte
+<input type="file" accept="image/*" onchange={(e) => file = e.currentTarget.files[0]} />
+<button onclick={() => data.products.create({ name, price, image: file })}>Add</button>
+\`\`\`
 
 ## Proxy API (for external data)
 \`\`\`javascript
@@ -292,13 +331,28 @@ Example: If code uses var(--font-main), pass css_var: "--font-main"`,
 		}),
 
 		create_data_file: tool({
-			description: `Create a persistent data collection stored in the database. Use this for ALL app data that needs to persist across page refreshes (todos, users, posts, settings, etc.). After creating, access via: import data from '$data'; data.todos.subscribe(items => ...)`,
+			description: `Create a persistent data collection stored in the database. Use this for ALL app data that needs to persist across page refreshes (todos, users, posts, settings, etc.). After creating, access via: import data from '$data'; data.todos.subscribe(items => ...)
+
+**Type inference guide - use appropriate types for these column patterns:**
+- date: created_at, updated_at, due_date, timestamp, *_at, *_date
+- file: image, avatar, photo, thumbnail, cover, attachment
+- files: images, photos, attachments, gallery
+- boolean: is_*, has_*, done, completed, active, enabled, published
+- number: price, count, quantity, amount, total, score, rating, age, *_count
+- json: metadata, config, settings, options, tags (for arrays)
+
+For file fields, use placeholder images for demo data: "placeholder.jpg" (square), "placeholder-avatar.jpg" (avatar), "placeholder-wide.jpg" (16:9 banner).`,
 			inputSchema: z.object({
 				filename: z.string().describe('Collection name (e.g., "todos", "users", "products")'),
-				initial_data: z.string().describe('JSON array of initial records'),
+				schema: z.array(z.object({
+					name: z.string(),
+					type: z.enum(['id', 'text', 'number', 'boolean', 'date', 'json', 'file', 'files'])
+				})).describe('Column definitions. Use the type inference guide above. An "id" column with type "id" is auto-added at the start. For relationships, use explicit IDs in both collections (e.g., author_id: "u1" referencing a user with id: "u1").'),
+				initial_data: z.string().describe('JSON array of initial records. For file fields, use placeholder values like "placeholder.jpg"'),
+				icon: z.string().optional().describe('Iconify icon ID for the collection (e.g., "lucide:users", "lucide:shopping-cart", "lucide:file-text")'),
 				description: z.string().optional().describe('Optional description of what this collection stores')
 			}),
-			execute: async ({ filename, initial_data }: { filename: string; initial_data: string; description?: string }) => {
+			execute: async ({ filename, schema: explicit_schema, initial_data, icon }: { filename: string; schema: Array<{ name: string; type: string }>; initial_data: string; icon?: string; description?: string }) => {
 				const project = await getProject(project_id)
 				if (!project) throw new Error('Project not found')
 				const current_data = project.data || {}
@@ -312,7 +366,7 @@ Example: If code uses var(--font-main), pass css_var: "--font-main"`,
 					throw new Error('initial_data must be a JSON array')
 				}
 
-				// Add IDs to records
+				// Add IDs to records if not provided
 				const now = new Date().toISOString()
 				const records_with_ids = records.map(r => ({
 					id: r.id || crypto.randomUUID().slice(0, 5),
@@ -321,18 +375,18 @@ Example: If code uses var(--font-main), pass css_var: "--font-main"`,
 					updated: r.updated || now
 				}))
 
-				// Infer schema
-				const schema: Array<{ name: string; type: string }> = []
-				if (records_with_ids.length > 0) {
-					for (const [key, value] of Object.entries(records_with_ids[0])) {
-						let type = 'text'
-						if (typeof value === 'number') type = 'number'
-						else if (typeof value === 'boolean') type = 'boolean'
-						schema.push({ name: key, type })
-					}
+				// Ensure id column exists at the beginning with type 'id'
+				let schema = [...explicit_schema]
+				const has_id = schema.some(col => col.name === 'id')
+				if (!has_id) {
+					schema.unshift({ name: 'id', type: 'id' })
+				} else {
+					// Move id to front and ensure type is 'id'
+					schema = schema.filter(col => col.name !== 'id')
+					schema.unshift({ name: 'id', type: 'id' })
 				}
 
-				current_data[filename] = { schema, records: records_with_ids }
+				current_data[filename] = { schema, records: records_with_ids, icon }
 				await updateProject(project_id, { data: current_data })
 				return `Created collection "${filename}" with ${records.length} records`
 			}
