@@ -1112,7 +1112,7 @@
           >
             {#each columns as col}
               {@const col_type = get_column_type(file_content.schema, col)}
-              <div class="flex flex-col gap-1.5 min-w-0 overflow-hidden">
+              <div class="flex flex-col gap-1.5 min-w-0">
                 <Label for="edit-{col}">{col}</Label>
                 {#if col_type === "id"}
                   <Input
@@ -1216,7 +1216,7 @@
           >
             {#each columns as col}
               {@const col_type = get_column_type(file_content.schema, col)}
-              <div class="flex flex-col gap-1.5 min-w-0 overflow-hidden">
+              <div class="flex flex-col gap-1.5 min-w-0">
                 <Label for="add-{col}">{col}</Label>
                 {#if col_type === "id"}
                   <Input
