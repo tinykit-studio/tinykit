@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onDestroy } from "svelte";
     import CodeMirror from "./CodeMirror/CodeMirror.svelte";
+    import type { ContentFieldInfo } from "./CodeMirror/extensions";
     import { LaptopMinimal, Server } from "lucide-svelte";
     import * as Tooltip from "$lib/components/ui/tooltip";
     import * as api from "$tinykit/lib/api.svelte";
@@ -10,6 +11,22 @@
     const { project_id } = getProjectContext();
     const store = getProjectStore();
 
+    // Convert content field name to key (same as in iframe.js slugify)
+    function name_to_key(name: string): string {
+        return name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "_")
+            .replace(/^_|_$/g, "");
+    }
+
+    // Derive content field info for autocomplete
+    let content_fields_info = $derived<ContentFieldInfo[]>(
+        store.content.map((field) => ({
+            key: name_to_key(field.name),
+            type: field.type,
+        })),
+    );
+
     type CodeTab = "frontend" | "backend";
     let active_tab = $state<CodeTab>("frontend");
 
@@ -18,7 +35,7 @@
   This file runs 24/7 on your server.
 */
 
-import { db, env, queue } from '$services'
+import { env, queue } from '$tinykit'
 
 // --- 1. API Endpoints ---
 
@@ -137,10 +154,11 @@ export const daily_checkin = {
         if (!is_mounted) return;
         if (store.loading) return;
         if (code_content === last_saved_content) return;
-        if (!code_content || code_content.length === 0) return;
 
         is_saving = true;
         try {
+            // Optimistic update - sync store immediately so realtime echoes are ignored
+            store.update_code(code_content);
             await api.write_code(project_id, code_content);
             last_saved_content = code_content;
             last_saved_at = new Date();
@@ -228,6 +246,8 @@ export const daily_checkin = {
                 language="svelte"
                 onChange={handle_change}
                 cache_key="frontend-code (TODO: set to project ID)"
+                collections={store.data_files}
+                content_fields={content_fields_info}
             />
         {:else}
             <CodeMirror

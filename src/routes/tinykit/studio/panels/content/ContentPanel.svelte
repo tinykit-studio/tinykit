@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { watch } from "runed";
+  import { debounce } from "lodash-es";
   import { dragHandleZone, dragHandle } from "svelte-dnd-action";
   import Icon from "@iconify/svelte";
   import { Button } from "$lib/components/ui/button";
@@ -264,8 +265,7 @@
   async function add_field() {
     if (!new_name.trim() || !generated_content_key) return;
 
-    const new_field: ContentField = {
-      id: Date.now().toString(),
+    const field_data: Omit<ContentField, "id"> = {
       name: new_name,
       type: new_type,
       value:
@@ -280,10 +280,10 @@
     };
 
     try {
-      await api.add_content_field(project_id, new_field);
-      // Don't optimistically update - store sync will handle it
+      const created_field = await api.add_content_field(project_id, field_data);
+      store.add_content_field(created_field);
+      // local_fields syncs via watch from store.content
       reset_modal();
-      window.dispatchEvent(new CustomEvent("tinykit:config-updated"));
     } catch (err) {
       console.error("Failed to add content field:", err);
     }
@@ -292,37 +292,39 @@
   async function delete_field(id: string) {
     try {
       await api.delete_content_field(project_id, id);
+      store.delete_content_field(id);
       local_fields = local_fields.filter((f) => f.id !== id);
     } catch (error) {
       console.error("Failed to delete content field:", error);
     }
   }
 
-  async function update_field_value(field: ContentField, new_value: any) {
-    try {
-      await api.update_content_field(project_id, field.id, new_value);
-      // optimistic update already handled by handle_input?
-      // No, handle_input updates local. handle_blur calls this.
-      // We update local just in case?
-      local_fields = local_fields.map((f) =>
-        f.id === field.id ? { ...f, value: new_value } : f,
-      );
-      on_refresh_preview();
-      window.dispatchEvent(new CustomEvent("tinykit:config-updated"));
-    } catch (error) {
-      console.error("Failed to update content field:", error);
-    }
+  function update_field_value(field: ContentField, new_value: any) {
+    store.update_content_field(field.id, new_value);
+    local_fields = local_fields.map((f) =>
+      f.id === field.id ? { ...f, value: new_value } : f,
+    );
+    on_refresh_preview();
   }
 
-  // Handle input changes - update local state only
+  // Debounced store update for real-time preview (300ms delay)
+  const debounced_store_update = debounce((field_id: string, value: any) => {
+    store.update_content_field(field_id, value);
+    on_refresh_preview();
+  }, 300);
+
+  // Handle input changes - update local state immediately, debounce store update
   function handle_input(field: ContentField, new_value: any) {
     local_fields = local_fields.map((f) =>
       f.id === field.id ? { ...f, value: new_value } : f,
     );
+    // Debounced update for real-time preview
+    debounced_store_update(field.id, new_value);
   }
 
-  // Save on blur
+  // Save immediately on blur (flush any pending debounced update)
   function handle_blur(field: ContentField) {
+    debounced_store_update.cancel();
     update_field_value(field, field.value);
   }
 
@@ -338,6 +340,7 @@
   ) {
     local_fields = e.detail.items;
     try {
+      store.pause_realtime();
       await api.reorder_content_fields(project_id, local_fields);
     } catch (err) {
       console.error("Failed to reorder content fields:", err);
@@ -429,7 +432,7 @@
               <div class="image-preview-wrapper">
                 <div class="image-preview">
                   <img
-                    src={field.value}
+                    src={api.asset_url(project_id, field.value)}
                     alt={field.name}
                     onerror={(e) =>
                       ((e.currentTarget as HTMLImageElement).style.display =
@@ -548,7 +551,9 @@
         {/if}
 
         {#if field.description}
-          <p class="text-xs text-[var(--builder-text-secondary)] opacity-70">
+          <p
+            class="text-xs text-[var(--builder-text-secondary)] opacity-70 mt-1"
+          >
             {field.description}
           </p>
         {/if}
@@ -635,7 +640,7 @@
                 <div class="image-preview-wrapper-dialog">
                   <div class="image-preview-dialog">
                     <img
-                      src={new_value}
+                      src={api.asset_url(project_id, new_value)}
                       alt="Preview"
                       onerror={(e) =>
                         ((e.currentTarget as HTMLImageElement).style.display =

@@ -5,6 +5,7 @@
     dynamic_iframe_srcdoc,
     generate_design_css,
     extract_web_fonts,
+    transform_content_fields,
   } from "$lib/compiler/init";
   import { watch } from "runed";
   import { Sparkles } from "lucide-svelte";
@@ -57,19 +58,21 @@
     },
   );
 
-  // Watch for app data changes
+  // Watch for app data changes (debounced to prevent rapid-fire updates)
   let last_sent_data: any;
+  const send_data_update = _.debounce((data: any) => {
+    if (_.isEqual(data, last_sent_data)) return;
+    const cloned_data = _.cloneDeep(data);
+    channel?.postMessage({
+      event: "DATA_UPDATED",
+      payload: { data: cloned_data },
+    });
+    last_sent_data = cloned_data;
+  }, 50);
+
   watch(
     () => store?.project?.data,
-    (data) => {
-      if (_.isEqual(data, last_sent_data)) return;
-      const cloned_data = _.cloneDeep(data);
-      channel?.postMessage({
-        event: "DATA_UPDATED",
-        payload: { data: cloned_data },
-      });
-      last_sent_data = cloned_data;
-    },
+    (data) => send_data_update(data),
   );
 
   let content_fields = $state<any[]>([]);
@@ -77,9 +80,30 @@
   let data_collections = $state<string[]>([]);
 
   let srcdoc = $state("");
-  const broadcast_id = "crud-preview";
+  const broadcast_id = $derived(`crud-preview-${project_id}`);
   let pending_config_update = $state(false);
   let compilation_version = 0;
+
+  // Reset state when project_id changes
+  watch(
+    () => project_id,
+    () => {
+      // Close old channel and create new one
+      channel?.close();
+      channel = new BroadcastChannel(broadcast_id);
+      channel.onmessage = handle_channel_message;
+
+      // Reset all state
+      iframe_loaded = false;
+      compiled_app = null;
+      compile_error = null;
+      srcdoc = "";
+      content_fields = [];
+      design_fields = [];
+      data_collections = [];
+      compilation_version = 0;
+    },
+  );
 
   $effect(() => {
     if (store && store.project) {
@@ -90,17 +114,6 @@
       handle_store_update();
     }
   });
-
-  // React to store changes if available
-  // We use effects to sync store state to local state to maintain the diffing logic
-  // and iframe communication layer
-  // watch(
-  //   () => store,
-  //   (store) => {
-  //     if (!store.project) return;
-  //     handle_store_update();
-  //   },
-  // );
 
   async function handle_store_update() {
     if (!store) return;
@@ -113,31 +126,34 @@
     await apply_config_update(new_content, new_design, new_data);
   }
 
+  function handle_channel_message({ data }: MessageEvent) {
+    const { event } = data;
+    if (event === "INITIALIZED") {
+      iframe_loaded = true;
+      if (compiled_app) {
+        send_to_iframe();
+      }
+    } else if (event === "SET_ERROR") {
+      compile_error = data.payload?.error || "Unknown runtime error";
+      error_type = "runtime";
+    } else if (event === "BEGIN") {
+      compile_error = null;
+    }
+  }
+
   onMount(() => {
     is_mounted = true;
 
     channel = new BroadcastChannel(broadcast_id);
-    channel.onmessage = ({ data }) => {
-      const { event } = data;
-      if (event === "INITIALIZED") {
-        iframe_loaded = true;
-        if (compiled_app) {
-          send_to_iframe();
-        }
-      } else if (event === "SET_ERROR") {
-        compile_error = data.payload?.error || "Unknown runtime error";
-        error_type = "runtime";
-      } else if (event === "BEGIN") {
-        compile_error = null;
-      }
-    };
+    channel.onmessage = handle_channel_message;
 
     return () => {
       is_mounted = false;
-      // realtime_unsubscribe?.();
       channel?.close();
+      send_data_update.cancel();
     };
   });
+
 
   // Unified update logic (shared by store and manual loading)
   async function apply_config_update(
@@ -149,22 +165,9 @@
     const content_changed = !_.isEqual(new_content, content_fields);
     const design_changed = !_.isEqual(new_design, design_fields);
     const data_changed = !_.isEqual(new_data_collections, data_collections);
-    // Design-only changes: inject CSS without reload
-    if (design_changed && !content_changed && !data_changed && srcdoc) {
-      design_fields = new_design;
-      channel?.postMessage({
-        event: "UPDATE_CSS_VARS",
-        payload: { css: generate_design_css(new_design) },
-      });
-      const fonts = extract_web_fonts(new_design);
-      if (fonts.length > 0) {
-        channel?.postMessage({
-          event: "UPDATE_FONTS",
-          payload: { fonts },
-        });
-      }
-    } else if (content_changed || data_changed || design_changed || !srcdoc) {
-      // Content or data changes require full reload - but defer if agent is working
+
+    // No srcdoc yet or data collections changed - need full reload
+    if (!srcdoc || data_changed) {
       if (is_processing) {
         pending_config_update = true;
       } else {
@@ -181,6 +184,32 @@
 
         if (!active_code) return;
         compile_component();
+      }
+      return;
+    }
+
+    // Content changes: update global and remount (no full reload)
+    if (content_changed) {
+      content_fields = new_content;
+      channel?.postMessage({
+        event: "UPDATE_CONTENT",
+        payload: { content: transform_content_fields(new_content, project_id) },
+      });
+    }
+
+    // Design changes: inject CSS (no reload needed)
+    if (design_changed) {
+      design_fields = new_design;
+      channel?.postMessage({
+        event: "UPDATE_CSS_VARS",
+        payload: { css: generate_design_css(new_design) },
+      });
+      const fonts = extract_web_fonts(new_design);
+      if (fonts.length > 0) {
+        channel?.postMessage({
+          event: "UPDATE_FONTS",
+          payload: { fonts },
+        });
       }
     }
   }
@@ -242,25 +271,12 @@
     });
   }
 
-  // const debounced_compile = debounce(compile_component, 500);
-
-  // When agent finishes, process any pending config updates
-  // $effect(() => {
-  //   if (!is_processing && pending_config_update) {
-  //     pending_config_update = false;
-  //     // Trigger update
-  //     apply_config_update(
-  //       store ? store.content : content_fields,
-  //       store ? store.design : design_fields,
-  //       store ? store.data_files : data_collections,
-  //     );
-  //     // Also dispatch event for others?
-  //     window.dispatchEvent(new CustomEvent("tinykit:config-updated"));
-  //   }
-  // });
 </script>
 
-<div class="preview-container" class:is-building={is_compiling || is_processing}>
+<div
+  class="preview-container"
+  class:is-building={is_compiling || is_processing}
+>
   {#if is_compiling || is_processing}
     <div class="building-border"></div>
   {/if}

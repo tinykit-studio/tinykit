@@ -45,28 +45,12 @@
     on_target_consumed,
   }: DesignPanelProps = $props();
 
-  // Local state for design fields (synced from store)
+  // Local mutable copy that syncs from store
   let design_fields = $state<DesignField[]>([]);
 
-  // Sync from store
-  watch(
-    () => store.design,
-    (new_design) => {
-      // Simple sync for now - overwrite local if store updates (e.g. from backend)
-      // To avoid overwriting active edits if they haven't saved, we rely on the fact that
-      // edits happen on 'design_fields' local state and saving propagates to backend.
-      // If backend updates, we accept it. Conflicting edits might be lost if latency high.
-      if (JSON.stringify(new_design) !== JSON.stringify(design_fields)) {
-        design_fields = new_design;
-      }
-    },
-  );
-
-  // Init from store if empty
+  // Sync from store (store handles optimistic updates so this is always fresh)
   $effect(() => {
-    if (design_fields.length === 0 && store.design.length > 0) {
-      design_fields = store.design;
-    }
+    design_fields = store.design;
   });
 
   // Map for storing field element references by field id
@@ -111,6 +95,17 @@
     save_expanded_fields();
   }
 
+  function toggle_all_fields() {
+    const all_ids = design_fields.map((f) => f.id);
+    const all_expanded = all_ids.every((id) => expanded_fields.has(id));
+    if (all_expanded) {
+      expanded_fields = new Set();
+    } else {
+      expanded_fields = new Set(all_ids);
+    }
+    save_expanded_fields();
+  }
+
   // Watch for target field changes and expand/scroll to the field
   watch(
     () => [target_field, design_fields.length] as const,
@@ -145,21 +140,11 @@
     },
   );
 
-  // Persist field changes to backend
-  async function handle_save(field: DesignField) {
-    try {
-      await api.update_design_field(project_id, field.id, field.value);
-      window.dispatchEvent(new CustomEvent("tinykit:config-updated"));
-    } catch (err) {
-      console.error("Failed to update design field:", err);
-    }
-  }
-
   async function delete_field(id: string) {
     try {
       await api.delete_design_field(project_id, id);
+      store.delete_design_field(id);
       design_fields = design_fields.filter((f) => f.id !== id);
-      window.dispatchEvent(new CustomEvent("tinykit:config-updated"));
     } catch (err) {
       console.error("Failed to delete design field:", err);
     }
@@ -330,8 +315,7 @@
   async function add_field() {
     if (!new_name.trim() || !generated_css_var) return;
 
-    const new_field: DesignField = {
-      id: Date.now().toString(),
+    const field_data: Omit<DesignField, "id"> = {
       name: new_name,
       css_var: generated_css_var,
       value: new_value,
@@ -342,10 +326,10 @@
     };
 
     try {
-      await api.add_design_field(project_id, new_field);
-      design_fields = [...design_fields, new_field];
+      const created_field = await api.add_design_field(project_id, field_data);
+      store.add_design_field(created_field);
+      // design_fields syncs via $effect from store.design
       reset_modal();
-      window.dispatchEvent(new CustomEvent("tinykit:config-updated"));
     } catch (err) {
       console.error("Failed to add design field:", err);
     }
@@ -396,6 +380,7 @@
     }
 
     try {
+      store.pause_realtime();
       const updated_field = {
         ...editing_field,
         name: edit_name,
@@ -407,12 +392,7 @@
         css_var: new_css_var,
         type: edit_type,
       });
-      // Update local state
-      design_fields = design_fields.map((f) =>
-        f.id === editing_field!.id ? updated_field : f,
-      );
       reset_edit_modal();
-      window.dispatchEvent(new CustomEvent("tinykit:config-updated"));
     } catch (err) {
       console.error("Failed to update design field:", err);
     }
@@ -462,6 +442,7 @@
   async function handle_dnd_finalize(e: CustomEvent<{ items: DesignField[] }>) {
     design_fields = e.detail.items;
     try {
+      store.pause_realtime();
       await api.reorder_design_fields(project_id, design_fields);
     } catch (err) {
       console.error("Failed to reorder design fields:", err);
@@ -493,6 +474,7 @@
           role="button"
           tabindex="0"
           onclick={() => toggle_expand(field.id)}
+          ondblclick={toggle_all_fields}
           onkeydown={(e) => e.key === "Enter" && toggle_expand(field.id)}
         >
           <div class="field-info">
@@ -567,25 +549,19 @@
           <div transition:slide={{ duration: 100 }} class="field-editor">
             {#if field.type === "color"}
               <ColorPalette
-                bind:value={field.value}
+                value={field.value}
                 {theme_colors}
-                onchange={() => handle_save(field)}
+                onchange={(color) => store.update_design_field(field.id, color)}
               />
             {:else if field.type === "size"}
               <SizeEditor
                 value={parse_number(field.value)}
-                onchange={(v) => {
-                  field.value = `${v}px`;
-                  handle_save(field);
-                }}
+                onchange={(v) => store.update_design_field(field.id, `${v}px`)}
               />
             {:else if field.type === "radius"}
               <RadiusEditor
                 value={parse_number(field.value)}
-                onchange={(v) => {
-                  field.value = v === 9999 ? "9999px" : `${v}px`;
-                  handle_save(field);
-                }}
+                onchange={(v) => store.update_design_field(field.id, v === 9999 ? "9999px" : `${v}px`)}
               />
             {:else if field.type === "font"}
               <div class="font-editor">
@@ -595,10 +571,7 @@
                       type="button"
                       class="font-btn"
                       class:selected={field.value === font.name}
-                      onclick={() => {
-                        field.value = font.name;
-                        handle_save(field);
-                      }}
+                      onclick={() => store.update_design_field(field.id, font.name)}
                     >
                       <span style="font-family: '{font.name}', {font.category}"
                         >{font.name}</span
@@ -627,8 +600,7 @@
                           class="font-dropdown-item"
                           class:selected={field.value === font.familyName}
                           onclick={() => {
-                            field.value = font.familyName;
-                            handle_save(field);
+                            store.update_design_field(field.id, font.familyName);
                             close_font_edit();
                           }}
                         >
@@ -653,10 +625,7 @@
                     type="button"
                     class="shadow-btn"
                     class:active={field.value === preset.value}
-                    onclick={() => {
-                      field.value = preset.value;
-                      handle_save(field);
-                    }}
+                    onclick={() => store.update_design_field(field.id, preset.value)}
                   >
                     <span class="shadow-box" style="box-shadow: {preset.value}"
                     ></span>
@@ -666,8 +635,8 @@
               </div>
             {:else}
               <Input
-                bind:value={field.value}
-                onchange={() => handle_save(field)}
+                value={field.value}
+                onchange={(e: Event) => store.update_design_field(field.id, (e.currentTarget as HTMLInputElement).value)}
               />
             {/if}
           </div>
