@@ -222,7 +222,6 @@ export const project_service = {
 			id: `snap_${Date.now()}`,
 			timestamp: Date.now(),
 			description,
-			file_count: 1, // Just frontend_code for now
 			collections
 		}
 
