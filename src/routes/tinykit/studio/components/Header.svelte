@@ -3,7 +3,6 @@
   import { fade } from "svelte/transition";
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { writable } from "svelte/store";
   import { Button } from "$lib/components/ui/button";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import * as Popover from "$lib/components/ui/popover";
@@ -79,12 +78,12 @@
     { id: "right", label: "Right", icon: PanelRight },
   ];
 
-  let mod_key_held = writable(false);
+  let mod_key_held = $state(false);
 
   // Keyboard shortcuts for tabs
   function handle_key_down(e: KeyboardEvent) {
     if (e.metaKey || e.ctrlKey) {
-      mod_key_held.set(true);
+      mod_key_held = true;
 
       const key_number = parseInt(e.key);
       if (key_number >= 1 && key_number <= tabs.length) {
@@ -94,22 +93,34 @@
           on_tab_change(tab.id);
         }
       }
+    } else {
+      // Reset if modifier not held (defensive)
+      mod_key_held = false;
     }
   }
 
   function handle_key_up(e: KeyboardEvent) {
     if (!e.metaKey && !e.ctrlKey) {
-      mod_key_held.set(false);
+      mod_key_held = false;
     }
+  }
+
+  function reset_mod_key() {
+    mod_key_held = false;
   }
 
   onMount(() => {
     window.addEventListener("keydown", handle_key_down);
     window.addEventListener("keyup", handle_key_up);
+    // Reset when window loses focus (prevents stuck state)
+    window.addEventListener("blur", reset_mod_key);
+    document.addEventListener("visibilitychange", reset_mod_key);
 
     return () => {
       window.removeEventListener("keydown", handle_key_down);
       window.removeEventListener("keyup", handle_key_up);
+      window.removeEventListener("blur", reset_mod_key);
+      document.removeEventListener("visibilitychange", reset_mod_key);
     };
   });
 
@@ -387,12 +398,12 @@
           >
             <span
               class="flex items-center gap-2"
-              class:invisible={$mod_key_held}
+              class:invisible={mod_key_held}
             >
               <Icon class="w-3 h-3" />
               <span>{tab.label}</span>
             </span>
-            {#if $mod_key_held}
+            {#if mod_key_held}
               <span
                 class="absolute inset-0 flex items-center justify-center text-xs"
               >
