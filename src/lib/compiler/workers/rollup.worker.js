@@ -20,6 +20,14 @@ const SVELTE_CDN = `${CDN_URL}/svelte@${SVELTE_VERSION}`
 // In-memory cache for external modules (persists for worker lifetime)
 const module_cache = new Map()
 
+// Transform <style global> to :global { } wrapper (svelte-preprocess syntax)
+function processGlobalStyles(code) {
+	return code.replace(
+		/<style(\s+global)(\s[^>]*)?>([^]*?)<\/style>/gi,
+		(match, globalAttr, otherAttrs, css) => `<style${otherAttrs || ''}>:global {${css}}</style>`
+	)
+}
+
 registerPromiseWorker(rollup_worker)
 async function rollup_worker({ component, head = { code: '', data: {} }, hydrated, buildStatic = true, css = 'external', format = 'esm', dev_mode = false, sourcemap = false, runtime = [], tinykit_modules = {} }) {
 	const final = {
@@ -268,8 +276,51 @@ export function tick() { return Promise.resolve(); }
 								return `export default ${JSON.stringify(design)};`
 							}
 							if (id === 'virtual:$data') {
-								// For SSR, $data returns empty collections (data is fetched client-side)
-								return `export default ${JSON.stringify(data)};`
+								// For SSR, $data returns collection stubs with no-op subscribe methods
+								// (actual data is fetched client-side after hydration)
+								const collection_names = Object.keys(data || {})
+								const stubs = collection_names.map(name => {
+									const records = data[name]?.records || data[name] || []
+									return `  ${name}: {
+    list: () => Promise.resolve(${JSON.stringify(records)}),
+    get: (id) => Promise.resolve(${JSON.stringify(records)}.find(r => r.id === id) || null),
+    create: () => Promise.resolve({}),
+    update: () => Promise.resolve({}),
+    delete: () => Promise.resolve(true),
+    subscribe: (cb) => { cb(${JSON.stringify(records)}); return () => {}; },
+    _notify: () => {},
+    _set_cooldown: () => {},
+    _refresh: () => Promise.resolve()
+  }`
+								}).join(',\n')
+								return `
+const _collections = {
+${stubs}
+}
+
+// Proxy to return stub for unknown collections
+const db = new Proxy(_collections, {
+  get(target, prop) {
+    if (prop in target) return target[prop]
+    if (typeof prop === 'string' && !prop.startsWith('_')) {
+      return {
+        list: () => Promise.resolve([]),
+        get: () => Promise.resolve(null),
+        create: () => Promise.resolve({}),
+        update: () => Promise.resolve({}),
+        delete: () => Promise.resolve(true),
+        subscribe: (cb) => { cb([]); return () => {}; },
+        _notify: () => {},
+        _set_cooldown: () => {},
+        _refresh: () => Promise.resolve()
+      }
+    }
+    return undefined
+  }
+})
+
+export default db
+`
 							}
 							if (id === 'virtual:$tinykit') {
 								return `
@@ -327,9 +378,12 @@ proxy.url = function(url) {
 							//@ts-ignore
 							if (!/.*\.svelte/.test(id)) return null
 
+							// Process <style global> before compilation
+							const processedCode = processGlobalStyles(code)
+
 							try {
 								const res = await sveltePromiseWorker.postMessage({
-									code,
+									code: processedCode,
 									svelteOptions
 								})
 
