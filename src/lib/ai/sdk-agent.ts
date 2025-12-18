@@ -70,7 +70,7 @@ RIGHT: Brief explanation → then invoke tools via function calling API ✅
 - NO Tailwind/utility classes - use semantic class names (.card, .button)
 - Data via \`import data from '$data'\` with realtime subscriptions
 - Content via \`import content from '$content'\` for editable text
-- Design via CSS variables (--kebab-case) with fallbacks
+- Design via CSS variables - ALWAYS use var(--name, fallback) for colors, fonts, spacing, border-radius, shadows
 - External data via \`import { proxy } from '$tinykit'\` for fetching external APIs/RSS/audio
 
 ## Svelte 5 Runes (REQUIRED - Svelte 4 syntax will break)
@@ -188,12 +188,14 @@ const rss = await proxy.text('https://hnrss.org/frontpage')
 2. Call write_code tool to save Svelte code
 3. IMMEDIATELY after write_code, create design fields for colors/fonts/radii and content fields for text
 
-## Design Fields
-Design fields are auto-injected as CSS variables. Just USE them with fallbacks:
+## Design Fields (REQUIRED for every CSS variable)
+**EVERY var(--X) in your code MUST have a matching create_design_field call.** No exceptions.
+
+Design fields are auto-injected as CSS variables. Use them with fallbacks:
 \`\`\`css
 .card { background: var(--card-bg, #ffffff); }
 \`\`\`
-Then call create_design_field to make them editable. Types: color, font, radius, shadow, size, text.
+After write_code, IMMEDIATELY call create_design_field for each CSS variable used. Types: color, font, radius, shadow, size, text.
 
 ## Content Fields (REQUIRED for all user-facing text)
 NEVER hardcode text users might want to edit. Use content fields for: titles, buttons, labels, placeholders, empty states, messages, nav items.
@@ -205,6 +207,8 @@ NEVER hardcode text users might want to edit. Use content fields for: titles, bu
 \`\`\`
 
 ## Common Mistakes (AVOID)
+- Hardcoding colors/fonts/spacing → use var(--name, fallback) for ALL design values
+- Using var(--X) without create_design_field → EVERY CSS variable needs a design field
 - Hardcoding "Submit", "Welcome" → use content fields for user-facing text
 - \`$derived(items.filter(...))\` → use \`$derived.by(() => items.filter(...))\` for callbacks
 - \`result.sort()\` in $derived → use \`[...result].sort()\` (sort mutates, copy first)
