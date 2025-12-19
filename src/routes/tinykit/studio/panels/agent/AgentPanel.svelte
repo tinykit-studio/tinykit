@@ -667,10 +667,13 @@
   }
 
   .message-container {
-    display: inline-flex;
+    display: inline;
   }
   .message-container:empty {
     display: none;
+  }
+  .message-container:has(.prose) {
+    display: block;
   }
 
   /* Tool button base styles */
