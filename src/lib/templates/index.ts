@@ -27,6 +27,7 @@ import invoice from './invoice.json'
 // Content
 import bookmarks from './bookmarks.json'
 import recipes from './recipes.json'
+import dev_blog from './dev-blog.json'
 // Social
 import linktree from './linktree.json'
 import poll from './poll.json'
@@ -35,6 +36,10 @@ import hn_reader from './hn-reader.json'
 import rss_reader from './rss-reader.json'
 import event_rsvp from './event-rsvp.json'
 import client_crm from './client-crm.json'
+// Marketing
+import landing_page from './landing-page.json'
+// Audio
+import voice_memo from './voice-memo.json'
 
 // Collection data structure
 export interface CollectionSchema {
@@ -61,12 +66,15 @@ export const TEMPLATES: Template[] = [
 	notes as Template,
 	canvas as Template,
 	timer as Template,
+	voice_memo as Template,
 	// Finance
 	expense as Template,
 	invoice as Template,
 	// Content
 	bookmarks as Template,
 	recipes as Template,
+	landing_page as Template,
+	dev_blog as Template,
 	// Social
 	linktree as Template,
 	poll as Template,
