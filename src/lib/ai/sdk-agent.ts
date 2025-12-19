@@ -197,19 +197,31 @@ Design fields are auto-injected as CSS variables. Use them with fallbacks:
 \`\`\`
 After write_code, IMMEDIATELY call create_design_field for each CSS variable used. Types: color, font, radius, shadow, size, text.
 
-## Content Fields (REQUIRED for all user-facing text)
-NEVER hardcode text users might want to edit. Use content fields for: titles, buttons, labels, placeholders, empty states, messages, nav items.
+**Fonts:** Web fonts are auto-loaded from Bunny Fonts CDN. Just use the font name (e.g., "Inter", "Playfair Display") - no @import or link tags needed.
+
+## Content Fields (REQUIRED for all user-facing text AND images)
+NEVER hardcode text or images users might want to edit. Use content fields for:
+- **Text:** titles, buttons, labels, placeholders, empty states, messages, nav items
+- **Images:** avatars, logos, hero images, profile photos, testimonial photos, team member photos
+- **Markdown:** bios, descriptions, rich text - auto-converted to HTML at runtime
+
 \`\`\`svelte
 <h1>{content.hero_title}</h1>
 <button>{content.add_button}</button>
 <p class="empty">{content.no_items_message}</p>
-<img src={content.hero_image} />
+<img src={content.hero_image} alt="" />
+<img src={content.user_avatar} alt="User" class="avatar" />
+<div class="bio">{@html content.author_bio}</div>  <!-- markdown fields need {@html} -->
 \`\`\`
+
+When creating image content fields, use type: "image" (not "text"). This gives users a proper image upload UI in the Content tab.
+When creating markdown content fields, use type: "markdown" - the value is auto-converted to HTML, so render with \`{@html content.field}\`.
 
 ## Common Mistakes (AVOID)
 - Hardcoding colors/fonts/spacing → use var(--name, fallback) for ALL design values
 - Using var(--X) without create_design_field → EVERY CSS variable needs a design field
 - Hardcoding "Submit", "Welcome" → use content fields for user-facing text
+- Using type:"text" for avatar/logo/photo → use type:"image" for proper upload UI
 - \`$derived(items.filter(...))\` → use \`$derived.by(() => items.filter(...))\` for callbacks
 - \`result.sort()\` in $derived → use \`[...result].sort()\` (sort mutates, copy first)
 - \`on:click\` → use \`onclick\` (Svelte 5)
@@ -278,11 +290,13 @@ function create_tools(project_id: string, project_name: string) {
 		}),
 
 		create_content_field: tool({
-			description: 'Create a CMS-like content field that can be edited without code changes. Content fields are automatically available in the app via: import content from \'$content\'. Field names are slugified (e.g., "Hero Title" becomes content.hero_title).',
+			description: `Create a CMS-like content field that can be edited without code changes. Content fields are automatically available in the app via: import content from '$content'. Field names are slugified (e.g., "Hero Title" becomes content.hero_title).
+
+**Use 'image' type for:** avatars, logos, hero images, profile photos, thumbnails, icons - any visual that users should be able to swap out easily.`,
 			inputSchema: z.object({
-				name: z.string().describe('Field name (e.g., "Hero Title", "App Name")'),
-				type: z.enum(['text', 'textarea', 'number', 'boolean', 'json']).describe('Field type'),
-				value: z.string().describe('Initial value for the field'),
+				name: z.string().describe('Field name (e.g., "Hero Title", "User Avatar", "Logo")'),
+				type: z.enum(['text', 'markdown', 'number', 'boolean', 'json', 'image']).describe('Field type: text (short strings), markdown (rich text/bios), number, boolean (toggles), json (structured data), image (avatars/photos/logos)'),
+				value: z.string().describe('Initial value. For images, use a placeholder URL or leave empty. For boolean, use "true" or "false"'),
 				description: z.string().optional().describe('Optional description of what this field is for')
 			}),
 			execute: async ({ name, type, value, description }: { name: string; type: string; value: string; description?: string }) => {
