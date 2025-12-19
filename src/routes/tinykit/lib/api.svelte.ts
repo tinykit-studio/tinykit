@@ -818,9 +818,52 @@ if (typeof window !== 'undefined') {
   })
 }
 
-const db = {
+// Create stub collection for unknown/not-yet-loaded collections
+function create_stub_collection(name) {
+  console.warn('[db] Collection "' + name + '" not found - returning stub')
+  return {
+    _notify() {},
+    _set_cooldown() {},
+    _refresh() { return Promise.resolve() },
+    list() { return Promise.resolve([]) },
+    get() { return Promise.resolve(null) },
+    create(data) {
+      // Try to create - collection may exist on server even if not predefined
+      const base_url = \`\${API_BASE}/\${PROJECT_ID}/\${name}\`
+      return fetch(base_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }).then(r => r.ok ? r.json() : Promise.reject(new Error('Failed to create')))
+    },
+    update() { return Promise.reject(new Error('Collection "' + name + '" not available')) },
+    delete() { return Promise.reject(new Error('Collection "' + name + '" not available')) },
+    subscribe(cb) {
+      // Try to fetch from API - collection may exist on server
+      const base_url = \`\${API_BASE}/\${PROJECT_ID}/\${name}\`
+      fetch(base_url)
+        .then(r => r.ok ? r.json() : { items: [] })
+        .then(data => cb(data.items || []))
+        .catch(() => cb([]))
+      return () => {} // noop unsubscribe
+    }
+  }
+}
+
+const _defined_collections = {
 ${collection_entries}
 }
+
+// Proxy to return stub for unknown collections
+const db = new Proxy(_defined_collections, {
+  get(target, prop) {
+    if (prop in target) return target[prop]
+    if (typeof prop === 'string' && !prop.startsWith('_')) {
+      return create_stub_collection(prop)
+    }
+    return undefined
+  }
+})
 
 export default db
 `.trim()
@@ -831,6 +874,19 @@ export default db
  */
 function generate_tinykit_module(): string {
 	return `
+export function asset(filename, options) {
+  if (!filename) return ''
+  if (filename.startsWith('http://') || filename.startsWith('https://')) {
+    return filename
+  }
+  let url = '/_tk/assets/' + filename
+  const params = []
+  if (options?.thumb) params.push('thumb=' + options.thumb)
+  if (options?.download) params.push('download=1')
+  if (params.length) url += '?' + params.join('&')
+  return url
+}
+
 export async function proxy(url, options = {}) {
   const proxy_url = '/api/proxy?url=' + encodeURIComponent(url)
   return fetch(proxy_url, options)
