@@ -39,7 +39,9 @@
 
 ## Overview
 
-[Tinykit](https://tinykit.studio) is an open-source platform for building and deploying web apps with AI. Under the hood, it manages code, database, content, and deployment, letting you focus on the details:
+[Tinykit](https://tinykit.studio) is an open-source platform for building and deploying web apps with AI. It manages code, database, content, and deployment under the hood, letting you focus on the details.
+
+### Features
 
 - **Agentic Builder**: Prompt the AI to write code, create fields and tables, and wire it all up.
 - **Self-Hosted**: Your server, your data. Powered by PocketBase. Docker optional.
@@ -55,7 +57,7 @@
 
 > Tinykit is in early alpha and evolving every day. Your suggestions, ideas, and reported bugs help us immensely. Join the conversation on [Discord](https://discord.gg/NfMjt3yUtn) or raise a GitHub issue.
 
-### Star the project to give the maintainer a dopamine hit ⭐
+### Star the project to give the maintainers a dopamine hit ⭐
 
 ## Getting Started
 
