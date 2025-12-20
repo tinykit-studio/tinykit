@@ -52,6 +52,10 @@
 - **Time Travel**: Snapshots on every change. Undo anything.
 - **Image Uploads**: Built-in asset storage for images and files.
 - **Bring Your Own LLM**: OpenAI, Anthropic, or Gemini (more coming soon).
+- **Backend Functionality (soon)** — Background jobs, CRON, server-side routes
+- **Authentication (soon)** — Email and OAuth signup in your apps
+- **Showcase (soon)** — Browse and one-click install community apps
+- **LLM Functionality (soon)** — AI-powered features and agentic workflows in your apps
 
 **Run hundreds of apps on one server.** Point any domain → get a working app.
 
@@ -71,7 +75,7 @@ One-click one-minute deploy on Railway, no config necessary. Configure your LLM 
 
 Or deploy with [Docker](https://docs.tinykit.studio/docker) or a [VPS](https://docs.tinykit.studio/vps)
 
-## 💻 Running Locally
+## Running Locally
 
 ### Docker
 
@@ -137,13 +141,6 @@ blog.myserver.com/tinykit/studio        → Edit blog app
 | **Content**      | Bookmarks, Recipes                 |
 | **Social**       | Linktree, Poll, Event RSVP         |
 | **News**         | HN reader, RSS reader              |
-
-## Roadmap
-
-- **Backend Functionality** — Background jobs, CRON, server-side routes
-- **Authentication** — Email and OAuth signup in your apps
-- **Showcase** — Browse and one-click install community apps
-- **LLM Functionality** — AI-powered features and agentic workflows in your apps
 
 ## Get Involved
 
