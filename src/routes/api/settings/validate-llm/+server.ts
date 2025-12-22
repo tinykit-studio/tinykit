@@ -107,11 +107,6 @@ async function validate_gemini(api_key: string): Promise<{ valid: boolean, error
 	}
 }
 
-async function validate_deepseek(api_key: string): Promise<{ valid: boolean, error?: string }> {
-	// DeepSeek uses OpenAI-compatible API
-	return validate_openai(api_key, 'https://api.deepseek.com/v1')
-}
-
 // POST /api/settings/validate-llm
 // Body: { provider: string, api_key: string, base_url?: string }
 export const POST: RequestHandler = async ({ request }) => {
@@ -141,9 +136,6 @@ export const POST: RequestHandler = async ({ request }) => {
 				break
 			case 'gemini':
 				result = await validate_gemini(api_key)
-				break
-			case 'deepseek':
-				result = await validate_deepseek(api_key)
 				break
 			default:
 				return json({ error: `Unknown provider: ${provider}` }, { status: 400 })

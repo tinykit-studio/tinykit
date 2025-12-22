@@ -63,8 +63,7 @@
 	const API_KEY_URLS: Record<string, string> = {
 		gemini: "https://aistudio.google.com/apikey",
 		anthropic: "https://console.anthropic.com/settings/keys",
-		openai: "https://platform.openai.com/api-keys",
-		deepseek: "https://platform.deepseek.com/api_keys",
+		openai: "https://platform.openai.com/api-keys"
 	};
 
 	let config = $state<LLMConfig>({

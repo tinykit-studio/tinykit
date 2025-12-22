@@ -10,8 +10,7 @@ export interface LLMUsage {
 export const WEB_SEARCH_PRICING: Record<string, number> = {
 	openai: 0.03,
 	anthropic: 0.01,
-	gemini: 0.035,
-	deepseek: 0.01
+	gemini: 0.035
 }
 
 // Token pricing per 1M tokens (in USD)
@@ -56,10 +55,7 @@ export const TOKEN_PRICING: Record<string, { input: number; output: number }> = 
 	'gemini-2.0-flash-lite': { input: 0.075, output: 0.30 },
 	'gemini-1.5-pro': { input: 1.25, output: 5.00 },
 	'gemini-1.5-flash': { input: 0.075, output: 0.30 },
-	'gemini-1.5-flash-8b': { input: 0.0375, output: 0.15 },
-	// DeepSeek models - https://platform.deepseek.com/api-docs/pricing
-	'deepseek-chat': { input: 0.28, output: 0.42 },
-	'deepseek-reasoner': { input: 0.28, output: 0.42 }
+	'gemini-1.5-flash-8b': { input: 0.0375, output: 0.15 }
 }
 
 export function calculateCost(model: string, usage: LLMUsage, provider?: string): number {
