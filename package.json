@@ -1,6 +1,6 @@
 {
   "name": "tinykit",
-  "version": "0.1.0",
+  "version": "0.2.0-canary.0",
   "description": "Open-source AI development platform - build production apps in an afternoon",
   "private": true,
   "type": "module",
