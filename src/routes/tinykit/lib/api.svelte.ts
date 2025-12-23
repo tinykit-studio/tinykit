@@ -62,6 +62,9 @@ export async function restore_from_snapshot_data(
 	project_id: string,
 	data: { frontend_code: string; design: DesignField[]; content: ContentField[]; collections?: CollectionSchema[] }
 ): Promise<void> {
+	// Create a safety snapshot before restoring so user can undo
+	await create_snapshot(project_id, 'Before restore')
+
 	const project = await get_project(project_id)
 	const update_data: Partial<Project> = {
 		frontend_code: data.frontend_code,
@@ -93,6 +96,10 @@ export async function read_code(project_id: string): Promise<string> {
 
 export async function write_code(project_id: string, content: string): Promise<void> {
 	await update_project(project_id, { frontend_code: content })
+}
+
+export async function write_backend_code(project_id: string, content: string): Promise<void> {
+	await update_project(project_id, { backend_code: content })
 }
 
 // Agent/Chat API

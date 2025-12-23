@@ -34,6 +34,7 @@ export class ProjectStore {
         return icons;
     });
     code = $derived(this.project?.frontend_code || '');
+    backend_code = $derived(this.project?.backend_code || '');
 
     // UI state that might be shared
     is_processing = $derived.by(() => {
@@ -68,11 +69,15 @@ export class ProjectStore {
         if (!p) return '';
         // Hash the mutable fields that we care about for echo detection
         const code = p.frontend_code || '';
+        const backend = p.backend_code || '';
         return JSON.stringify({
             // Use length + start + end for code (catches changes anywhere)
             code_len: code.length,
             code_start: code.slice(0, 50),
             code_end: code.slice(-50),
+            backend_len: backend.length,
+            backend_start: backend.slice(0, 50),
+            backend_end: backend.slice(-50),
             design: p.design?.map(d => d.id + ':' + d.value).join(','),
             content: p.content?.map(c => c.id + ':' + c.value).join(',')
         });
@@ -232,6 +237,16 @@ export class ProjectStore {
     update_code(code: string) {
         if (!this.project) return;
         this.project = { ...this.project, frontend_code: code };
+        this._last_local_update = this._hash_project(this.project);
+        this._ignore_realtime_until = Date.now() + 2000;
+    }
+
+    /**
+     * Optimistically update backend code - updates local state immediately
+     */
+    update_backend_code(code: string) {
+        if (!this.project) return;
+        this.project = { ...this.project, backend_code: code };
         this._last_local_update = this._hash_project(this.project);
         this._ignore_realtime_until = Date.now() + 2000;
     }

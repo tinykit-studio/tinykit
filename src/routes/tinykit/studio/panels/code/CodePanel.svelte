@@ -30,71 +30,53 @@
     type CodeTab = "frontend" | "backend";
     let active_tab = $state<CodeTab>("frontend");
 
-    const backend_placeholder = `/*
-  Server-side Backend (Coming Soon in v0.2)
-  This file runs 24/7 on your server.
-*/
+    const backend_example = `// Backend functions run on your server (not in browser)
+// Call from frontend: import backend from '$backend'
+//                     const result = await backend.my_function({ arg })
 
-import { env, queue } from '$tinykit'
+// Available globals: env (secrets), data (collections), fetch
 
-// --- 1. API Endpoints ---
-
-// GET /api/health
-export const health = async () => {
-  return { status: 'ok' }
+export async function hello({ name }) {
+  return { message: \`Hello, \${name}!\` }
 }
 
-// POST /api/summarize
-export const summarize = {
-  post: async (context) => {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: \`Bearer \${env.OPENAI_API_KEY}\`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: context.body.text }]
-      })
+// Example: Call external API with secret key
+export async function summarize({ text }) {
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': \`Bearer \${env.OPENAI_API_KEY}\`
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: \`Summarize: \${text}\` }]
     })
-    return res.json()
-  }
+  })
+  const data = await response.json()
+  return { summary: data.choices?.[0]?.message?.content }
 }
 
-// --- 2. Background Jobs ---
-
-// Trigger via: await queue('process_upload', { id: '123' })
-export const process_upload = {
-  background: true,
-  handler: async (context) => {
-    // Runs in background - can take minutes without timing out
-    console.log(\`Processing \${context.data.id}...\`)
-  }
+// Example: Access project data
+export async function get_stats() {
+  const todos = await data.todos.list()
+  const done = todos.filter(t => t.done).length
+  return { total: todos.length, done, pending: todos.length - done }
 }
-
-// --- 3. Cron Jobs ---
-
-// Runs every morning at 9am
-export const daily_checkin = {
-  cron: '0 9 * * *',
-  handler: async () => {
-    // Read data, send reports, etc.
-  }
-}
-
-/*
-  Ideas or feedback? https://github.com/tinykit-studio/tinykit/discussions
-*/`;
+`;
 
     // Track if component is still mounted
     let is_mounted = true;
     onDestroy(() => {
         is_mounted = false;
-        // Clear any pending save timeout
+        // Clear any pending save timeouts
         if (save_timeout) {
             clearTimeout(save_timeout);
             save_timeout = null;
+        }
+        if (backend_save_timeout) {
+            clearTimeout(backend_save_timeout);
+            backend_save_timeout = null;
         }
     });
 
@@ -112,28 +94,40 @@ export const daily_checkin = {
 
     // Local state for code content - start empty, sync from store via effect below
     let code_content = $state("");
+    let backend_code_content = $state("");
 
     // Track when content changes externally (from file load or agent)
     let is_user_editing = $state(false);
+    let is_backend_user_editing = $state(false);
 
-    // Sync from store on mount AND when store.code changes
-    // This handles both initial load and realtime updates
-    // Use untrack to read current values without creating circular dependencies
+    // Sync frontend code from store
     $effect(() => {
         const store_code = store.code;
-        // Read these without creating a dependency on them
         const current_code = $state.snapshot(code_content);
         const editing = $state.snapshot(is_user_editing);
 
-        // Only sync if user isn't actively editing and there's new content
         if (!editing && store_code && store_code !== current_code) {
             code_content = store_code;
             last_saved_content = store_code;
         }
     });
 
+    // Sync backend code from store
+    $effect(() => {
+        const store_backend = store.backend_code;
+        const current = $state.snapshot(backend_code_content);
+        const editing = $state.snapshot(is_backend_user_editing);
+
+        if (!editing && store_backend !== current) {
+            backend_code_content = store_backend || backend_example;
+            last_saved_backend = store_backend || "";
+        }
+    });
+
     let save_timeout: ReturnType<typeof setTimeout> | null = null;
+    let backend_save_timeout: ReturnType<typeof setTimeout> | null = null;
     let last_saved_content = $state("");
+    let last_saved_backend = $state("");
     let last_saved_at = $state<Date | null>(null);
     let is_saving = $state(false);
 
@@ -192,6 +186,40 @@ export const daily_checkin = {
             is_user_editing = false;
         }, 500);
     }
+
+    async function save_backend() {
+        if (!is_mounted) return;
+        if (store.loading) return;
+        if (backend_code_content === last_saved_backend) return;
+
+        is_saving = true;
+        try {
+            store.update_backend_code(backend_code_content);
+            await api.write_backend_code(project_id, backend_code_content);
+            last_saved_backend = backend_code_content;
+            last_saved_at = new Date();
+            is_backend_user_editing = false;
+        } catch (err) {
+            console.error("Failed to save backend code:", err);
+        } finally {
+            is_saving = false;
+        }
+    }
+
+    function handle_backend_change(new_value: string) {
+        if (!is_mounted) return;
+
+        is_backend_user_editing = true;
+        backend_code_content = new_value;
+
+        if (backend_save_timeout) clearTimeout(backend_save_timeout);
+        backend_save_timeout = setTimeout(async () => {
+            if (is_mounted && !store.loading) {
+                await save_backend();
+            }
+            is_backend_user_editing = false;
+        }, 500);
+    }
 </script>
 
 <div class="h-full flex font-sans text-sm">
@@ -216,7 +244,7 @@ export const daily_checkin = {
                     </Tooltip.Trigger>
                     <Tooltip.Content side="left" class="mr-2 mt-2">
                         <p class="font-medium">Server</p>
-                        <p class="text-xs text-muted-foreground">Coming soon</p>
+                        <p class="text-xs text-muted-foreground">Runs on server</p>
                     </Tooltip.Content>
                 </Tooltip.Root>
                 <Tooltip.Root openDelay={200}>
@@ -251,10 +279,10 @@ export const daily_checkin = {
             />
         {:else}
             <CodeMirror
-                value={backend_placeholder}
+                value={backend_code_content}
                 language="javascript"
-                onChange={() => {}}
-                cache_key="backend-placeholder"
+                onChange={handle_backend_change}
+                cache_key="backend-code"
             />
         {/if}
     </div>

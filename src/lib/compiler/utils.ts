@@ -25,7 +25,7 @@ export async function processCode({
 	dev_mode?: boolean
 	sourcemap?: boolean
 	runtime?: string[]
-	tinykit_modules?: { content?: object; design?: object; data?: object }
+	tinykit_modules?: { content?: object; design?: object; data?: object; project_id?: string }
 }) {
 	// If component is a string, pass it directly
 	if (typeof component === 'string') {

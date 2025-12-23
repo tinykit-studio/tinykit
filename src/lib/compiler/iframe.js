@@ -392,6 +392,52 @@ proxy.url = function(url) {
 }
 
 /**
+ * Generate the $backend module code (server function proxy)
+ * @param {string} project_id
+ * @returns {string}
+ */
+const generate_backend_module = (project_id) => {
+  return `
+const PROJECT_ID = '${project_id}'
+
+/**
+ * Proxy for calling backend functions
+ * Usage: import backend from '$backend'
+ *        const result = await backend.my_function({ arg1: 'value' })
+ */
+const backend = new Proxy({}, {
+  get(target, fn_name) {
+    if (typeof fn_name !== 'string' || fn_name.startsWith('_')) return undefined
+
+    // Return an async function that calls the backend
+    return async function(args = {}) {
+      if (!PROJECT_ID) {
+        throw new Error('Backend not available: no project ID')
+      }
+
+      const url = '/_tk/backend/' + PROJECT_ID + '/' + fn_name
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ args })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok || data.error) {
+        throw new Error(data.error || 'Backend function failed: ' + response.status)
+      }
+
+      return data.result
+    }
+  }
+})
+
+export default backend
+`.trim()
+}
+
+/**
  * @param {string} head
  * @param {string} broadcast_id
  * @param {{content?: any[], design?: any[], project_id?: string, data_collections?: string[]}} [options]
@@ -424,10 +470,12 @@ export default window.__tk_content;
   const design_module = `export default ${JSON.stringify(design_obj)}`;
   const data_module = generate_data_module(project_id, data_collections);
   const tk_module = generate_tinykit_module(project_id);
+  const backend_module = generate_backend_module(project_id);
   const content_url = `data:text/javascript,${encodeURIComponent(content_module)}`;
   const design_url = `data:text/javascript,${encodeURIComponent(design_module)}`;
   const data_url = `data:text/javascript,${encodeURIComponent(data_module)}`;
   const tk_url = `data:text/javascript,${encodeURIComponent(tk_module)}`;
+  const backend_url = `data:text/javascript,${encodeURIComponent(backend_module)}`;
 
   return `
   <!DOCTYPE html>
@@ -447,7 +495,8 @@ export default window.__tk_content;
           "$content": "${content_url}",
           "$design": "${design_url}",
           "$data": "${data_url}",
-          "$tinykit": "${tk_url}"
+          "$tinykit": "${tk_url}",
+          "$backend": "${backend_url}"
         }
       }
       </script>

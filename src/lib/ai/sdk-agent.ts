@@ -36,6 +36,12 @@ export interface StreamCallbacks {
 
 const SYSTEM_PROMPT = `You are a code assistant for tinykit, building small web apps.
 
+**CRITICAL: You MUST use function calling to write code. NEVER output code as text.**
+- When you want to write/update the app, call the write_code tool
+- NEVER show \`\`\`svelte or \`\`\`javascript code blocks in your response
+- Code in your text response will NOT be saved - only tool calls work
+- Your text should contain ONLY: explanations, plans, and summaries
+
 **IMPORTANT: ALWAYS respond with text BEFORE making any tool calls.** Never start your response with tool calls - users need to see your plan first.
 
 Response format:
@@ -55,17 +61,6 @@ Response format:
 
 3. For QUESTIONS (no tools needed):
    - Just answer directly
-
-Tool calling rules:
-- Use the native function calling API to invoke tools - NEVER write tool calls as text or code
-- DO NOT show tool names, arguments, or JSON in your response text
-- DO NOT write "import { tool_name }" or "tool_name({ ... })" - that's wrong
-- After your brief plan, invoke tools using the API (they appear as badges in the UI)
-
-WRONG: Writing \`write_code({ code: "..." })\` as text ❌
-WRONG: Showing \`\`\`json {...}\`\`\` or \`\`\`javascript import {...}\`\`\` ❌
-WRONG: Simulating tool calls in your response ❌
-RIGHT: Brief explanation → then invoke tools via function calling API ✅
 
 ## Architecture
 - Single Svelte 5 file with standard CSS in <style> (all styles are automatically global - never use :global())
@@ -170,7 +165,7 @@ create_data_file({
 <button onclick={() => data.products.create({ name, price, image: file })}>Add</button>
 \`\`\`
 
-## Proxy API (for external data)
+## Proxy API (for external data without secrets)
 \`\`\`javascript
 import { proxy } from '$tinykit'
 
@@ -183,6 +178,38 @@ const rss = await proxy.text('https://hnrss.org/frontpage')
 // URL for media src attributes (audio, img)
 <audio src={proxy.url('https://example.com/podcast.mp3')} />
 \`\`\`
+
+## Backend API (for server-side code with secrets)
+When you need to call external APIs with secret keys (OpenAI, Stripe, etc.) or do server-side processing:
+\`\`\`javascript
+// Frontend: call backend functions
+import backend from '$backend'
+
+const result = await backend.summarize({ text: 'Hello world' })
+console.log(result.summary)
+\`\`\`
+
+Backend code (write with write_backend_code tool):
+\`\`\`javascript
+// Available: env (secrets), data (collections), fetch
+
+export async function summarize({ text }) {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': \`Bearer \${env.OPENAI_API_KEY}\`
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: \`Summarize: \${text}\` }]
+    })
+  })
+  const data = await res.json()
+  return { summary: data.choices?.[0]?.message?.content }
+}
+\`\`\`
+**When to use:** API calls that need secret keys, server-side processing, operations that shouldn't expose credentials to browser.
 
 ## Responsive Layout
 - Mobile-first: base styles for small screens, media queries for larger
@@ -269,7 +296,39 @@ Any npm package works with bare imports - auto-resolved via esm.sh:
 \`\`\`javascript
 import dayjs from 'dayjs'
 import confetti from 'canvas-confetti'
-\`\`\``
+\`\`\`
+
+## CRITICAL: Tool Calling
+You MUST use the native function calling API to invoke tools.
+
+**NEVER include code in your text response.** This includes:
+- Svelte code (\`\`\`svelte)
+- JavaScript/TypeScript (\`\`\`javascript, \`\`\`typescript)
+- Import statements (\`import { ... }\`)
+- Variable declarations (\`let x = $state(...)\`)
+- Any executable code meant for the app
+
+**Your text should ONLY contain:**
+- A brief numbered plan (what you'll build)
+- Short explanations of your approach
+- Summaries after completing work
+
+**To write code:** Call the write_code tool with the complete Svelte file. The tool handles saving - code in your text does NOTHING.
+
+WRONG (code will not be saved):
+"I'll add categories. Here's the code:
+\`\`\`svelte
+<script>
+let todos = $state([])
+</script>
+\`\`\`"
+
+CORRECT:
+"I'll add categories:
+1. Category selector dropdown
+2. Visual badges on tasks
+3. Filter bar"
+[then call write_code tool]`
 
 function get_model(config: AgentConfig) {
 	switch (config.provider) {
@@ -324,6 +383,24 @@ function create_tools(project_id: string, project_name: string) {
 
 				const fixes = code !== cleaned_code ? ' (auto-fixed syntax errors)' : ''
 				return `Wrote application code (${cleaned_code.length} chars)${fixes}`
+			}
+		}),
+
+		write_backend_code: tool({
+			description: `Write server-side backend code. Backend functions run on the server (not in the browser) and are called from frontend code via: import backend from '$backend'; const result = await backend.my_function({ arg })
+
+Backend functions have access to:
+- env: Environment variables/secrets (e.g., API keys)
+- data: Project data collections (same API as frontend $data)
+- fetch: Standard fetch for external APIs
+
+Use for: API integrations with secret keys, server-side processing, external service calls that need CORS bypass.`,
+			inputSchema: z.object({
+				code: z.string().describe('JavaScript module with exported async functions')
+			}),
+			execute: async ({ code }: { code: string }) => {
+				await updateProject(project_id, { backend_code: code })
+				return `Wrote backend code (${code.length} chars)`
 			}
 		}),
 
@@ -475,6 +552,7 @@ export async function run_agent(
 	const model = get_model(config)
 	const tools = create_tools(project_id, project.name)
 	const current_code = project.frontend_code || ''
+	const backend_code = project.backend_code || ''
 	const existing_design = project.design || []
 	const existing_content = project.content || []
 
@@ -482,12 +560,17 @@ export async function run_agent(
 	if (current_code.trim()) {
 		context += `## Current application code\n\`\`\`svelte\n${current_code}\n\`\`\`\n\n`
 	}
+	if (backend_code.trim()) {
+		context += `## Current backend code\n\`\`\`javascript\n${backend_code}\n\`\`\`\n\n`
+	}
 	if (existing_design.length > 0) {
 		context += `## Existing Design Fields (do not recreate)\n${existing_design.map((f: any) => `- ${f.name} (${f.css_var}): ${f.value}`).join('\n')}\n\n`
 	}
 	if (existing_content.length > 0) {
 		context += `## Existing Content Fields (do not recreate)\n${existing_content.map((f: any) => `- ${f.name}: ${f.value}`).join('\n')}\n\n`
 	}
+	// Add reminder for Gemini (which sometimes outputs code as text)
+	context += `REMINDER: To write/update code, use the write_code tool. Do NOT output code blocks in your response.\n\n`
 
 	// Convert messages to CoreMessage format, prepending context to last user message
 	const core_messages: CoreMessage[] = messages.map((m, i) => {
@@ -505,6 +588,7 @@ export async function run_agent(
 		system,
 		messages: core_messages,
 		tools,
+		toolChoice: 'auto',
 		maxSteps: 100, // High limit to allow model to finish completely (default is 1 when tools present)
 		toolCallStreaming: true,
 		// Encourage text output before tool calls

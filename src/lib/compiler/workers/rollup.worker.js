@@ -36,9 +36,9 @@ async function rollup_worker({ component, head = { code: '', data: {} }, hydrate
 		error: ''
 	}
 
-	// Virtual modules for $content, $design, $data, $tinykit
+	// Virtual modules for $content, $design, $data, $tinykit, $backend
 	// For SSR: inline the data. For client: leave as external (import map resolves them)
-	const { content = {}, design = {}, data = {} } = tinykit_modules
+	const { content = {}, design = {}, data = {}, project_id = '' } = tinykit_modules
 
 	const component_lookup = new Map()
 
@@ -166,10 +166,10 @@ async function rollup_worker({ component, head = { code: '', data: {} }, hydrate
 			return await rollup({
 				input: './entry.js',
 				external: (id) => {
-					// For client builds: mark $content, $design, $data as external
+					// For client builds: mark $content, $design, $data, $backend as external
 					// (browser import map resolves them)
 					// For SSR builds: inline them (no import map available)
-					if (id === '$content' || id === '$design' || id === '$data' || id === '$tinykit') {
+					if (id === '$content' || id === '$design' || id === '$data' || id === '$tinykit' || id === '$backend') {
 						return !isSSR // external for client, not for SSR
 					}
 					return false
@@ -191,8 +191,8 @@ async function rollup_worker({ component, head = { code: '', data: {} }, hydrate
 							// 1) Virtual esm-env
 							if (importee === 'esm-env') return 'virtual:esm-env'
 
-							// 2) Tinykit virtual modules ($content, $design, $data, $tinykit)
-							if (importee === '$content' || importee === '$design' || importee === '$data' || importee === '$tinykit') {
+							// 2) Tinykit virtual modules ($content, $design, $data, $tinykit, $backend)
+							if (importee === '$content' || importee === '$design' || importee === '$data' || importee === '$tinykit' || importee === '$backend') {
 								if (isSSR) {
 									// For SSR: resolve to virtual module (will be loaded below)
 									return `virtual:${importee}`
@@ -354,6 +354,46 @@ proxy.text = async function(url) {
 proxy.url = function(url) {
 	return '/api/proxy?url=' + encodeURIComponent(url);
 };
+`
+							}
+							if (id === 'virtual:$backend') {
+								// Backend proxy - calls server-side functions
+								// For SSR: functions are no-ops (backend runs on client request)
+								// For client: POST to /_tk/backend/[project_id]/[fn]
+								const pid = project_id ? JSON.stringify(project_id) : 'null'
+								return `
+const PROJECT_ID = ${pid};
+
+// Create a proxy that intercepts function calls
+const backend = new Proxy({}, {
+	get(target, fn_name) {
+		if (typeof fn_name !== 'string' || fn_name.startsWith('_')) return undefined;
+
+		// Return an async function that calls the backend
+		return async function(args = {}) {
+			if (!PROJECT_ID) {
+				throw new Error('Backend not available: no project ID');
+			}
+
+			const url = '/_tk/backend/' + PROJECT_ID + '/' + fn_name;
+			const response = await fetch(url, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ args })
+			});
+
+			const data = await response.json();
+
+			if (!response.ok || data.error) {
+				throw new Error(data.error || 'Backend function failed: ' + response.status);
+			}
+
+			return data.result;
+		};
+	}
+});
+
+export default backend;
 `
 							}
 
