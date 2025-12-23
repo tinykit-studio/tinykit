@@ -392,7 +392,7 @@ proxy.url = function(url) {
 }
 
 /**
- * Generate the $backend module code (server function proxy)
+ * Generate the $backend module code (SDK primitives + custom functions)
  * @param {string} project_id
  * @returns {string}
  */
@@ -400,40 +400,210 @@ const generate_backend_module = (project_id) => {
   return `
 const PROJECT_ID = '${project_id}'
 
+// Token storage
+let _token = null
+if (typeof localStorage !== 'undefined') {
+  _token = localStorage.getItem('_tk_auth_token')
+}
+
+function getAuthHeaders() {
+  const headers = { 'Content-Type': 'application/json' }
+  if (_token) headers['Authorization'] = 'Bearer ' + _token
+  return headers
+}
+
+// ============ AUTH ============
+const auth = {
+  /** Get current user (null if not logged in) */
+  get user() {
+    if (!_token) return null
+    // Decode JWT payload (not verified, just for display)
+    try {
+      const payload = JSON.parse(atob(_token.split('.')[1]))
+      return payload
+    } catch { return null }
+  },
+
+  /** Get current token */
+  get token() { return _token },
+
+  /** Login with email/password */
+  async login({ email, password }) {
+    const res = await fetch('/_tk/sdk/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.message || 'Login failed')
+    _token = data.token
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('_tk_auth_token', data.token)
+    }
+    return data.user
+  },
+
+  /** Create new account */
+  async signup({ email, password, name }) {
+    const res = await fetch('/_tk/sdk/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, name })
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.message || 'Signup failed')
+    _token = data.token
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('_tk_auth_token', data.token)
+    }
+    return data.user
+  },
+
+  /** Sign out */
+  signout() {
+    _token = null
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('_tk_auth_token')
+    }
+  },
+
+  /** Get fresh user data from server */
+  async me() {
+    if (!_token) return null
+    const res = await fetch('/_tk/sdk/auth/me', {
+      headers: getAuthHeaders()
+    })
+    if (!res.ok) {
+      auth.signout()
+      return null
+    }
+    const data = await res.json()
+    return data.user
+  }
+}
+
+// ============ AI ============
 /**
- * Proxy for calling backend functions
- * Usage: import backend from '$backend'
- *        const result = await backend.my_function({ arg1: 'value' })
+ * Generate text with AI
+ * @param {{ prompt: string, system?: string }} options
+ * @returns {Promise<string>}
  */
-const backend = new Proxy({}, {
+async function ai({ prompt, system }) {
+  const res = await fetch('/_tk/sdk/ai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, system })
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.message || 'AI request failed')
+  return data.text
+}
+
+/**
+ * Stream AI response
+ * @param {{ prompt: string, system?: string }} options
+ * @param {(chunk: string) => void} onChunk
+ * @returns {Promise<string>} Full text when complete
+ */
+ai.stream = async function({ prompt, system }, onChunk) {
+  const res = await fetch('/_tk/sdk/ai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, system, stream: true })
+  })
+
+  if (!res.ok) {
+    const data = await res.json()
+    throw new Error(data.message || 'AI request failed')
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let fullText = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    const chunk = decoder.decode(value)
+    const lines = chunk.split('\\n')
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        try {
+          const data = JSON.parse(line.slice(6))
+          if (data.text) {
+            fullText += data.text
+            onChunk?.(data.text)
+          }
+          if (data.error) throw new Error(data.error)
+        } catch (e) {
+          if (e.message !== 'Unexpected end of JSON input') throw e
+        }
+      }
+    }
+  }
+
+  return fullText
+}
+
+// ============ UTILS ============
+const utils = {
+  /** Proxy fetch through server (bypasses CORS) */
+  async proxy(url, options = {}) {
+    const proxy_url = '/api/proxy?url=' + encodeURIComponent(url)
+    return fetch(proxy_url, options)
+  }
+}
+
+utils.proxy.json = async function(url) {
+  const res = await utils.proxy(url)
+  if (!res.ok) throw new Error('Fetch failed: ' + res.status)
+  return res.json()
+}
+
+utils.proxy.text = async function(url) {
+  const res = await utils.proxy(url)
+  if (!res.ok) throw new Error('Fetch failed: ' + res.status)
+  return res.text()
+}
+
+utils.proxy.url = function(url) {
+  return '/api/proxy?url=' + encodeURIComponent(url)
+}
+
+// ============ CUSTOM FUNCTIONS ============
+// Proxy for custom backend functions (user-defined)
+const custom = new Proxy({}, {
   get(target, fn_name) {
     if (typeof fn_name !== 'string' || fn_name.startsWith('_')) return undefined
-
-    // Return an async function that calls the backend
     return async function(args = {}) {
-      if (!PROJECT_ID) {
-        throw new Error('Backend not available: no project ID')
-      }
-
+      if (!PROJECT_ID) throw new Error('Backend not available: no project ID')
       const url = '/_tk/backend/' + PROJECT_ID + '/' + fn_name
-      const response = await fetch(url, {
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ args })
       })
-
-      const data = await response.json()
-
-      if (!response.ok || data.error) {
-        throw new Error(data.error || 'Backend function failed: ' + response.status)
-      }
-
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'Backend function failed')
       return data.result
     }
   }
 })
 
+// ============ EXPORT ============
+const backend = {
+  auth,
+  ai,
+  utils,
+  custom,
+  // Direct access to custom functions at top level too
+  ...custom
+}
+
 export default backend
+export { auth, ai, utils }
 `.trim()
 }
 

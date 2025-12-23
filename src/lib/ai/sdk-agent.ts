@@ -179,37 +179,34 @@ const rss = await proxy.text('https://hnrss.org/frontpage')
 <audio src={proxy.url('https://example.com/podcast.mp3')} />
 \`\`\`
 
-## Backend API (for server-side code with secrets)
-When you need to call external APIs with secret keys (OpenAI, Stripe, etc.) or do server-side processing:
+## Backend SDK (server-side primitives)
 \`\`\`javascript
-// Frontend: call backend functions
 import backend from '$backend'
 
-const result = await backend.summarize({ text: 'Hello world' })
-console.log(result.summary)
+// AUTH - login, signup, user management
+const user = await backend.auth.login({ email, password })
+const user = await backend.auth.signup({ email, password, name })
+backend.auth.signout()
+backend.auth.user  // current user (reactive)
+backend.auth.token // JWT token
+
+// AI - uses configured LLM (OpenAI/Anthropic/Gemini)
+const text = await backend.ai({ prompt: 'Hello', system: 'Be helpful' })
+
+// Streaming AI
+await backend.ai.stream({ prompt }, (chunk) => {
+  answer += chunk  // Build up response
+})
+
+// UTILS
+const data = await backend.utils.proxy.json('https://api.example.com/data')
+const html = await backend.utils.proxy.text('https://example.com/page')
+const url = backend.utils.proxy.url('https://example.com/image.jpg') // for src attrs
 \`\`\`
 
-Backend code (write with write_backend_code tool):
-\`\`\`javascript
-// Available: env (secrets), data (collections), fetch
-
-export async function summarize({ text }) {
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': \`Bearer \${env.OPENAI_API_KEY}\`
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: \`Summarize: \${text}\` }]
-    })
-  })
-  const data = await res.json()
-  return { summary: data.choices?.[0]?.message?.content }
-}
-\`\`\`
-**When to use:** API calls that need secret keys, server-side processing, operations that shouldn't expose credentials to browser.
+**Use backend.ai** for AI features - no API key management needed, uses project's configured LLM.
+**Use backend.auth** for user login/signup - built-in auth, no setup required.
+**Use backend.utils.proxy** instead of \`import { proxy } from '$tinykit'\` (same API, cleaner organization).
 
 ## Responsive Layout
 - Mobile-first: base styles for small screens, media queries for larger

@@ -357,43 +357,36 @@ proxy.url = function(url) {
 `
 							}
 							if (id === 'virtual:$backend') {
-								// Backend proxy - calls server-side functions
-								// For SSR: functions are no-ops (backend runs on client request)
-								// For client: POST to /_tk/backend/[project_id]/[fn]
-								const pid = project_id ? JSON.stringify(project_id) : 'null'
+								// Backend SDK - provides auth, ai, utils primitives + custom functions
+								// For SSR: returns stubs (backend runs on client)
 								return `
-const PROJECT_ID = ${pid};
+// SSR stubs - these run on client only
+const auth = {
+	user: null,
+	token: null,
+	login: async () => { throw new Error('Auth only available in browser') },
+	signup: async () => { throw new Error('Auth only available in browser') },
+	signout: () => {},
+	me: async () => null
+};
 
-// Create a proxy that intercepts function calls
-const backend = new Proxy({}, {
-	get(target, fn_name) {
-		if (typeof fn_name !== 'string' || fn_name.startsWith('_')) return undefined;
+const ai = async () => { throw new Error('AI only available in browser') };
+ai.stream = async () => { throw new Error('AI only available in browser') };
 
-		// Return an async function that calls the backend
-		return async function(args = {}) {
-			if (!PROJECT_ID) {
-				throw new Error('Backend not available: no project ID');
-			}
+const utils = {
+	proxy: async () => { throw new Error('Proxy only available in browser') }
+};
+utils.proxy.json = async () => { throw new Error('Proxy only available in browser') };
+utils.proxy.text = async () => { throw new Error('Proxy only available in browser') };
+utils.proxy.url = () => '';
 
-			const url = '/_tk/backend/' + PROJECT_ID + '/' + fn_name;
-			const response = await fetch(url, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ args })
-			});
-
-			const data = await response.json();
-
-			if (!response.ok || data.error) {
-				throw new Error(data.error || 'Backend function failed: ' + response.status);
-			}
-
-			return data.result;
-		};
-	}
+const custom = new Proxy({}, {
+	get() { return async () => { throw new Error('Backend only available in browser') } }
 });
 
+const backend = { auth, ai, utils, custom };
 export default backend;
+export { auth, ai, utils };
 `
 							}
 
