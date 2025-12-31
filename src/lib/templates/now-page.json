@@ -1,0 +1,156 @@
+{
+	"id": "now-page",
+	"name": "Now Page",
+	"description": "Share what you're focused on right now",
+	"preview": "lucide:clock",
+	"tags": [
+		"personal-site",
+		"personal",
+		"beginner"
+	],
+	"kits": [
+		"personal-site"
+	],
+	"frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet sections = $state([])\n\tdata.sections.subscribe(items => {\n\t\tsections = items.sort((a, b) => (a.order || 0) - (b.order || 0))\n\t})\n\n\tfunction format_date(date_str) {\n\t\tif (!date_str) return ''\n\t\treturn new Date(date_str).toLocaleDateString('en-US', {\n\t\t\tyear: 'numeric',\n\t\t\tmonth: 'long',\n\t\t\tday: 'numeric'\n\t\t})\n\t}\n\n\t// Simple markdown-ish rendering\n\tfunction render_content(text) {\n\t\tif (!text) return ''\n\t\treturn text\n\t\t\t.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>')\n\t\t\t.replace(/\\*(.+?)\\*/g, '<em>$1</em>')\n\t\t\t.replace(/\\[(.+?)\\]\\((.+?)\\)/g, '<a href=\"$2\" target=\"_blank\" rel=\"noopener\">$1</a>')\n\t\t\t.replace(/\\n\\n/g, '</p><p>')\n\t\t\t.replace(/\\n/g, '<br>')\n\t}\n</script>\n\n<div class=\"page\">\n\t<header class=\"header\">\n\t\t<h1>{content.title}</h1>\n\t\t<p class=\"intro\">{content.intro}</p>\n\t\t{#if content.updated_at}\n\t\t\t<p class=\"updated\">\n\t\t\t\t<Icon icon=\"lucide:clock\" width={14} />\n\t\t\t\t{content.updated_label} {format_date(content.updated_at)}\n\t\t\t</p>\n\t\t{/if}\n\t</header>\n\n\t<main class=\"content\">\n\t\t{#each sections as section (section.id)}\n\t\t\t<section class=\"section\">\n\t\t\t\t{#if section.title}\n\t\t\t\t\t<h2>{section.title}</h2>\n\t\t\t\t{/if}\n\t\t\t\t<div class=\"section-content\">\n\t\t\t\t\t<p>{@html render_content(section.content)}</p>\n\t\t\t\t</div>\n\t\t\t</section>\n\t\t{/each}\n\t</main>\n\n\t<footer class=\"footer\">\n\t\t<a href={content.nownownow_url} target=\"_blank\" rel=\"noopener\" class=\"now-link\">\n\t\t\t{content.nownownow_text}\n\t\t</a>\n\t</footer>\n</div>\n\n<style>\n\t.page {\n\t\tmin-height: 100vh;\n\t\tbackground: var(--bg-color, #fffdf9);\n\t\tpadding: 4rem 1.5rem;\n\t\tfont-family: var(--font, Georgia, serif);\n\t}\n\n\t.header {\n\t\tmax-width: 640px;\n\t\tmargin: 0 auto 3rem;\n\t}\n\n\t.header h1 {\n\t\tfont-size: 2.5rem;\n\t\tfont-weight: 400;\n\t\tcolor: var(--heading-color, #1a1a1a);\n\t\tmargin: 0 0 1rem;\n\t\tletter-spacing: -0.01em;\n\t}\n\n\t.intro {\n\t\tfont-size: 1.125rem;\n\t\tcolor: var(--text-color, #4a4a4a);\n\t\tline-height: 1.7;\n\t\tmargin: 0 0 1rem;\n\t}\n\n\t.updated {\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tgap: 0.375rem;\n\t\tfont-size: 0.875rem;\n\t\tcolor: var(--muted-color, #888);\n\t\tmargin: 0;\n\t\tfont-family: system-ui, sans-serif;\n\t}\n\n\t.content {\n\t\tmax-width: 640px;\n\t\tmargin: 0 auto;\n\t}\n\n\t.section {\n\t\tmargin-bottom: 2.5rem;\n\t}\n\n\t.section h2 {\n\t\tfont-size: 1.375rem;\n\t\tfont-weight: 400;\n\t\tcolor: var(--heading-color, #1a1a1a);\n\t\tmargin: 0 0 0.75rem;\n\t\tpadding-bottom: 0.5rem;\n\t\tborder-bottom: 1px solid var(--border-color, #e8e4df);\n\t}\n\n\t.section-content {\n\t\tcolor: var(--text-color, #4a4a4a);\n\t\tline-height: 1.8;\n\t\tfont-size: 1.0625rem;\n\t}\n\n\t.section-content :global(p) {\n\t\tmargin: 0 0 1rem;\n\t}\n\n\t.section-content :global(p:last-child) {\n\t\tmargin-bottom: 0;\n\t}\n\n\t.section-content :global(a) {\n\t\tcolor: var(--link-color, #2563eb);\n\t\ttext-decoration: underline;\n\t\ttext-decoration-color: var(--link-underline, rgba(37, 99, 235, 0.3));\n\t\ttext-underline-offset: 2px;\n\t\ttransition: text-decoration-color 0.2s;\n\t}\n\n\t.section-content :global(a:hover) {\n\t\ttext-decoration-color: var(--link-color, #2563eb);\n\t}\n\n\t.section-content :global(strong) {\n\t\tcolor: var(--heading-color, #1a1a1a);\n\t\tfont-weight: 600;\n\t}\n\n\t.footer {\n\t\tmax-width: 640px;\n\t\tmargin: 4rem auto 0;\n\t\tpadding-top: 2rem;\n\t\tborder-top: 1px solid var(--border-color, #e8e4df);\n\t\ttext-align: center;\n\t}\n\n\t.now-link {\n\t\tfont-size: 0.875rem;\n\t\tcolor: var(--muted-color, #888);\n\t\ttext-decoration: none;\n\t\tfont-family: system-ui, sans-serif;\n\t}\n\n\t.now-link:hover {\n\t\tcolor: var(--link-color, #2563eb);\n\t}\n\n\t@media (max-width: 500px) {\n\t\t.header h1 {\n\t\t\tfont-size: 2rem;\n\t\t}\n\t}\n</style>",
+	"design": [
+		{
+			"id": "bg-color",
+			"name": "Background",
+			"css_var": "--bg-color",
+			"value": "#fffdf9",
+			"type": "color",
+			"description": "Page background color"
+		},
+		{
+			"id": "heading-color",
+			"name": "Heading Color",
+			"css_var": "--heading-color",
+			"value": "#1a1a1a",
+			"type": "color",
+			"description": "Color for headings"
+		},
+		{
+			"id": "text-color",
+			"name": "Text Color",
+			"css_var": "--text-color",
+			"value": "#4a4a4a",
+			"type": "color",
+			"description": "Color for body text"
+		},
+		{
+			"id": "muted-color",
+			"name": "Muted Color",
+			"css_var": "--muted-color",
+			"value": "#888888",
+			"type": "color",
+			"description": "Color for subtle text"
+		},
+		{
+			"id": "border-color",
+			"name": "Border Color",
+			"css_var": "--border-color",
+			"value": "#e8e4df",
+			"type": "color",
+			"description": "Color for borders"
+		},
+		{
+			"id": "link-color",
+			"name": "Link Color",
+			"css_var": "--link-color",
+			"value": "#2563eb",
+			"type": "color",
+			"description": "Color for links"
+		},
+		{
+			"id": "font",
+			"name": "Font",
+			"css_var": "--font",
+			"value": "Georgia, serif",
+			"type": "font",
+			"description": "Main font family"
+		}
+	],
+	"content": [
+		{
+			"id": "title",
+			"name": "Title",
+			"type": "text",
+			"value": "What I'm doing now",
+			"description": "Page title"
+		},
+		{
+			"id": "intro",
+			"name": "Introduction",
+			"type": "textarea",
+			"value": "This is a now page. It's a place to share what I'm currently focused on in life and work.",
+			"description": "Introduction text"
+		},
+		{
+			"id": "updated_at",
+			"name": "Last Updated",
+			"type": "text",
+			"value": "2024-12-15",
+			"description": "Date last updated (YYYY-MM-DD format)"
+		},
+		{
+			"id": "updated_label",
+			"name": "Updated Label",
+			"type": "text",
+			"value": "Last updated",
+			"description": "Label before the date"
+		},
+		{
+			"id": "nownownow_url",
+			"name": "Now Now Now URL",
+			"type": "text",
+			"value": "https://nownownow.com/about",
+			"description": "Link to nownownow.com"
+		},
+		{
+			"id": "nownownow_text",
+			"name": "Now Now Now Text",
+			"type": "text",
+			"value": "What is a now page?",
+			"description": "Link text"
+		}
+	],
+	"data": {
+		"sections": {
+			"schema": [
+				{
+					"name": "title",
+					"type": "text"
+				},
+				{
+					"name": "content",
+					"type": "text"
+				},
+				{
+					"name": "order",
+					"type": "number"
+				}
+			],
+			"records": [
+				{
+					"id": "s1",
+					"title": "Work",
+					"content": "I'm currently building a new product at my startup. It's a tool that helps teams collaborate more effectively. We're in private beta and planning to launch publicly in early 2025.\n\nI'm also doing some freelance consulting on the side, helping early-stage startups with their product strategy.",
+					"order": 1
+				},
+				{
+					"id": "s2",
+					"title": "Learning",
+					"content": "Diving deep into **systems design** and distributed systems. Currently reading [Designing Data-Intensive Applications](https://dataintensive.net/) by Martin Kleppmann.\n\nAlso practicing my Spanish with daily lessons on Duolingo. 200-day streak and counting!",
+					"order": 2
+				},
+				{
+					"id": "s3",
+					"title": "Life",
+					"content": "Living in San Francisco. Training for a half marathon in the spring. Trying to read more fiction\u2014just finished *The Overstory* by Richard Powers and loved it.\n\nSpending weekends hiking and exploring new coffee shops.",
+					"order": 3
+				}
+			],
+			"icon": "lucide:file-text"
+		}
+	}
+}

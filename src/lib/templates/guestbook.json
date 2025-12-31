@@ -1,0 +1,268 @@
+{
+	"id": "guestbook",
+	"name": "Guestbook",
+	"description": "Classic guestbook for visitors to leave messages",
+	"preview": "lucide:book-heart",
+	"tags": [
+		"personal-site",
+		"personal",
+		"beginner"
+	],
+	"kits": [
+		"personal-site",
+		"community",
+		"feedback"
+	],
+	"frontend_code": "<script>\n\timport { fade, fly } from 'svelte/transition'\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet entries = $state([])\n\tlet loading = $state(true)\n\n\tdata.entries.subscribe(items => {\n\t\t// Only show approved entries (or all if approval is disabled)\n\t\tentries = items\n\t\t\t.filter(e => e.approved)\n\t\t\t.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())\n\t\tloading = false\n\t})\n\n\tlet name = $state('')\n\tlet message = $state('')\n\tlet website = $state('')\n\tlet location = $state('')\n\tlet submitting = $state(false)\n\tlet submitted = $state(false)\n\tlet error = $state('')\n\n\tasync function handle_submit(e) {\n\t\te.preventDefault()\n\t\tif (!name.trim() || !message.trim()) return\n\n\t\tsubmitting = true\n\t\terror = ''\n\n\t\ttry {\n\t\t\tawait data.entries.create({\n\t\t\t\tname: name.trim(),\n\t\t\t\tmessage: message.trim(),\n\t\t\t\twebsite: website.trim(),\n\t\t\t\tlocation: location.trim(),\n\t\t\t\tapproved: true, // Auto-approve; toggle in Data tab if needed\n\t\t\t\tcreated_at: new Date().toISOString()\n\t\t\t})\n\t\t\tsubmitted = true\n\t\t\tname = ''\n\t\t\tmessage = ''\n\t\t\twebsite = ''\n\t\t\tlocation = ''\n\t\t} catch (err) {\n\t\t\terror = content.error_message\n\t\t} finally {\n\t\t\tsubmitting = false\n\t\t}\n\t}\n\n\tfunction format_date(date_str) {\n\t\treturn new Date(date_str).toLocaleDateString('en-US', {\n\t\t\tyear: 'numeric',\n\t\t\tmonth: 'short',\n\t\t\tday: 'numeric'\n\t\t})\n\t}\n</script>\n\n<div class=\"page\">\n\t<header class=\"header\">\n\t\t<h1>\n\t\t\t<Icon icon=\"lucide:book-heart\" width={28} />\n\t\t\t{content.title}\n\t\t</h1>\n\t\t<p>{content.description}</p>\n\t</header>\n\n\t<div class=\"guestbook\">\n\t\t<section class=\"sign-form\">\n\t\t\t<h2>{content.sign_title}</h2>\n\t\t\t{#if submitted}\n\t\t\t\t<div class=\"success\" transition:fade>\n\t\t\t\t\t<Icon icon=\"lucide:sparkles\" width={20} />\n\t\t\t\t\t<p>{content.success_message}</p>\n\t\t\t\t\t<button class=\"btn-link\" onclick={() => submitted = false}>\n\t\t\t\t\t\t{content.sign_another}\n\t\t\t\t\t</button>\n\t\t\t\t</div>\n\t\t\t{:else}\n\t\t\t\t<form onsubmit={handle_submit}>\n\t\t\t\t\t<div class=\"form-group\">\n\t\t\t\t\t\t<label for=\"name\">{content.name_label} *</label>\n\t\t\t\t\t\t<input id=\"name\" type=\"text\" bind:value={name} required />\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"form-group\">\n\t\t\t\t\t\t<label for=\"message\">{content.message_label} *</label>\n\t\t\t\t\t\t<textarea id=\"message\" bind:value={message} rows=\"3\" required></textarea>\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"form-row\">\n\t\t\t\t\t\t<div class=\"form-group\">\n\t\t\t\t\t\t\t<label for=\"website\">{content.website_label}</label>\n\t\t\t\t\t\t\t<input id=\"website\" type=\"url\" placeholder=\"https://\" bind:value={website} />\n\t\t\t\t\t\t</div>\n\t\t\t\t\t\t<div class=\"form-group\">\n\t\t\t\t\t\t\t<label for=\"location\">{content.location_label}</label>\n\t\t\t\t\t\t\t<input id=\"location\" type=\"text\" placeholder=\"City, Country\" bind:value={location} />\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t\t{#if error}\n\t\t\t\t\t\t<p class=\"error\">{error}</p>\n\t\t\t\t\t{/if}\n\t\t\t\t\t<button type=\"submit\" class=\"btn-primary\" disabled={submitting}>\n\t\t\t\t\t\t{#if submitting}\n\t\t\t\t\t\t\t<Icon icon=\"lucide:loader-2\" width={16} class=\"spin\" />\n\t\t\t\t\t\t{:else}\n\t\t\t\t\t\t\t<Icon icon=\"lucide:pen-line\" width={16} />\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t{content.submit_button}\n\t\t\t\t\t</button>\n\t\t\t\t</form>\n\t\t\t{/if}\n\t\t</section>\n\n\t\t<section class=\"entries\">\n\t\t\t<h2>{content.entries_title} ({entries.length})</h2>\n\t\t\t{#if loading}\n\t\t\t\t<div class=\"loading\">\n\t\t\t\t\t<Icon icon=\"lucide:loader-2\" width={24} class=\"spin\" />\n\t\t\t\t</div>\n\t\t\t{:else if entries.length === 0}\n\t\t\t\t<div class=\"empty\">\n\t\t\t\t\t<p>{content.empty_text}</p>\n\t\t\t\t</div>\n\t\t\t{:else}\n\t\t\t\t<div class=\"entries-list\">\n\t\t\t\t\t{#each entries as entry (entry.id)}\n\t\t\t\t\t\t<div class=\"entry\" in:fly={{ y: 10, duration: 300 }}>\n\t\t\t\t\t\t\t<div class=\"entry-header\">\n\t\t\t\t\t\t\t\t<span class=\"entry-name\">\n\t\t\t\t\t\t\t\t\t{#if entry.website}\n\t\t\t\t\t\t\t\t\t\t<a href={entry.website} target=\"_blank\" rel=\"noopener\">{entry.name}</a>\n\t\t\t\t\t\t\t\t\t{:else}\n\t\t\t\t\t\t\t\t\t\t{entry.name}\n\t\t\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t\t\t</span>\n\t\t\t\t\t\t\t\t<span class=\"entry-meta\">\n\t\t\t\t\t\t\t\t\t{#if entry.location}\n\t\t\t\t\t\t\t\t\t\t<span class=\"location\">\n\t\t\t\t\t\t\t\t\t\t\t<Icon icon=\"lucide:map-pin\" width={12} />\n\t\t\t\t\t\t\t\t\t\t\t{entry.location}\n\t\t\t\t\t\t\t\t\t\t</span>\n\t\t\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t\t\t\t<span class=\"date\">{format_date(entry.created_at)}</span>\n\t\t\t\t\t\t\t\t</span>\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t<p class=\"entry-message\">{entry.message}</p>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t{/each}\n\t\t\t\t</div>\n\t\t\t{/if}\n\t\t</section>\n\t</div>\n</div>\n\n<style>\n\t.page {\n\t\tmin-height: 100vh;\n\t\tbackground: var(--bg-color, #fef6e4);\n\t\tpadding: 2rem 1.5rem;\n\t\tfont-family: var(--font, Georgia, serif);\n\t}\n\n\t.header {\n\t\tmax-width: 640px;\n\t\tmargin: 0 auto 2rem;\n\t\ttext-align: center;\n\t}\n\n\t.header h1 {\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tfont-size: 1.75rem;\n\t\tfont-weight: 400;\n\t\tcolor: var(--heading-color, #001858);\n\t\tmargin: 0 0 0.5rem;\n\t}\n\n\t.header p {\n\t\tcolor: var(--text-color, #172c66);\n\t\tmargin: 0;\n\t\topacity: 0.8;\n\t}\n\n\t.guestbook {\n\t\tmax-width: 640px;\n\t\tmargin: 0 auto;\n\t\tdisplay: grid;\n\t\tgap: 2rem;\n\t}\n\n\tsection {\n\t\tbackground: var(--card-bg, #fffffe);\n\t\tborder: 2px solid var(--border-color, #001858);\n\t\tborder-radius: var(--radius, 8px);\n\t\tpadding: 1.5rem;\n\t}\n\n\tsection h2 {\n\t\tfont-size: 1.125rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #001858);\n\t\tmargin: 0 0 1rem;\n\t\tpadding-bottom: 0.5rem;\n\t\tborder-bottom: 1px dashed var(--border-color, #001858);\n\t\tfont-family: system-ui, sans-serif;\n\t}\n\n\t.form-group {\n\t\tmargin-bottom: 1rem;\n\t}\n\n\t.form-group label {\n\t\tdisplay: block;\n\t\tfont-size: 0.875rem;\n\t\tfont-weight: 500;\n\t\tcolor: var(--heading-color, #001858);\n\t\tmargin-bottom: 0.375rem;\n\t\tfont-family: system-ui, sans-serif;\n\t}\n\n\t.form-group input,\n\t.form-group textarea {\n\t\twidth: 100%;\n\t\tpadding: 0.625rem 0.75rem;\n\t\tborder: 2px solid var(--input-border, #e8e4e6);\n\t\tborder-radius: 4px;\n\t\tbackground: var(--input-bg, #fef6e4);\n\t\tcolor: var(--heading-color, #001858);\n\t\tfont-size: 0.9375rem;\n\t\tfont-family: inherit;\n\t\tresize: vertical;\n\t}\n\n\t.form-group input:focus,\n\t.form-group textarea:focus {\n\t\toutline: none;\n\t\tborder-color: var(--accent-color, #f582ae);\n\t}\n\n\t.form-row {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: 1fr 1fr;\n\t\tgap: 1rem;\n\t}\n\n\t.btn-primary {\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tpadding: 0.625rem 1.25rem;\n\t\tbackground: var(--accent-color, #f582ae);\n\t\tcolor: var(--heading-color, #001858);\n\t\tborder: 2px solid var(--heading-color, #001858);\n\t\tborder-radius: 4px;\n\t\tfont-size: 0.9375rem;\n\t\tfont-weight: 600;\n\t\tcursor: pointer;\n\t\ttransition: all 0.2s;\n\t\tfont-family: system-ui, sans-serif;\n\t}\n\n\t.btn-primary:hover:not(:disabled) {\n\t\tbackground: var(--accent-hover, #ff6b9d);\n\t\ttransform: translate(-2px, -2px);\n\t\tbox-shadow: 4px 4px 0 var(--heading-color, #001858);\n\t}\n\n\t.btn-primary:disabled {\n\t\topacity: 0.6;\n\t\tcursor: not-allowed;\n\t}\n\n\t.btn-link {\n\t\tbackground: none;\n\t\tborder: none;\n\t\tcolor: var(--accent-color, #f582ae);\n\t\tfont-weight: 600;\n\t\tcursor: pointer;\n\t\ttext-decoration: underline;\n\t\tfont-family: system-ui, sans-serif;\n\t}\n\n\t.success {\n\t\ttext-align: center;\n\t\tpadding: 1rem;\n\t\tcolor: var(--heading-color, #001858);\n\t}\n\n\t.success p {\n\t\tmargin: 0.75rem 0 1rem;\n\t}\n\n\t.error {\n\t\tcolor: #dc2626;\n\t\tfont-size: 0.875rem;\n\t\tmargin: 0 0 1rem;\n\t\tfont-family: system-ui, sans-serif;\n\t}\n\n\t.loading, .empty {\n\t\ttext-align: center;\n\t\tpadding: 2rem;\n\t\tcolor: var(--text-color, #172c66);\n\t}\n\n\t.entries-list {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tgap: 1rem;\n\t}\n\n\t.entry {\n\t\tpadding: 1rem;\n\t\tbackground: var(--entry-bg, #fef6e4);\n\t\tborder-radius: 4px;\n\t\tborder-left: 3px solid var(--accent-color, #f582ae);\n\t}\n\n\t.entry-header {\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: flex-start;\n\t\tgap: 0.5rem;\n\t\tmargin-bottom: 0.5rem;\n\t\tflex-wrap: wrap;\n\t}\n\n\t.entry-name {\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #001858);\n\t\tfont-family: system-ui, sans-serif;\n\t}\n\n\t.entry-name a {\n\t\tcolor: inherit;\n\t\ttext-decoration: underline;\n\t\ttext-decoration-color: var(--accent-color, #f582ae);\n\t}\n\n\t.entry-meta {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.75rem;\n\t\tfont-size: 0.8125rem;\n\t\tcolor: var(--text-color, #172c66);\n\t\topacity: 0.7;\n\t\tfont-family: system-ui, sans-serif;\n\t}\n\n\t.location {\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tgap: 0.25rem;\n\t}\n\n\t.entry-message {\n\t\tcolor: var(--text-color, #172c66);\n\t\tline-height: 1.6;\n\t\tmargin: 0;\n\t\tfont-size: 0.9375rem;\n\t}\n\n\t:global(.spin) {\n\t\tanimation: spin 1s linear infinite;\n\t}\n\n\t@keyframes spin {\n\t\tfrom { transform: rotate(0deg); }\n\t\tto { transform: rotate(360deg); }\n\t}\n\n\t@media (max-width: 500px) {\n\t\t.form-row {\n\t\t\tgrid-template-columns: 1fr;\n\t\t}\n\n\t\t.entry-header {\n\t\t\tflex-direction: column;\n\t\t}\n\t}\n</style>",
+	"design": [
+		{
+			"id": "bg-color",
+			"name": "Background",
+			"css_var": "--bg-color",
+			"value": "#fef6e4",
+			"type": "color",
+			"description": "Page background color"
+		},
+		{
+			"id": "card-bg",
+			"name": "Card Background",
+			"css_var": "--card-bg",
+			"value": "#fffffe",
+			"type": "color",
+			"description": "Background for cards"
+		},
+		{
+			"id": "entry-bg",
+			"name": "Entry Background",
+			"css_var": "--entry-bg",
+			"value": "#fef6e4",
+			"type": "color",
+			"description": "Background for entries"
+		},
+		{
+			"id": "input-bg",
+			"name": "Input Background",
+			"css_var": "--input-bg",
+			"value": "#fef6e4",
+			"type": "color",
+			"description": "Background for inputs"
+		},
+		{
+			"id": "heading-color",
+			"name": "Heading Color",
+			"css_var": "--heading-color",
+			"value": "#001858",
+			"type": "color",
+			"description": "Color for headings"
+		},
+		{
+			"id": "text-color",
+			"name": "Text Color",
+			"css_var": "--text-color",
+			"value": "#172c66",
+			"type": "color",
+			"description": "Color for body text"
+		},
+		{
+			"id": "accent-color",
+			"name": "Accent Color",
+			"css_var": "--accent-color",
+			"value": "#f582ae",
+			"type": "color",
+			"description": "Primary accent color"
+		},
+		{
+			"id": "accent-hover",
+			"name": "Accent Hover",
+			"css_var": "--accent-hover",
+			"value": "#ff6b9d",
+			"type": "color",
+			"description": "Accent color on hover"
+		},
+		{
+			"id": "border-color",
+			"name": "Border Color",
+			"css_var": "--border-color",
+			"value": "#001858",
+			"type": "color",
+			"description": "Color for borders"
+		},
+		{
+			"id": "input-border",
+			"name": "Input Border",
+			"css_var": "--input-border",
+			"value": "#e8e4e6",
+			"type": "color",
+			"description": "Color for input borders"
+		},
+		{
+			"id": "font",
+			"name": "Font",
+			"css_var": "--font",
+			"value": "Georgia, serif",
+			"type": "font",
+			"description": "Main font family"
+		},
+		{
+			"id": "radius",
+			"name": "Border Radius",
+			"css_var": "--radius",
+			"value": "8px",
+			"type": "radius",
+			"description": "Roundness of corners"
+		}
+	],
+	"content": [
+		{
+			"id": "title",
+			"name": "Title",
+			"type": "text",
+			"value": "Guestbook",
+			"description": "Page title"
+		},
+		{
+			"id": "description",
+			"name": "Description",
+			"type": "text",
+			"value": "Leave a message! I'd love to hear from you.",
+			"description": "Page description"
+		},
+		{
+			"id": "sign_title",
+			"name": "Sign Title",
+			"type": "text",
+			"value": "Sign the guestbook",
+			"description": "Title for sign form"
+		},
+		{
+			"id": "name_label",
+			"name": "Name Label",
+			"type": "text",
+			"value": "Your name",
+			"description": "Label for name input"
+		},
+		{
+			"id": "message_label",
+			"name": "Message Label",
+			"type": "text",
+			"value": "Your message",
+			"description": "Label for message input"
+		},
+		{
+			"id": "website_label",
+			"name": "Website Label",
+			"type": "text",
+			"value": "Website (optional)",
+			"description": "Label for website input"
+		},
+		{
+			"id": "location_label",
+			"name": "Location Label",
+			"type": "text",
+			"value": "Location (optional)",
+			"description": "Label for location input"
+		},
+		{
+			"id": "submit_button",
+			"name": "Submit Button",
+			"type": "text",
+			"value": "Sign",
+			"description": "Submit button text"
+		},
+		{
+			"id": "success_message",
+			"name": "Success Message",
+			"type": "text",
+			"value": "Thanks for signing! Your message has been added.",
+			"description": "Message after successful submission"
+		},
+		{
+			"id": "sign_another",
+			"name": "Sign Another",
+			"type": "text",
+			"value": "Sign again",
+			"description": "Button to sign again"
+		},
+		{
+			"id": "error_message",
+			"name": "Error Message",
+			"type": "text",
+			"value": "Something went wrong. Please try again.",
+			"description": "Error message"
+		},
+		{
+			"id": "entries_title",
+			"name": "Entries Title",
+			"type": "text",
+			"value": "Messages",
+			"description": "Title for entries section"
+		},
+		{
+			"id": "empty_text",
+			"name": "Empty State",
+			"type": "text",
+			"value": "No messages yet. Be the first to sign!",
+			"description": "Text when no entries exist"
+		}
+	],
+	"data": {
+		"entries": {
+			"schema": [
+				{
+					"name": "name",
+					"type": "text"
+				},
+				{
+					"name": "message",
+					"type": "text"
+				},
+				{
+					"name": "website",
+					"type": "text"
+				},
+				{
+					"name": "location",
+					"type": "text"
+				},
+				{
+					"name": "approved",
+					"type": "bool"
+				},
+				{
+					"name": "created_at",
+					"type": "text"
+				}
+			],
+			"records": [
+				{
+					"id": "e1",
+					"name": "Sarah",
+					"message": "Love your site! Keep up the great work. Can't wait to see what you build next.",
+					"website": "https://example.com",
+					"location": "San Francisco, CA",
+					"approved": true,
+					"created_at": "2024-12-14T10:30:00Z"
+				},
+				{
+					"id": "e2",
+					"name": "Marco",
+					"message": "Found your site through a friend. Really cool vibe here!",
+					"website": "",
+					"location": "Berlin, Germany",
+					"approved": true,
+					"created_at": "2024-12-10T15:45:00Z"
+				},
+				{
+					"id": "e3",
+					"name": "Anonymous Visitor",
+					"message": "Just wanted to say hi! Hope you're having a great day.",
+					"website": "",
+					"location": "",
+					"approved": true,
+					"created_at": "2024-12-05T08:20:00Z"
+				}
+			],
+			"icon": "lucide:file-text"
+		}
+	}
+}

@@ -1,0 +1,197 @@
+{
+	"id": "content-calendar",
+	"name": "Content Calendar",
+	"description": "Plan and schedule content across platforms",
+	"preview": "lucide:calendar-days",
+	"tags": [
+		"creator",
+		"intermediate",
+		"productivity"
+	],
+	"kits": [
+		"creator"
+	],
+	"frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet items = $state([])\n\tlet loading = $state(true)\n\tlet current_date = $state(new Date())\n\tlet view_mode = $state('month')\n\tlet selected_item = $state(null)\n\tlet editing_item = $state(null)\n\n\t// Form state\n\tlet form_title = $state('')\n\tlet form_platform = $state('')\n\tlet form_type = $state('')\n\tlet form_status = $state('idea')\n\tlet form_date = $state('')\n\tlet form_notes = $state('')\n\n\tconst platforms = [\n\t\t{ id: 'instagram', name: 'Instagram', icon: 'mdi:instagram', color: '#E4405F' },\n\t\t{ id: 'tiktok', name: 'TikTok', icon: 'ic:baseline-tiktok', color: '#000000' },\n\t\t{ id: 'youtube', name: 'YouTube', icon: 'mdi:youtube', color: '#FF0000' },\n\t\t{ id: 'twitter', name: 'X/Twitter', icon: 'ri:twitter-x-fill', color: '#000000' },\n\t\t{ id: 'linkedin', name: 'LinkedIn', icon: 'mdi:linkedin', color: '#0A66C2' },\n\t\t{ id: 'threads', name: 'Threads', icon: 'bi:threads', color: '#000000' }\n\t]\n\n\tconst content_types = [\n\t\t{ id: 'reel', name: 'Reel', icon: 'lucide:film' },\n\t\t{ id: 'post', name: 'Post', icon: 'lucide:image' },\n\t\t{ id: 'story', name: 'Story', icon: 'lucide:circle' },\n\t\t{ id: 'video', name: 'Video', icon: 'lucide:video' },\n\t\t{ id: 'carousel', name: 'Carousel', icon: 'lucide:images' },\n\t\t{ id: 'live', name: 'Live', icon: 'lucide:radio' }\n\t]\n\n\tconst statuses = [\n\t\t{ id: 'idea', name: 'Idea', color: '#94a3b8' },\n\t\t{ id: 'drafted', name: 'Drafted', color: '#f59e0b' },\n\t\t{ id: 'scheduled', name: 'Scheduled', color: '#3b82f6' },\n\t\t{ id: 'posted', name: 'Posted', color: '#22c55e' }\n\t]\n\n\tdata.items.subscribe(all_items => {\n\t\titems = all_items\n\t\tloading = false\n\t})\n\n\tfunction get_platform(id) {\n\t\treturn platforms.find(p => p.id === id) || platforms[0]\n\t}\n\n\tfunction get_type(id) {\n\t\treturn content_types.find(t => t.id === id) || content_types[0]\n\t}\n\n\tfunction get_status(id) {\n\t\treturn statuses.find(s => s.id === id) || statuses[0]\n\t}\n\n\tfunction get_month_name(date) {\n\t\treturn date.toLocaleString('default', { month: 'long', year: 'numeric' })\n\t}\n\n\tfunction get_days_in_month(date) {\n\t\treturn new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()\n\t}\n\n\tfunction get_first_day_of_month(date) {\n\t\treturn new Date(date.getFullYear(), date.getMonth(), 1).getDay()\n\t}\n\n\tfunction get_calendar_days() {\n\t\tconst days = []\n\t\tconst first_day = get_first_day_of_month(current_date)\n\t\tconst total_days = get_days_in_month(current_date)\n\n\t\t// Previous month padding\n\t\tfor (let i = 0; i < first_day; i++) {\n\t\t\tdays.push({ day: null, items: [] })\n\t\t}\n\n\t\t// Current month days\n\t\tfor (let d = 1; d <= total_days; d++) {\n\t\t\tconst date_str = format_date_key(new Date(current_date.getFullYear(), current_date.getMonth(), d))\n\t\t\tconst day_items = items.filter(item => item.date === date_str)\n\t\t\tdays.push({ day: d, items: day_items, date_str })\n\t\t}\n\n\t\treturn days\n\t}\n\n\tfunction format_date_key(date) {\n\t\treturn date.toISOString().split('T')[0]\n\t}\n\n\tfunction is_today(day) {\n\t\tif (!day) return false\n\t\tconst today = new Date()\n\t\treturn day === today.getDate() && \n\t\t\tcurrent_date.getMonth() === today.getMonth() && \n\t\t\tcurrent_date.getFullYear() === today.getFullYear()\n\t}\n\n\tfunction prev_month() {\n\t\tcurrent_date = new Date(current_date.getFullYear(), current_date.getMonth() - 1, 1)\n\t}\n\n\tfunction next_month() {\n\t\tcurrent_date = new Date(current_date.getFullYear(), current_date.getMonth() + 1, 1)\n\t}\n\n\tfunction go_today() {\n\t\tcurrent_date = new Date()\n\t}\n\n\tfunction open_item(item) {\n\t\tselected_item = item\n\t}\n\n\tfunction close_modal() {\n\t\tselected_item = null\n\t\tediting_item = null\n\t\treset_form()\n\t}\n\n\tfunction start_editing(item) {\n\t\tediting_item = item ? item.id : 'new'\n\t\tform_title = item?.title || ''\n\t\tform_platform = item?.platform || 'instagram'\n\t\tform_type = item?.type || 'post'\n\t\tform_status = item?.status || 'idea'\n\t\tform_date = item?.date || format_date_key(new Date())\n\t\tform_notes = item?.notes || ''\n\t\tselected_item = null\n\t}\n\n\tfunction reset_form() {\n\t\tform_title = ''\n\t\tform_platform = 'instagram'\n\t\tform_type = 'post'\n\t\tform_status = 'idea'\n\t\tform_date = format_date_key(new Date())\n\t\tform_notes = ''\n\t}\n\n\tasync function save_item() {\n\t\tif (!form_title.trim() || !form_date) return\n\n\t\tconst item_data = {\n\t\t\ttitle: form_title.trim(),\n\t\t\tplatform: form_platform,\n\t\t\ttype: form_type,\n\t\t\tstatus: form_status,\n\t\t\tdate: form_date,\n\t\t\tnotes: form_notes.trim()\n\t\t}\n\n\t\tif (editing_item === 'new') {\n\t\t\tawait data.items.create(item_data)\n\t\t} else {\n\t\t\tawait data.items.update(editing_item, item_data)\n\t\t}\n\n\t\tclose_modal()\n\t}\n\n\tasync function delete_item(id) {\n\t\tawait data.items.delete(id)\n\t\tclose_modal()\n\t}\n\n\tasync function update_status(item, new_status) {\n\t\tawait data.items.update(item.id, { status: new_status })\n\t}\n\n\tfunction handle_backdrop_click(e) {\n\t\tif (e.target === e.currentTarget) close_modal()\n\t}\n</script>\n\n<div class=\"page\">\n\t<header class=\"header\">\n\t\t<div class=\"header-content\">\n\t\t\t<h1>{content.calendar_title}</h1>\n\t\t\t<button class=\"add-btn\" onclick={() => start_editing(null)}>\n\t\t\t\t<Icon icon=\"lucide:plus\" width={18} />\n\t\t\t\tAdd Content\n\t\t\t</button>\n\t\t</div>\n\t</header>\n\n\t<main class=\"container\">\n\t\t<div class=\"calendar-header\">\n\t\t\t<div class=\"nav-controls\">\n\t\t\t\t<button class=\"nav-btn\" onclick={prev_month}>\n\t\t\t\t\t<Icon icon=\"lucide:chevron-left\" width={20} />\n\t\t\t\t</button>\n\t\t\t\t<h2>{get_month_name(current_date)}</h2>\n\t\t\t\t<button class=\"nav-btn\" onclick={next_month}>\n\t\t\t\t\t<Icon icon=\"lucide:chevron-right\" width={20} />\n\t\t\t\t</button>\n\t\t\t</div>\n\t\t\t<button class=\"today-btn\" onclick={go_today}>Today</button>\n\t\t</div>\n\n\t\t<div class=\"legend\">\n\t\t\t{#each statuses as status (status.id)}\n\t\t\t\t<span class=\"legend-item\">\n\t\t\t\t\t<span class=\"legend-dot\" style=\"background: {status.color}\"></span>\n\t\t\t\t\t{status.name}\n\t\t\t\t</span>\n\t\t\t{/each}\n\t\t</div>\n\n\t\t<div class=\"calendar-grid\">\n\t\t\t<div class=\"weekdays\">\n\t\t\t\t{#each ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as day}\n\t\t\t\t\t<div class=\"weekday\">{day}</div>\n\t\t\t\t{/each}\n\t\t\t</div>\n\n\t\t\t<div class=\"days\">\n\t\t\t\t{#each get_calendar_days() as { day, items: day_items, date_str }}\n\t\t\t\t\t<div class=\"day-cell\" class:empty={!day} class:today={is_today(day)}>\n\t\t\t\t\t\t{#if day}\n\t\t\t\t\t\t\t<span class=\"day-number\">{day}</span>\n\t\t\t\t\t\t\t<div class=\"day-items\">\n\t\t\t\t\t\t\t\t{#each day_items.slice(0, 3) as item (item.id)}\n\t\t\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\t\t\tclass=\"day-item\"\n\t\t\t\t\t\t\t\t\t\tstyle=\"border-left-color: {get_status(item.status).color}\"\n\t\t\t\t\t\t\t\t\t\tonclick={() => open_item(item)}\n\t\t\t\t\t\t\t\t\t>\n\t\t\t\t\t\t\t\t\t\t<Icon icon={get_platform(item.platform).icon} width={12} style=\"color: {get_platform(item.platform).color}\" />\n\t\t\t\t\t\t\t\t\t\t<span class=\"item-title\">{item.title}</span>\n\t\t\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t\t\t{#if day_items.length > 3}\n\t\t\t\t\t\t\t\t\t<span class=\"more-items\">+{day_items.length - 3} more</span>\n\t\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t</div>\n\t\t\t\t{/each}\n\t\t\t</div>\n\t\t</div>\n\t</main>\n\n\t{#if selected_item}\n\t\t<div class=\"modal-backdrop\" onclick={handle_backdrop_click}>\n\t\t\t<div class=\"modal\">\n\t\t\t\t<button class=\"close-btn\" onclick={close_modal}>\n\t\t\t\t\t<Icon icon=\"lucide:x\" width={20} />\n\t\t\t\t</button>\n\n\t\t\t\t<div class=\"modal-header\">\n\t\t\t\t\t<div class=\"platform-badge\" style=\"background: {get_platform(selected_item.platform).color}\">\n\t\t\t\t\t\t<Icon icon={get_platform(selected_item.platform).icon} width={16} />\n\t\t\t\t\t\t{get_platform(selected_item.platform).name}\n\t\t\t\t\t</div>\n\t\t\t\t\t<span class=\"type-badge\">\n\t\t\t\t\t\t<Icon icon={get_type(selected_item.type).icon} width={14} />\n\t\t\t\t\t\t{get_type(selected_item.type).name}\n\t\t\t\t\t</span>\n\t\t\t\t</div>\n\n\t\t\t\t<h2>{selected_item.title}</h2>\n\n\t\t\t\t<div class=\"item-meta\">\n\t\t\t\t\t<span class=\"meta-item\">\n\t\t\t\t\t\t<Icon icon=\"lucide:calendar\" width={16} />\n\t\t\t\t\t\t{new Date(selected_item.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}\n\t\t\t\t\t</span>\n\t\t\t\t</div>\n\n\t\t\t\t<div class=\"status-selector\">\n\t\t\t\t\t<label>Status:</label>\n\t\t\t\t\t<div class=\"status-options\">\n\t\t\t\t\t\t{#each statuses as status (status.id)}\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"status-option\"\n\t\t\t\t\t\t\t\tclass:active={selected_item.status === status.id}\n\t\t\t\t\t\t\t\tstyle=\"--status-color: {status.color}\"\n\t\t\t\t\t\t\t\tonclick={() => update_status(selected_item, status.id)}\n\t\t\t\t\t\t\t>\n\t\t\t\t\t\t\t\t{status.name}\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t{/each}\n\t\t\t\t\t</div>\n\t\t\t\t</div>\n\n\t\t\t\t{#if selected_item.notes}\n\t\t\t\t\t<div class=\"item-notes\">\n\t\t\t\t\t\t<h4>Notes</h4>\n\t\t\t\t\t\t<p>{selected_item.notes}</p>\n\t\t\t\t\t</div>\n\t\t\t\t{/if}\n\n\t\t\t\t<div class=\"modal-actions\">\n\t\t\t\t\t<button class=\"edit-btn\" onclick={() => start_editing(selected_item)}>\n\t\t\t\t\t\t<Icon icon=\"lucide:pencil\" width={16} /> Edit\n\t\t\t\t\t</button>\n\t\t\t\t\t<button class=\"delete-btn\" onclick={() => delete_item(selected_item.id)}>\n\t\t\t\t\t\t<Icon icon=\"lucide:trash-2\" width={16} /> Delete\n\t\t\t\t\t</button>\n\t\t\t\t</div>\n\t\t\t</div>\n\t\t</div>\n\t{/if}\n\n\t{#if editing_item}\n\t\t<div class=\"modal-backdrop\" onclick={handle_backdrop_click}>\n\t\t\t<div class=\"modal edit-modal\">\n\t\t\t\t<button class=\"close-btn\" onclick={close_modal}>\n\t\t\t\t\t<Icon icon=\"lucide:x\" width={20} />\n\t\t\t\t</button>\n\n\t\t\t\t<h2>{editing_item === 'new' ? 'Add Content' : 'Edit Content'}</h2>\n\n\t\t\t\t<form class=\"edit-form\" onsubmit={(e) => { e.preventDefault(); save_item() }}>\n\t\t\t\t\t<div class=\"form-group\">\n\t\t\t\t\t\t<label>Title *</label>\n\t\t\t\t\t\t<input type=\"text\" bind:value={form_title} placeholder=\"Content title...\" autofocus />\n\t\t\t\t\t</div>\n\n\t\t\t\t\t<div class=\"form-row\">\n\t\t\t\t\t\t<div class=\"form-group\">\n\t\t\t\t\t\t\t<label>Platform</label>\n\t\t\t\t\t\t\t<div class=\"platform-options\">\n\t\t\t\t\t\t\t\t{#each platforms as platform (platform.id)}\n\t\t\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\t\t\ttype=\"button\"\n\t\t\t\t\t\t\t\t\t\tclass=\"platform-option\"\n\t\t\t\t\t\t\t\t\t\tclass:active={form_platform === platform.id}\n\t\t\t\t\t\t\t\t\t\tstyle=\"--platform-color: {platform.color}\"\n\t\t\t\t\t\t\t\t\t\tonclick={() => form_platform = platform.id}\n\t\t\t\t\t\t\t\t\t\ttitle={platform.name}\n\t\t\t\t\t\t\t\t\t>\n\t\t\t\t\t\t\t\t\t\t<Icon icon={platform.icon} width={18} />\n\t\t\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t</div>\n\n\t\t\t\t\t\t<div class=\"form-group\">\n\t\t\t\t\t\t\t<label>Content Type</label>\n\t\t\t\t\t\t\t<select bind:value={form_type}>\n\t\t\t\t\t\t\t\t{#each content_types as type (type.id)}\n\t\t\t\t\t\t\t\t\t<option value={type.id}>{type.name}</option>\n\t\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t\t</select>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\n\t\t\t\t\t<div class=\"form-row\">\n\t\t\t\t\t\t<div class=\"form-group\">\n\t\t\t\t\t\t\t<label>Date *</label>\n\t\t\t\t\t\t\t<input type=\"date\" bind:value={form_date} />\n\t\t\t\t\t\t</div>\n\n\t\t\t\t\t\t<div class=\"form-group\">\n\t\t\t\t\t\t\t<label>Status</label>\n\t\t\t\t\t\t\t<select bind:value={form_status}>\n\t\t\t\t\t\t\t\t{#each statuses as status (status.id)}\n\t\t\t\t\t\t\t\t\t<option value={status.id}>{status.name}</option>\n\t\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t\t</select>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\n\t\t\t\t\t<div class=\"form-group\">\n\t\t\t\t\t\t<label>Notes</label>\n\t\t\t\t\t\t<textarea bind:value={form_notes} rows=\"3\" placeholder=\"Content ideas, captions, hashtags...\"></textarea>\n\t\t\t\t\t</div>\n\n\t\t\t\t\t<div class=\"form-actions\">\n\t\t\t\t\t\t<button type=\"button\" class=\"cancel-btn\" onclick={close_modal}>Cancel</button>\n\t\t\t\t\t\t<button type=\"submit\" class=\"save-btn\">Save</button>\n\t\t\t\t\t</div>\n\t\t\t\t</form>\n\t\t\t</div>\n\t\t</div>\n\t{/if}\n\n\t<footer class=\"footer\">built with <a href=\"https://tinykit.studio\" target=\"_blank\">tinykit.studio</a></footer>\n</div>\n\n<style>\n\t.page {\n\t\tmin-height: 100vh;\n\t\tbackground: var(--page-background, #f8fafc);\n\t\tfont-family: var(--body-font, 'Inter', system-ui, sans-serif);\n\t\tcolor: var(--body-text-color, #1a1a1a);\n\t}\n\n\t.header {\n\t\tbackground: var(--header-background, #ffffff);\n\t\tborder-bottom: 1px solid var(--border-color, #e2e8f0);\n\t\tpadding: 1.25rem 2rem;\n\t}\n\n\t.header-content {\n\t\tmax-width: 1200px;\n\t\tmargin: 0 auto;\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: center;\n\t}\n\n\t.header h1 {\n\t\tmargin: 0;\n\t\tfont-size: 1.5rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--heading-color, #1a1a1a);\n\t}\n\n\t.add-btn {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tbackground: var(--accent-color, #8b5cf6);\n\t\tcolor: #ffffff;\n\t\tborder: none;\n\t\tpadding: 0.625rem 1rem;\n\t\tborder-radius: 8px;\n\t\tfont-weight: 600;\n\t\tfont-size: 0.9rem;\n\t\tcursor: pointer;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.add-btn:hover {\n\t\tfilter: brightness(1.1);\n\t}\n\n\t.container {\n\t\tmax-width: 1200px;\n\t\tmargin: 0 auto;\n\t\tpadding: 1.5rem 2rem;\n\t}\n\n\t.calendar-header {\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: center;\n\t\tmargin-bottom: 1rem;\n\t}\n\n\t.nav-controls {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 1rem;\n\t}\n\n\t.nav-controls h2 {\n\t\tmargin: 0;\n\t\tfont-size: 1.25rem;\n\t\tfont-weight: 600;\n\t\tmin-width: 180px;\n\t\ttext-align: center;\n\t}\n\n\t.nav-btn {\n\t\tbackground: var(--card-background, #ffffff);\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\twidth: 36px;\n\t\theight: 36px;\n\t\tborder-radius: 8px;\n\t\tcursor: pointer;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tcolor: var(--body-text-color, #1a1a1a);\n\t\ttransition: all 0.2s;\n\t}\n\n\t.nav-btn:hover {\n\t\tbackground: var(--page-background, #f1f5f9);\n\t}\n\n\t.today-btn {\n\t\tbackground: transparent;\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tpadding: 0.5rem 1rem;\n\t\tborder-radius: 6px;\n\t\tfont-size: 0.85rem;\n\t\tfont-weight: 500;\n\t\tcursor: pointer;\n\t\tcolor: var(--body-text-color, #1a1a1a);\n\t\ttransition: all 0.2s;\n\t}\n\n\t.today-btn:hover {\n\t\tbackground: var(--page-background, #f1f5f9);\n\t}\n\n\t.legend {\n\t\tdisplay: flex;\n\t\tgap: 1.5rem;\n\t\tmargin-bottom: 1.5rem;\n\t\tflex-wrap: wrap;\n\t}\n\n\t.legend-item {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.4rem;\n\t\tfont-size: 0.8rem;\n\t\tcolor: var(--secondary-text-color, #64748b);\n\t}\n\n\t.legend-dot {\n\t\twidth: 10px;\n\t\theight: 10px;\n\t\tborder-radius: 50%;\n\t}\n\n\t.calendar-grid {\n\t\tbackground: var(--card-background, #ffffff);\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: var(--card-radius, 12px);\n\t\toverflow: hidden;\n\t}\n\n\t.weekdays {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(7, 1fr);\n\t\tbackground: var(--page-background, #f8fafc);\n\t\tborder-bottom: 1px solid var(--border-color, #e2e8f0);\n\t}\n\n\t.weekday {\n\t\tpadding: 0.75rem;\n\t\ttext-align: center;\n\t\tfont-size: 0.75rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--secondary-text-color, #64748b);\n\t\ttext-transform: uppercase;\n\t}\n\n\t.days {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(7, 1fr);\n\t}\n\n\t.day-cell {\n\t\tmin-height: 100px;\n\t\tborder-right: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-bottom: 1px solid var(--border-color, #e2e8f0);\n\t\tpadding: 0.5rem;\n\t}\n\n\t.day-cell:nth-child(7n) {\n\t\tborder-right: none;\n\t}\n\n\t.day-cell.empty {\n\t\tbackground: var(--page-background, #f8fafc);\n\t}\n\n\t.day-cell.today {\n\t\tbackground: rgba(139, 92, 246, 0.05);\n\t}\n\n\t.day-cell.today .day-number {\n\t\tbackground: var(--accent-color, #8b5cf6);\n\t\tcolor: #ffffff;\n\t\tborder-radius: 50%;\n\t\twidth: 24px;\n\t\theight: 24px;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t}\n\n\t.day-number {\n\t\tfont-size: 0.85rem;\n\t\tfont-weight: 500;\n\t\tcolor: var(--heading-color, #1a1a1a);\n\t\tmargin-bottom: 0.25rem;\n\t}\n\n\t.day-items {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tgap: 2px;\n\t}\n\n\t.day-item {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 4px;\n\t\tpadding: 3px 6px;\n\t\tbackground: var(--page-background, #f8fafc);\n\t\tborder: none;\n\t\tborder-left: 3px solid;\n\t\tborder-radius: 4px;\n\t\tfont-size: 0.7rem;\n\t\tcursor: pointer;\n\t\ttransition: all 0.15s;\n\t\ttext-align: left;\n\t\twidth: 100%;\n\t}\n\n\t.day-item:hover {\n\t\tbackground: var(--border-color, #e2e8f0);\n\t}\n\n\t.item-title {\n\t\toverflow: hidden;\n\t\ttext-overflow: ellipsis;\n\t\twhite-space: nowrap;\n\t\tcolor: var(--body-text-color, #1a1a1a);\n\t}\n\n\t.more-items {\n\t\tfont-size: 0.65rem;\n\t\tcolor: var(--secondary-text-color, #64748b);\n\t\tpadding: 2px 6px;\n\t}\n\n\t.modal-backdrop {\n\t\tposition: fixed;\n\t\tinset: 0;\n\t\tbackground: rgba(0, 0, 0, 0.5);\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tpadding: 1rem;\n\t\tz-index: 100;\n\t}\n\n\t.modal {\n\t\tbackground: var(--card-background, #ffffff);\n\t\tborder-radius: var(--card-radius, 12px);\n\t\tpadding: 1.5rem;\n\t\tmax-width: 450px;\n\t\twidth: 100%;\n\t\tmax-height: 90vh;\n\t\toverflow-y: auto;\n\t\tposition: relative;\n\t}\n\n\t.close-btn {\n\t\tposition: absolute;\n\t\ttop: 1rem;\n\t\tright: 1rem;\n\t\tbackground: none;\n\t\tborder: none;\n\t\tcolor: var(--secondary-text-color, #64748b);\n\t\tcursor: pointer;\n\t\tpadding: 4px;\n\t\tborder-radius: 4px;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.close-btn:hover {\n\t\tbackground: var(--page-background, #f1f5f9);\n\t\tcolor: var(--body-text-color, #1a1a1a);\n\t}\n\n\t.modal-header {\n\t\tdisplay: flex;\n\t\tgap: 0.5rem;\n\t\tmargin-bottom: 0.75rem;\n\t}\n\n\t.platform-badge {\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tgap: 0.4rem;\n\t\tpadding: 0.25rem 0.6rem;\n\t\tborder-radius: 4px;\n\t\tfont-size: 0.75rem;\n\t\tfont-weight: 600;\n\t\tcolor: #ffffff;\n\t}\n\n\t.type-badge {\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tgap: 0.3rem;\n\t\tpadding: 0.25rem 0.6rem;\n\t\tbackground: var(--page-background, #f1f5f9);\n\t\tborder-radius: 4px;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--secondary-text-color, #64748b);\n\t}\n\n\t.modal h2 {\n\t\tmargin: 0 0 0.75rem 0;\n\t\tfont-size: 1.25rem;\n\t\tcolor: var(--heading-color, #1a1a1a);\n\t}\n\n\t.item-meta {\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t\tmargin-bottom: 1rem;\n\t}\n\n\t.meta-item {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.4rem;\n\t\tfont-size: 0.85rem;\n\t\tcolor: var(--secondary-text-color, #64748b);\n\t}\n\n\t.status-selector {\n\t\tmargin-bottom: 1rem;\n\t}\n\n\t.status-selector label {\n\t\tdisplay: block;\n\t\tfont-size: 0.8rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #1a1a1a);\n\t\tmargin-bottom: 0.5rem;\n\t}\n\n\t.status-options {\n\t\tdisplay: flex;\n\t\tgap: 0.5rem;\n\t\tflex-wrap: wrap;\n\t}\n\n\t.status-option {\n\t\tpadding: 0.4rem 0.75rem;\n\t\tborder: 2px solid var(--border-color, #e2e8f0);\n\t\tbackground: transparent;\n\t\tborder-radius: 6px;\n\t\tfont-size: 0.8rem;\n\t\tfont-weight: 500;\n\t\tcursor: pointer;\n\t\ttransition: all 0.15s;\n\t}\n\n\t.status-option:hover {\n\t\tborder-color: var(--status-color);\n\t}\n\n\t.status-option.active {\n\t\tbackground: var(--status-color);\n\t\tborder-color: var(--status-color);\n\t\tcolor: #ffffff;\n\t}\n\n\t.item-notes {\n\t\tbackground: var(--page-background, #f8fafc);\n\t\tborder-radius: 8px;\n\t\tpadding: 1rem;\n\t\tmargin-bottom: 1rem;\n\t}\n\n\t.item-notes h4 {\n\t\tmargin: 0 0 0.5rem 0;\n\t\tfont-size: 0.85rem;\n\t\tcolor: var(--heading-color, #1a1a1a);\n\t}\n\n\t.item-notes p {\n\t\tmargin: 0;\n\t\tfont-size: 0.9rem;\n\t\tcolor: var(--secondary-text-color, #64748b);\n\t\tline-height: 1.5;\n\t\twhite-space: pre-wrap;\n\t}\n\n\t.modal-actions {\n\t\tdisplay: flex;\n\t\tgap: 0.5rem;\n\t}\n\n\t.edit-btn, .delete-btn {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.4rem;\n\t\tpadding: 0.5rem 1rem;\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tbackground: transparent;\n\t\tborder-radius: 6px;\n\t\tfont-size: 0.85rem;\n\t\tfont-weight: 500;\n\t\tcursor: pointer;\n\t\ttransition: all 0.15s;\n\t}\n\n\t.edit-btn:hover {\n\t\tbackground: var(--page-background, #f1f5f9);\n\t}\n\n\t.delete-btn {\n\t\tcolor: #dc2626;\n\t\tborder-color: #dc2626;\n\t}\n\n\t.delete-btn:hover {\n\t\tbackground: #fef2f2;\n\t}\n\n\t.edit-form {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tgap: 1rem;\n\t}\n\n\t.form-row {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: 1fr 1fr;\n\t\tgap: 1rem;\n\t}\n\n\t.form-group {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tgap: 0.4rem;\n\t}\n\n\t.form-group label {\n\t\tfont-size: 0.8rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #1a1a1a);\n\t}\n\n\t.form-group input,\n\t.form-group select,\n\t.form-group textarea {\n\t\tpadding: 0.625rem 0.875rem;\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: 6px;\n\t\tfont-size: 0.9rem;\n\t\tcolor: var(--body-text-color, #1a1a1a);\n\t\tbackground: var(--card-background, #ffffff);\n\t\tfont-family: inherit;\n\t}\n\n\t.form-group input:focus,\n\t.form-group select:focus,\n\t.form-group textarea:focus {\n\t\toutline: none;\n\t\tborder-color: var(--accent-color, #8b5cf6);\n\t}\n\n\t.platform-options {\n\t\tdisplay: flex;\n\t\tgap: 0.4rem;\n\t\tflex-wrap: wrap;\n\t}\n\n\t.platform-option {\n\t\twidth: 36px;\n\t\theight: 36px;\n\t\tborder: 2px solid var(--border-color, #e2e8f0);\n\t\tbackground: transparent;\n\t\tborder-radius: 8px;\n\t\tcursor: pointer;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tcolor: var(--secondary-text-color, #64748b);\n\t\ttransition: all 0.15s;\n\t}\n\n\t.platform-option:hover {\n\t\tborder-color: var(--platform-color);\n\t\tcolor: var(--platform-color);\n\t}\n\n\t.platform-option.active {\n\t\tbackground: var(--platform-color);\n\t\tborder-color: var(--platform-color);\n\t\tcolor: #ffffff;\n\t}\n\n\t.form-actions {\n\t\tdisplay: flex;\n\t\tgap: 0.5rem;\n\t\tjustify-content: flex-end;\n\t\tmargin-top: 0.5rem;\n\t}\n\n\t.cancel-btn {\n\t\tpadding: 0.625rem 1.25rem;\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tbackground: transparent;\n\t\tborder-radius: 6px;\n\t\tfont-size: 0.9rem;\n\t\tcursor: pointer;\n\t\ttransition: all 0.15s;\n\t}\n\n\t.cancel-btn:hover {\n\t\tbackground: var(--page-background, #f1f5f9);\n\t}\n\n\t.save-btn {\n\t\tpadding: 0.625rem 1.25rem;\n\t\tbackground: var(--accent-color, #8b5cf6);\n\t\tcolor: #ffffff;\n\t\tborder: none;\n\t\tborder-radius: 6px;\n\t\tfont-size: 0.9rem;\n\t\tfont-weight: 600;\n\t\tcursor: pointer;\n\t\ttransition: all 0.15s;\n\t}\n\n\t.save-btn:hover {\n\t\tfilter: brightness(1.1);\n\t}\n\n\t.footer {\n\t\ttext-align: center;\n\t\tpadding: 2rem;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--secondary-text-color, #94a3b8);\n\t}\n\n\t.footer a {\n\t\tcolor: inherit;\n\t\ttext-decoration: none;\n\t}\n\n\t.footer a:hover {\n\t\ttext-decoration: underline;\n\t}\n\n\t@media (max-width: 768px) {\n\t\t.header {\n\t\t\tpadding: 1rem;\n\t\t}\n\n\t\t.container {\n\t\t\tpadding: 1rem;\n\t\t}\n\n\t\t.day-cell {\n\t\t\tmin-height: 60px;\n\t\t\tpadding: 0.25rem;\n\t\t}\n\n\t\t.day-item {\n\t\t\tpadding: 2px 4px;\n\t\t}\n\n\t\t.item-title {\n\t\t\tdisplay: none;\n\t\t}\n\n\t\t.form-row {\n\t\t\tgrid-template-columns: 1fr;\n\t\t}\n\t}\n</style>",
+	"design": [
+		{
+			"id": "body-font",
+			"name": "Font",
+			"css_var": "--body-font",
+			"value": "'Inter', system-ui, sans-serif",
+			"type": "font",
+			"description": "Main font for all text"
+		},
+		{
+			"id": "page-background",
+			"name": "Page Background",
+			"css_var": "--page-background",
+			"value": "#f8fafc",
+			"type": "color",
+			"description": "Page background color"
+		},
+		{
+			"id": "header-background",
+			"name": "Header Background",
+			"css_var": "--header-background",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Header background color"
+		},
+		{
+			"id": "card-background",
+			"name": "Card Background",
+			"css_var": "--card-background",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Card background color"
+		},
+		{
+			"id": "heading-color",
+			"name": "Heading Color",
+			"css_var": "--heading-color",
+			"value": "#1a1a1a",
+			"type": "color",
+			"description": "Heading text color"
+		},
+		{
+			"id": "body-text-color",
+			"name": "Body Text",
+			"css_var": "--body-text-color",
+			"value": "#1a1a1a",
+			"type": "color",
+			"description": "Main text color"
+		},
+		{
+			"id": "secondary-text-color",
+			"name": "Secondary Text",
+			"css_var": "--secondary-text-color",
+			"value": "#64748b",
+			"type": "color",
+			"description": "Muted text color"
+		},
+		{
+			"id": "accent-color",
+			"name": "Accent Color",
+			"css_var": "--accent-color",
+			"value": "#8b5cf6",
+			"type": "color",
+			"description": "Primary accent color"
+		},
+		{
+			"id": "border-color",
+			"name": "Border Color",
+			"css_var": "--border-color",
+			"value": "#e2e8f0",
+			"type": "color",
+			"description": "Border color"
+		},
+		{
+			"id": "card-radius",
+			"name": "Card Radius",
+			"css_var": "--card-radius",
+			"value": "12px",
+			"type": "radius",
+			"description": "Roundness of cards"
+		}
+	],
+	"content": [
+		{
+			"id": "calendar_title",
+			"name": "Calendar Title",
+			"type": "text",
+			"value": "Content Calendar",
+			"description": "Title shown in header"
+		}
+	],
+	"data": {
+		"items": {
+			"schema": [
+				{
+					"name": "id",
+					"type": "text"
+				},
+				{
+					"name": "title",
+					"type": "text"
+				},
+				{
+					"name": "platform",
+					"type": "text"
+				},
+				{
+					"name": "type",
+					"type": "text"
+				},
+				{
+					"name": "status",
+					"type": "text"
+				},
+				{
+					"name": "date",
+					"type": "text"
+				},
+				{
+					"name": "notes",
+					"type": "text"
+				}
+			],
+			"records": [
+				{
+					"id": "c1",
+					"title": "Morning routine reel",
+					"platform": "instagram",
+					"type": "reel",
+					"status": "scheduled",
+					"date": "2025-01-02",
+					"notes": "Include coffee shop clips and desk setup"
+				},
+				{
+					"id": "c2",
+					"title": "Product review: New headphones",
+					"platform": "youtube",
+					"type": "video",
+					"status": "drafted",
+					"date": "2025-01-05",
+					"notes": "Script done, need to film B-roll"
+				},
+				{
+					"id": "c3",
+					"title": "2025 goals thread",
+					"platform": "twitter",
+					"type": "post",
+					"status": "idea",
+					"date": "2025-01-01",
+					"notes": "Share personal and professional goals"
+				},
+				{
+					"id": "c4",
+					"title": "Behind the scenes Q&A",
+					"platform": "instagram",
+					"type": "story",
+					"status": "posted",
+					"date": "2024-12-28",
+					"notes": ""
+				},
+				{
+					"id": "c5",
+					"title": "Workspace tour",
+					"platform": "tiktok",
+					"type": "reel",
+					"status": "idea",
+					"date": "2025-01-08",
+					"notes": "Show new monitor setup and lighting"
+				},
+				{
+					"id": "c6",
+					"title": "Tips carousel",
+					"platform": "instagram",
+					"type": "carousel",
+					"status": "scheduled",
+					"date": "2025-01-03",
+					"notes": "5 productivity tips for remote workers"
+				}
+			],
+			"icon": "lucide:box"
+		}
+	}
+}

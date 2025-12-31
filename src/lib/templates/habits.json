@@ -1,0 +1,272 @@
+{
+	"id": "habits",
+	"name": "Habits",
+	"description": "Track daily habits with streaks and completion stats",
+	"preview": "lucide:check-circle",
+	"tags": [
+		"daily",
+		"productivity",
+		"intermediate"
+	],
+	"kits": [
+		"daily"
+	],
+	"frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet habits = $state([])\n\tlet completions = $state([])\n\tlet loading = $state(true)\n\tlet view = $state('week')\n\n\tdata.habits.subscribe(items => {\n\t\thabits = items.filter(h => !h.archived).sort((a, b) => (a.order || 0) - (b.order || 0))\n\t\tloading = false\n\t})\n\n\tdata.completions.subscribe(items => completions = items)\n\n\t// Get today and date helpers\n\tconst today = new Date()\n\ttoday.setHours(0, 0, 0, 0)\n\n\tfunction date_key(date) {\n\t\treturn date.toISOString().split('T')[0]\n\t}\n\n\tfunction get_dates(view_type) {\n\t\tconst dates = []\n\t\tconst days = view_type === 'week' ? 7 : 30\n\t\tfor (let i = days - 1; i >= 0; i--) {\n\t\t\tconst d = new Date(today)\n\t\t\td.setDate(d.getDate() - i)\n\t\t\tdates.push(d)\n\t\t}\n\t\treturn dates\n\t}\n\n\tlet dates = $derived(get_dates(view))\n\n\tfunction is_completed(habit_id, date) {\n\t\tconst key = date_key(date)\n\t\treturn completions.some(c => c.habit_id === habit_id && c.date === key)\n\t}\n\n\tasync function toggle_completion(habit_id, date) {\n\t\tconst key = date_key(date)\n\t\tconst existing = completions.find(c => c.habit_id === habit_id && c.date === key)\n\t\t\n\t\tif (existing) {\n\t\t\tawait data.completions.delete(existing.id)\n\t\t} else {\n\t\t\tawait data.completions.create({\n\t\t\t\thabit_id,\n\t\t\t\tdate: key\n\t\t\t})\n\t\t}\n\t}\n\n\tfunction get_streak(habit_id) {\n\t\tlet streak = 0\n\t\tconst d = new Date(today)\n\t\t\n\t\t// Start from yesterday if today isn't complete\n\t\tif (!is_completed(habit_id, today)) {\n\t\t\td.setDate(d.getDate() - 1)\n\t\t}\n\t\t\n\t\twhile (is_completed(habit_id, d)) {\n\t\t\tstreak++\n\t\t\td.setDate(d.getDate() - 1)\n\t\t}\n\t\treturn streak\n\t}\n\n\tfunction get_completion_rate(habit_id) {\n\t\tconst habit_completions = completions.filter(c => c.habit_id === habit_id)\n\t\tconst total_days = dates.length\n\t\tconst completed_days = dates.filter(d => is_completed(habit_id, d)).length\n\t\treturn Math.round((completed_days / total_days) * 100)\n\t}\n\n\tfunction format_day(date) {\n\t\treturn date.toLocaleDateString('en-US', { weekday: 'short' }).charAt(0)\n\t}\n\n\tfunction format_date_short(date) {\n\t\treturn date.getDate()\n\t}\n\n\tfunction is_today(date) {\n\t\treturn date_key(date) === date_key(today)\n\t}\n\n\t// New habit form\n\tlet new_name = $state('')\n\tlet new_emoji = $state('')\n\tlet show_form = $state(false)\n\tlet adding = $state(false)\n\n\tasync function add_habit(e) {\n\t\te.preventDefault()\n\t\tif (!new_name.trim()) return\n\n\t\tadding = true\n\t\ttry {\n\t\t\tawait data.habits.create({\n\t\t\t\tname: new_name.trim(),\n\t\t\t\temoji: new_emoji || '',\n\t\t\t\torder: habits.length,\n\t\t\t\tarchived: false\n\t\t\t})\n\t\t\tnew_name = ''\n\t\t\tnew_emoji = ''\n\t\t\tshow_form = false\n\t\t} finally {\n\t\t\tadding = false\n\t\t}\n\t}\n\n\tasync function archive_habit(habit) {\n\t\tawait data.habits.update(habit.id, { archived: true })\n\t}\n</script>\n\n<div class=\"page\">\n\t<header class=\"header\">\n\t\t<h1>{content.title}</h1>\n\t\t<div class=\"controls\">\n\t\t\t<div class=\"view-toggle\">\n\t\t\t\t<button class:active={view === 'week'} onclick={() => view = 'week'}>\n\t\t\t\t\t{content.week_view}\n\t\t\t\t</button>\n\t\t\t\t<button class:active={view === 'month'} onclick={() => view = 'month'}>\n\t\t\t\t\t{content.month_view}\n\t\t\t\t</button>\n\t\t\t</div>\n\t\t\t<button class=\"btn-primary\" onclick={() => show_form = !show_form}>\n\t\t\t\t<Icon icon={show_form ? 'lucide:x' : 'lucide:plus'} width={16} />\n\t\t\t\t{show_form ? content.cancel : content.add_habit}\n\t\t\t</button>\n\t\t</div>\n\t</header>\n\n\t{#if show_form}\n\t\t<form class=\"add-form\" onsubmit={add_habit}>\n\t\t\t<input\n\t\t\t\ttype=\"text\"\n\t\t\t\tplaceholder={content.habit_placeholder}\n\t\t\t\tbind:value={new_name}\n\t\t\t\trequired\n\t\t\t/>\n\t\t\t<input\n\t\t\t\ttype=\"text\"\n\t\t\t\tplaceholder={content.emoji_placeholder}\n\t\t\t\tbind:value={new_emoji}\n\t\t\t\tclass=\"emoji-input\"\n\t\t\t\tmaxlength=\"2\"\n\t\t\t/>\n\t\t\t<button type=\"submit\" class=\"btn-primary\" disabled={adding}>\n\t\t\t\t{content.create_button}\n\t\t\t</button>\n\t\t</form>\n\t{/if}\n\n\t{#if loading}\n\t\t<div class=\"loading\">\n\t\t\t<Icon icon=\"lucide:loader-2\" width={24} class=\"spin\" />\n\t\t</div>\n\t{:else if habits.length === 0}\n\t\t<div class=\"empty\">\n\t\t\t<Icon icon=\"lucide:check-circle\" width={48} />\n\t\t\t<p>{content.empty_text}</p>\n\t\t</div>\n\t{:else}\n\t\t<div class=\"habits-grid\">\n\t\t\t<div class=\"grid-header\">\n\t\t\t\t<div class=\"habit-info-header\">{content.habit_column}</div>\n\t\t\t\t<div class=\"dates-header\">\n\t\t\t\t\t{#each dates as date (date.toISOString())}\n\t\t\t\t\t\t<div class=\"date-header\" class:today={is_today(date)}>\n\t\t\t\t\t\t\t<span class=\"day-letter\">{format_day(date)}</span>\n\t\t\t\t\t\t\t<span class=\"date-num\">{format_date_short(date)}</span>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t{/each}\n\t\t\t\t</div>\n\t\t\t\t<div class=\"stats-header\">{content.stats_column}</div>\n\t\t\t</div>\n\n\t\t\t{#each habits as habit (habit.id)}\n\t\t\t\t{@const streak = get_streak(habit.id)}\n\t\t\t\t{@const rate = get_completion_rate(habit.id)}\n\t\t\t\t<div class=\"habit-row\">\n\t\t\t\t\t<div class=\"habit-info\">\n\t\t\t\t\t\t<span class=\"emoji\">{habit.emoji || ''}</span>\n\t\t\t\t\t\t<span class=\"name\">{habit.name}</span>\n\t\t\t\t\t\t<button class=\"archive-btn\" onclick={() => archive_habit(habit)} title=\"Archive\">\n\t\t\t\t\t\t\t<Icon icon=\"lucide:archive\" width={14} />\n\t\t\t\t\t\t</button>\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"checkboxes\">\n\t\t\t\t\t\t{#each dates as date (date.toISOString())}\n\t\t\t\t\t\t\t{@const completed = is_completed(habit.id, date)}\n\t\t\t\t\t\t\t<button \n\t\t\t\t\t\t\t\tclass=\"checkbox\"\n\t\t\t\t\t\t\t\tclass:completed\n\t\t\t\t\t\t\t\tclass:today={is_today(date)}\n\t\t\t\t\t\t\t\tonclick={() => toggle_completion(habit.id, date)}\n\t\t\t\t\t\t\t>\n\t\t\t\t\t\t\t\t{#if completed}\n\t\t\t\t\t\t\t\t\t<Icon icon=\"lucide:check\" width={14} />\n\t\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t{/each}\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"stats\">\n\t\t\t\t\t\t{#if streak > 0}\n\t\t\t\t\t\t\t<span class=\"streak\" title=\"Current streak\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:flame\" width={14} />\n\t\t\t\t\t\t\t\t{streak}\n\t\t\t\t\t\t\t</span>\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t<span class=\"rate\" title=\"Completion rate\">{rate}%</span>\n\t\t\t\t\t</div>\n\t\t\t\t</div>\n\t\t\t{/each}\n\t\t</div>\n\t{/if}\n</div>\n\n<style>\n\t.page {\n\t\tmin-height: 100vh;\n\t\tbackground: var(--bg-color, #f8fafc);\n\t\tpadding: 2rem 1.5rem;\n\t\tfont-family: var(--font, system-ui, sans-serif);\n\t}\n\n\t.header {\n\t\tmax-width: 900px;\n\t\tmargin: 0 auto 1.5rem;\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: center;\n\t\tgap: 1rem;\n\t\tflex-wrap: wrap;\n\t}\n\n\t.header h1 {\n\t\tfont-size: 1.5rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--heading-color, #0f172a);\n\t\tmargin: 0;\n\t}\n\n\t.controls {\n\t\tdisplay: flex;\n\t\tgap: 0.75rem;\n\t\talign-items: center;\n\t}\n\n\t.view-toggle {\n\t\tdisplay: flex;\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: var(--radius, 6px);\n\t\toverflow: hidden;\n\t}\n\n\t.view-toggle button {\n\t\tpadding: 0.5rem 0.875rem;\n\t\tbackground: transparent;\n\t\tborder: none;\n\t\tcolor: var(--text-color, #64748b);\n\t\tfont-size: 0.8125rem;\n\t\tcursor: pointer;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.view-toggle button.active {\n\t\tbackground: var(--accent-color, #3b82f6);\n\t\tcolor: white;\n\t}\n\n\t.btn-primary {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.375rem;\n\t\tpadding: 0.5rem 0.875rem;\n\t\tbackground: var(--accent-color, #3b82f6);\n\t\tcolor: white;\n\t\tborder: none;\n\t\tborder-radius: var(--radius, 6px);\n\t\tfont-size: 0.8125rem;\n\t\tfont-weight: 600;\n\t\tcursor: pointer;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.btn-primary:hover {\n\t\tfilter: brightness(1.1);\n\t}\n\n\t.btn-primary:disabled {\n\t\topacity: 0.7;\n\t\tcursor: not-allowed;\n\t}\n\n\t.add-form {\n\t\tmax-width: 900px;\n\t\tmargin: 0 auto 1.5rem;\n\t\tdisplay: flex;\n\t\tgap: 0.5rem;\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: var(--radius, 6px);\n\t\tpadding: 0.75rem;\n\t}\n\n\t.add-form input {\n\t\tflex: 1;\n\t\tpadding: 0.5rem 0.75rem;\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: 4px;\n\t\tfont-size: 0.875rem;\n\t\tbackground: var(--bg-color, #f8fafc);\n\t\tcolor: var(--heading-color, #0f172a);\n\t}\n\n\t.add-form input:focus {\n\t\toutline: none;\n\t\tborder-color: var(--accent-color, #3b82f6);\n\t}\n\n\t.emoji-input {\n\t\twidth: 50px;\n\t\tflex: 0 0 50px !important;\n\t\ttext-align: center;\n\t}\n\n\t.loading, .empty {\n\t\tmax-width: 900px;\n\t\tmargin: 4rem auto;\n\t\ttext-align: center;\n\t\tcolor: var(--text-color, #64748b);\n\t}\n\n\t.empty p {\n\t\tmargin-top: 1rem;\n\t}\n\n\t.habits-grid {\n\t\tmax-width: 900px;\n\t\tmargin: 0 auto;\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: var(--radius, 6px);\n\t\toverflow-x: auto;\n\t}\n\n\t.grid-header {\n\t\tdisplay: flex;\n\t\tpadding: 0.75rem 1rem;\n\t\tbackground: var(--bg-color, #f8fafc);\n\t\tborder-bottom: 1px solid var(--border-color, #e2e8f0);\n\t\tgap: 0.5rem;\n\t}\n\n\t.habit-info-header {\n\t\twidth: 180px;\n\t\tflex-shrink: 0;\n\t\tfont-size: 0.75rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--text-color, #64748b);\n\t\ttext-transform: uppercase;\n\t\tletter-spacing: 0.05em;\n\t}\n\n\t.dates-header {\n\t\tdisplay: flex;\n\t\tgap: 4px;\n\t\tflex: 1;\n\t}\n\n\t.date-header {\n\t\twidth: 28px;\n\t\ttext-align: center;\n\t\tfont-size: 0.6875rem;\n\t\tcolor: var(--text-color, #64748b);\n\t}\n\n\t.date-header.today {\n\t\tcolor: var(--accent-color, #3b82f6);\n\t\tfont-weight: 600;\n\t}\n\n\t.day-letter {\n\t\tdisplay: block;\n\t}\n\n\t.date-num {\n\t\tdisplay: block;\n\t\tfont-weight: 500;\n\t}\n\n\t.stats-header {\n\t\twidth: 80px;\n\t\tflex-shrink: 0;\n\t\tfont-size: 0.75rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--text-color, #64748b);\n\t\ttext-transform: uppercase;\n\t\tletter-spacing: 0.05em;\n\t\ttext-align: right;\n\t}\n\n\t.habit-row {\n\t\tdisplay: flex;\n\t\tpadding: 0.75rem 1rem;\n\t\tborder-bottom: 1px solid var(--border-color, #e2e8f0);\n\t\tgap: 0.5rem;\n\t\talign-items: center;\n\t}\n\n\t.habit-row:last-child {\n\t\tborder-bottom: none;\n\t}\n\n\t.habit-info {\n\t\twidth: 180px;\n\t\tflex-shrink: 0;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t}\n\n\t.emoji {\n\t\tfont-size: 1.125rem;\n\t}\n\n\t.name {\n\t\tfont-size: 0.875rem;\n\t\tcolor: var(--heading-color, #0f172a);\n\t\tfont-weight: 500;\n\t\tflex: 1;\n\t\twhite-space: nowrap;\n\t\toverflow: hidden;\n\t\ttext-overflow: ellipsis;\n\t}\n\n\t.archive-btn {\n\t\tbackground: none;\n\t\tborder: none;\n\t\tcolor: var(--text-color, #64748b);\n\t\tcursor: pointer;\n\t\tpadding: 0.25rem;\n\t\topacity: 0;\n\t\ttransition: opacity 0.2s;\n\t}\n\n\t.habit-row:hover .archive-btn {\n\t\topacity: 0.5;\n\t}\n\n\t.archive-btn:hover {\n\t\topacity: 1 !important;\n\t}\n\n\t.checkboxes {\n\t\tdisplay: flex;\n\t\tgap: 4px;\n\t\tflex: 1;\n\t}\n\n\t.checkbox {\n\t\twidth: 28px;\n\t\theight: 28px;\n\t\tborder: 2px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: 4px;\n\t\tbackground: transparent;\n\t\tcursor: pointer;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tcolor: transparent;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.checkbox:hover {\n\t\tborder-color: var(--accent-color, #3b82f6);\n\t}\n\n\t.checkbox.today {\n\t\tborder-color: var(--accent-color, #3b82f6);\n\t}\n\n\t.checkbox.completed {\n\t\tbackground: var(--success-color, #22c55e);\n\t\tborder-color: var(--success-color, #22c55e);\n\t\tcolor: white;\n\t}\n\n\t.stats {\n\t\twidth: 80px;\n\t\tflex-shrink: 0;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: flex-end;\n\t\tgap: 0.5rem;\n\t}\n\n\t.streak {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.125rem;\n\t\tcolor: var(--streak-color, #f97316);\n\t\tfont-size: 0.8125rem;\n\t\tfont-weight: 600;\n\t}\n\n\t.rate {\n\t\tfont-size: 0.8125rem;\n\t\tcolor: var(--text-color, #64748b);\n\t}\n\n\t:global(.spin) {\n\t\tanimation: spin 1s linear infinite;\n\t}\n\n\t@keyframes spin {\n\t\tfrom { transform: rotate(0deg); }\n\t\tto { transform: rotate(360deg); }\n\t}\n\n\t@media (max-width: 700px) {\n\t\t.habit-info-header, .habit-info {\n\t\t\twidth: 120px;\n\t\t}\n\n\t\t.stats-header, .stats {\n\t\t\twidth: 60px;\n\t\t}\n\t}\n</style>",
+	"design": [
+		{
+			"id": "bg-color",
+			"name": "Background",
+			"css_var": "--bg-color",
+			"value": "#f8fafc",
+			"type": "color",
+			"description": "Page background color"
+		},
+		{
+			"id": "card-bg",
+			"name": "Card Background",
+			"css_var": "--card-bg",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Background for cards"
+		},
+		{
+			"id": "accent-color",
+			"name": "Accent Color",
+			"css_var": "--accent-color",
+			"value": "#3b82f6",
+			"type": "color",
+			"description": "Primary accent color"
+		},
+		{
+			"id": "success-color",
+			"name": "Success Color",
+			"css_var": "--success-color",
+			"value": "#22c55e",
+			"type": "color",
+			"description": "Color for completed items"
+		},
+		{
+			"id": "streak-color",
+			"name": "Streak Color",
+			"css_var": "--streak-color",
+			"value": "#f97316",
+			"type": "color",
+			"description": "Color for streak indicator"
+		},
+		{
+			"id": "heading-color",
+			"name": "Heading Color",
+			"css_var": "--heading-color",
+			"value": "#0f172a",
+			"type": "color",
+			"description": "Color for headings"
+		},
+		{
+			"id": "text-color",
+			"name": "Text Color",
+			"css_var": "--text-color",
+			"value": "#64748b",
+			"type": "color",
+			"description": "Color for body text"
+		},
+		{
+			"id": "border-color",
+			"name": "Border Color",
+			"css_var": "--border-color",
+			"value": "#e2e8f0",
+			"type": "color",
+			"description": "Color for borders"
+		},
+		{
+			"id": "font",
+			"name": "Font",
+			"css_var": "--font",
+			"value": "system-ui, sans-serif",
+			"type": "font",
+			"description": "Main font family"
+		},
+		{
+			"id": "radius",
+			"name": "Border Radius",
+			"css_var": "--radius",
+			"value": "6px",
+			"type": "radius",
+			"description": "Roundness of corners"
+		}
+	],
+	"content": [
+		{
+			"id": "title",
+			"name": "Title",
+			"type": "text",
+			"value": "Habits",
+			"description": "Page title"
+		},
+		{
+			"id": "week_view",
+			"name": "Week View",
+			"type": "text",
+			"value": "Week",
+			"description": "Week view button text"
+		},
+		{
+			"id": "month_view",
+			"name": "Month View",
+			"type": "text",
+			"value": "Month",
+			"description": "Month view button text"
+		},
+		{
+			"id": "add_habit",
+			"name": "Add Habit",
+			"type": "text",
+			"value": "Add habit",
+			"description": "Add habit button text"
+		},
+		{
+			"id": "cancel",
+			"name": "Cancel",
+			"type": "text",
+			"value": "Cancel",
+			"description": "Cancel button text"
+		},
+		{
+			"id": "habit_placeholder",
+			"name": "Habit Placeholder",
+			"type": "text",
+			"value": "Habit name...",
+			"description": "Placeholder for habit input"
+		},
+		{
+			"id": "emoji_placeholder",
+			"name": "Emoji Placeholder",
+			"type": "text",
+			"value": "\ud83c\udfaf",
+			"description": "Placeholder for emoji input"
+		},
+		{
+			"id": "create_button",
+			"name": "Create Button",
+			"type": "text",
+			"value": "Create",
+			"description": "Create button text"
+		},
+		{
+			"id": "habit_column",
+			"name": "Habit Column",
+			"type": "text",
+			"value": "Habit",
+			"description": "Column header for habits"
+		},
+		{
+			"id": "stats_column",
+			"name": "Stats Column",
+			"type": "text",
+			"value": "Stats",
+			"description": "Column header for stats"
+		},
+		{
+			"id": "empty_text",
+			"name": "Empty State",
+			"type": "text",
+			"value": "No habits yet. Add one to start tracking!",
+			"description": "Text when no habits exist"
+		}
+	],
+	"data": {
+		"habits": {
+			"schema": [
+				{
+					"name": "name",
+					"type": "text"
+				},
+				{
+					"name": "emoji",
+					"type": "text"
+				},
+				{
+					"name": "order",
+					"type": "number"
+				},
+				{
+					"name": "archived",
+					"type": "bool"
+				}
+			],
+			"records": [
+				{
+					"id": "h1",
+					"name": "Morning exercise",
+					"emoji": "\ud83c\udfc3",
+					"order": 0,
+					"archived": false
+				},
+				{
+					"id": "h2",
+					"name": "Read 30 minutes",
+					"emoji": "\ud83d\udcda",
+					"order": 1,
+					"archived": false
+				},
+				{
+					"id": "h3",
+					"name": "Meditate",
+					"emoji": "\ud83e\uddd8",
+					"order": 2,
+					"archived": false
+				}
+			],
+			"icon": "lucide:check-square"
+		},
+		"completions": {
+			"schema": [
+				{
+					"name": "habit_id",
+					"type": "text"
+				},
+				{
+					"name": "date",
+					"type": "text"
+				}
+			],
+			"records": [
+				{
+					"id": "c1",
+					"habit_id": "h1",
+					"date": "2024-12-15"
+				},
+				{
+					"id": "c2",
+					"habit_id": "h2",
+					"date": "2024-12-15"
+				},
+				{
+					"id": "c3",
+					"habit_id": "h1",
+					"date": "2024-12-14"
+				},
+				{
+					"id": "c4",
+					"habit_id": "h2",
+					"date": "2024-12-14"
+				},
+				{
+					"id": "c5",
+					"habit_id": "h3",
+					"date": "2024-12-14"
+				},
+				{
+					"id": "c6",
+					"habit_id": "h1",
+					"date": "2024-12-13"
+				},
+				{
+					"id": "c7",
+					"habit_id": "h1",
+					"date": "2024-12-12"
+				}
+			],
+			"icon": "lucide:check-circle-2"
+		}
+	}
+}

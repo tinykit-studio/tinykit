@@ -2,7 +2,7 @@
 	import { onMount } from "svelte"
 	import { processCode, dynamic_iframe_srcdoc } from "$lib/compiler/init"
 	import { pb } from "$lib/pocketbase.svelte"
-	import type { DesignField, ContentField } from "../types"
+	import type { DesignField, ContentField } from "../../types"
 
 	let {
 		code = "",
@@ -25,16 +25,27 @@
 	let srcdoc = $state("")
 	let is_loading = $state(true)
 	let has_error = $state(false)
-	let channel: BroadcastChannel | null = null
+	let iframe_el = $state<HTMLIFrameElement | null>(null)
+	let pending_code: string | null = null
 
-	// Generate unique broadcast ID for this thumbnail
-	const broadcast_id = `thumbnail-${project_id || crypto.randomUUID()}`
+	function handle_message(e: MessageEvent) {
+		if (e.source !== iframe_el?.contentWindow) return
+		const { event } = e.data || {}
+		if (event === "INITIALIZED" && pending_code) {
+			iframe_el?.contentWindow?.postMessage({
+				event: "SET_APP",
+				payload: { componentApp: pending_code, data: {} }
+			}, "*")
+			pending_code = null
+		}
+	}
 
 	onMount(() => {
+		window.addEventListener("message", handle_message)
 		load_preview()
 
 		return () => {
-			channel?.close()
+			window.removeEventListener("message", handle_message)
 		}
 	})
 
@@ -79,24 +90,16 @@
 			// Extract collection names from data object
 			const data_collections = Object.keys(data || {})
 
+			// Store compiled code to send when iframe is ready
+			pending_code = result.js
+
 			// Build srcdoc with full data module support
-			srcdoc = dynamic_iframe_srcdoc("", broadcast_id, {
+			srcdoc = dynamic_iframe_srcdoc("", {
 				content: content || [],
 				design: design || [],
 				project_id: project_id || "",
 				data_collections
 			})
-
-			// Set up channel to send compiled code once iframe is ready
-			channel = new BroadcastChannel(broadcast_id)
-			channel.onmessage = ({ data: msg }) => {
-				if (msg.event === "INITIALIZED" && result.js) {
-					channel?.postMessage({
-						event: "SET_APP",
-						payload: { componentApp: result.js, data: {} }
-					})
-				}
-			}
 		} catch (err) {
 			console.error("[ProjectThumbnail] Compile error:", err)
 			has_error = true
@@ -117,9 +120,10 @@
 		</div>
 	{:else}
 		<iframe
+			bind:this={iframe_el}
 			title="Project preview"
 			{srcdoc}
-			sandbox="allow-scripts allow-same-origin"
+			sandbox="allow-scripts"
 			class="thumbnail-iframe"
 		></iframe>
 	{/if}

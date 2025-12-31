@@ -1,0 +1,355 @@
+{
+	"id": "contract",
+	"name": "Service Contract",
+	"description": "Simple freelance service agreement with scope, payment terms, and digital signatures",
+	"preview": "lucide:file-check",
+	"tags": [
+		"business",
+		"freelance",
+		"intermediate",
+		"data"
+	],
+	"kits": [
+		"freelance"
+	],
+	"frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet contract = $state({\n\t\ttitle: '',\n\t\teffective_date: new Date().toISOString().split('T')[0],\n\t\t// Freelancer info\n\t\tfreelancer_name: '',\n\t\tfreelancer_email: '',\n\t\tfreelancer_address: '',\n\t\t// Client info\n\t\tclient_name: '',\n\t\tclient_company: '',\n\t\tclient_email: '',\n\t\tclient_address: '',\n\t\t// Contract details\n\t\tscope_of_work: '',\n\t\tpayment_amount: 0,\n\t\tpayment_schedule: '',\n\t\tstart_date: '',\n\t\tend_date: '',\n\t\trevision_policy: '',\n\t\ttermination_clause: '',\n\t\tadditional_terms: '',\n\t\t// Signatures\n\t\tfreelancer_signed: false,\n\t\tfreelancer_signed_date: '',\n\t\tfreelancer_signature: '',\n\t\tclient_signed: false,\n\t\tclient_signed_date: '',\n\t\tclient_signature: ''\n\t})\n\n\tlet loading = $state(true)\n\tlet contract_id = $state(null)\n\tlet initial_load = $state(false)\n\tlet view_mode = $state('edit')\n\n\tdata.contract.subscribe(records => {\n\t\tif (records.length > 0 && !initial_load) {\n\t\t\tconst r = records[0]\n\t\t\tcontract_id = r.id\n\t\t\tcontract = { ...contract, ...r }\n\t\t\tinitial_load = true\n\t\t}\n\t\tloading = false\n\t})\n\n\tlet both_signed = $derived(contract.freelancer_signed && contract.client_signed)\n\n\tlet save_timeout = null\n\tasync function save_contract() {\n\t\tif (save_timeout) clearTimeout(save_timeout)\n\t\tsave_timeout = setTimeout(async () => {\n\t\t\tif (contract_id) {\n\t\t\t\tawait data.contract.update(contract_id, contract)\n\t\t\t} else {\n\t\t\t\tconst created = await data.contract.create(contract)\n\t\t\t\tcontract_id = created.id\n\t\t\t}\n\t\t}, 500)\n\t}\n\n\tasync function sign_freelancer() {\n\t\tif (!contract.freelancer_signature.trim()) {\n\t\t\talert('Please enter your name to sign')\n\t\t\treturn\n\t\t}\n\t\tcontract.freelancer_signed = true\n\t\tcontract.freelancer_signed_date = new Date().toISOString().split('T')[0]\n\t\tawait data.contract.update(contract_id, contract)\n\t}\n\n\tasync function sign_client() {\n\t\tif (!contract.client_signature.trim()) {\n\t\t\talert('Please enter your name to sign')\n\t\t\treturn\n\t\t}\n\t\tcontract.client_signed = true\n\t\tcontract.client_signed_date = new Date().toISOString().split('T')[0]\n\t\tawait data.contract.update(contract_id, contract)\n\t}\n\n\tfunction print_contract() {\n\t\twindow.print()\n\t}\n\n\tfunction format_currency(amount) {\n\t\treturn new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)\n\t}\n\n\tfunction format_date(date) {\n\t\tif (!date) return ''\n\t\treturn new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })\n\t}\n</script>\n\n<main>\n\t<div class=\"toolbar no-print\">\n\t\t<div class=\"view-toggle\">\n\t\t\t<button class:active={view_mode === 'edit'} onclick={() => view_mode = 'edit'}>\n\t\t\t\t<Icon icon=\"lucide:edit-3\" width={16} /> Edit\n\t\t\t</button>\n\t\t\t<button class:active={view_mode === 'preview'} onclick={() => view_mode = 'preview'}>\n\t\t\t\t<Icon icon=\"lucide:eye\" width={16} /> Preview\n\t\t\t</button>\n\t\t</div>\n\t\t<button class=\"print-btn\" onclick={print_contract}>\n\t\t\t<Icon icon=\"lucide:printer\" width={16} /> {content.print_button}\n\t\t</button>\n\t</div>\n\n\t<div class=\"contract-container\">\n\t\t{#if both_signed}\n\t\t\t<div class=\"status-banner complete\">\n\t\t\t\t<Icon icon=\"lucide:check-circle-2\" width={20} />\n\t\t\t\t<span>Contract fully executed</span>\n\t\t\t</div>\n\t\t{:else if contract.freelancer_signed || contract.client_signed}\n\t\t\t<div class=\"status-banner pending\">\n\t\t\t\t<Icon icon=\"lucide:clock\" width={20} />\n\t\t\t\t<span>Awaiting {contract.freelancer_signed ? 'client' : 'freelancer'} signature</span>\n\t\t\t</div>\n\t\t{/if}\n\n\t\t<header class=\"header\">\n\t\t\t{#if view_mode === 'edit'}\n\t\t\t\t<input class=\"title-input\" type=\"text\" bind:value={contract.title} placeholder=\"Contract Title\" onchange={save_contract} />\n\t\t\t{:else}\n\t\t\t\t<h1>{contract.title || 'Service Agreement'}</h1>\n\t\t\t{/if}\n\t\t\t<p class=\"effective-date\">\n\t\t\t\t{content.effective_date_label}: \n\t\t\t\t{#if view_mode === 'edit'}\n\t\t\t\t\t<input type=\"date\" bind:value={contract.effective_date} onchange={save_contract} />\n\t\t\t\t{:else}\n\t\t\t\t\t{format_date(contract.effective_date)}\n\t\t\t\t{/if}\n\t\t\t</p>\n\t\t</header>\n\n\t\t<section class=\"parties-section\">\n\t\t\t<div class=\"party\">\n\t\t\t\t<h3>{content.freelancer_label}</h3>\n\t\t\t\t{#if view_mode === 'edit'}\n\t\t\t\t\t<input type=\"text\" bind:value={contract.freelancer_name} placeholder=\"Your Name\" onchange={save_contract} />\n\t\t\t\t\t<input type=\"email\" bind:value={contract.freelancer_email} placeholder=\"Email\" onchange={save_contract} />\n\t\t\t\t\t<textarea bind:value={contract.freelancer_address} placeholder=\"Address\" rows=\"2\" onchange={save_contract}></textarea>\n\t\t\t\t{:else}\n\t\t\t\t\t<p class=\"party-name\">{contract.freelancer_name}</p>\n\t\t\t\t\t<p>{contract.freelancer_email}</p>\n\t\t\t\t\t<p class=\"address\">{contract.freelancer_address}</p>\n\t\t\t\t{/if}\n\t\t\t</div>\n\t\t\t<div class=\"party-divider\">\n\t\t\t\t<span>AND</span>\n\t\t\t</div>\n\t\t\t<div class=\"party\">\n\t\t\t\t<h3>{content.client_label}</h3>\n\t\t\t\t{#if view_mode === 'edit'}\n\t\t\t\t\t<input type=\"text\" bind:value={contract.client_name} placeholder=\"Client Name\" onchange={save_contract} />\n\t\t\t\t\t<input type=\"text\" bind:value={contract.client_company} placeholder=\"Company (optional)\" onchange={save_contract} />\n\t\t\t\t\t<input type=\"email\" bind:value={contract.client_email} placeholder=\"Email\" onchange={save_contract} />\n\t\t\t\t\t<textarea bind:value={contract.client_address} placeholder=\"Address\" rows=\"2\" onchange={save_contract}></textarea>\n\t\t\t\t{:else}\n\t\t\t\t\t<p class=\"party-name\">{contract.client_name}</p>\n\t\t\t\t\t{#if contract.client_company}<p class=\"company\">{contract.client_company}</p>{/if}\n\t\t\t\t\t<p>{contract.client_email}</p>\n\t\t\t\t\t<p class=\"address\">{contract.client_address}</p>\n\t\t\t\t{/if}\n\t\t\t</div>\n\t\t</section>\n\n\t\t<section class=\"section\">\n\t\t\t<h2>1. {content.scope_label}</h2>\n\t\t\t{#if view_mode === 'edit'}\n\t\t\t\t<textarea bind:value={contract.scope_of_work} placeholder=\"Describe the services to be provided...\" rows=\"6\" onchange={save_contract}></textarea>\n\t\t\t{:else}\n\t\t\t\t<p class=\"prose\">{contract.scope_of_work}</p>\n\t\t\t{/if}\n\t\t</section>\n\n\t\t<section class=\"section\">\n\t\t\t<h2>2. {content.timeline_label}</h2>\n\t\t\t<div class=\"date-range\">\n\t\t\t\t<div class=\"date-field\">\n\t\t\t\t\t<label>Start Date</label>\n\t\t\t\t\t{#if view_mode === 'edit'}\n\t\t\t\t\t\t<input type=\"date\" bind:value={contract.start_date} onchange={save_contract} />\n\t\t\t\t\t{:else}\n\t\t\t\t\t\t<span>{format_date(contract.start_date)}</span>\n\t\t\t\t\t{/if}\n\t\t\t\t</div>\n\t\t\t\t<div class=\"date-arrow\">\n\t\t\t\t\t<Icon icon=\"lucide:arrow-right\" width={20} />\n\t\t\t\t</div>\n\t\t\t\t<div class=\"date-field\">\n\t\t\t\t\t<label>End Date</label>\n\t\t\t\t\t{#if view_mode === 'edit'}\n\t\t\t\t\t\t<input type=\"date\" bind:value={contract.end_date} onchange={save_contract} />\n\t\t\t\t\t{:else}\n\t\t\t\t\t\t<span>{format_date(contract.end_date)}</span>\n\t\t\t\t\t{/if}\n\t\t\t\t</div>\n\t\t\t</div>\n\t\t</section>\n\n\t\t<section class=\"section\">\n\t\t\t<h2>3. {content.payment_label}</h2>\n\t\t\t<div class=\"payment-info\">\n\t\t\t\t<div class=\"payment-amount\">\n\t\t\t\t\t<label>Total Amount</label>\n\t\t\t\t\t{#if view_mode === 'edit'}\n\t\t\t\t\t\t<div class=\"amount-input\">\n\t\t\t\t\t\t\t<span>$</span>\n\t\t\t\t\t\t\t<input type=\"number\" bind:value={contract.payment_amount} onchange={save_contract} />\n\t\t\t\t\t\t</div>\n\t\t\t\t\t{:else}\n\t\t\t\t\t\t<span class=\"amount-display\">{format_currency(contract.payment_amount)}</span>\n\t\t\t\t\t{/if}\n\t\t\t\t</div>\n\t\t\t</div>\n\t\t\t<div class=\"payment-schedule\">\n\t\t\t\t<label>Payment Schedule</label>\n\t\t\t\t{#if view_mode === 'edit'}\n\t\t\t\t\t<textarea bind:value={contract.payment_schedule} placeholder=\"e.g., 50% upfront, 50% on completion...\" rows=\"3\" onchange={save_contract}></textarea>\n\t\t\t\t{:else}\n\t\t\t\t\t<p class=\"prose\">{contract.payment_schedule}</p>\n\t\t\t\t{/if}\n\t\t\t</div>\n\t\t</section>\n\n\t\t<section class=\"section\">\n\t\t\t<h2>4. {content.revisions_label}</h2>\n\t\t\t{#if view_mode === 'edit'}\n\t\t\t\t<textarea bind:value={contract.revision_policy} placeholder=\"Number of revisions included, additional revision rates...\" rows=\"3\" onchange={save_contract}></textarea>\n\t\t\t{:else}\n\t\t\t\t<p class=\"prose\">{contract.revision_policy}</p>\n\t\t\t{/if}\n\t\t</section>\n\n\t\t<section class=\"section\">\n\t\t\t<h2>5. {content.termination_label}</h2>\n\t\t\t{#if view_mode === 'edit'}\n\t\t\t\t<textarea bind:value={contract.termination_clause} placeholder=\"Conditions under which either party may terminate...\" rows=\"3\" onchange={save_contract}></textarea>\n\t\t\t{:else}\n\t\t\t\t<p class=\"prose\">{contract.termination_clause}</p>\n\t\t\t{/if}\n\t\t</section>\n\n\t\t{#if contract.additional_terms || view_mode === 'edit'}\n\t\t\t<section class=\"section\">\n\t\t\t\t<h2>6. {content.additional_label}</h2>\n\t\t\t\t{#if view_mode === 'edit'}\n\t\t\t\t\t<textarea bind:value={contract.additional_terms} placeholder=\"Any additional terms or conditions...\" rows=\"4\" onchange={save_contract}></textarea>\n\t\t\t\t{:else}\n\t\t\t\t\t<p class=\"prose\">{contract.additional_terms}</p>\n\t\t\t\t{/if}\n\t\t\t</section>\n\t\t{/if}\n\n\t\t<section class=\"signatures-section\">\n\t\t\t<h2>{content.signatures_label}</h2>\n\t\t\t<p class=\"signature-intro\">{content.signature_intro}</p>\n\n\t\t\t<div class=\"signature-grid\">\n\t\t\t\t<div class=\"signature-box\" class:signed={contract.freelancer_signed}>\n\t\t\t\t\t<h4>{content.freelancer_label}</h4>\n\t\t\t\t\t{#if contract.freelancer_signed}\n\t\t\t\t\t\t<div class=\"signed-display\">\n\t\t\t\t\t\t\t<span class=\"signature-name\">{contract.freelancer_signature}</span>\n\t\t\t\t\t\t\t<span class=\"signature-date\">{format_date(contract.freelancer_signed_date)}</span>\n\t\t\t\t\t\t\t<Icon icon=\"lucide:check-circle\" width={24} class=\"check-icon\" />\n\t\t\t\t\t\t</div>\n\t\t\t\t\t{:else}\n\t\t\t\t\t\t<div class=\"signature-input\">\n\t\t\t\t\t\t\t<input type=\"text\" bind:value={contract.freelancer_signature} placeholder=\"Type your full name\" />\n\t\t\t\t\t\t\t<button class=\"sign-btn\" onclick={sign_freelancer} disabled={!contract.freelancer_signature.trim()}>\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:pen-line\" width={16} /> Sign\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t{/if}\n\t\t\t\t</div>\n\n\t\t\t\t<div class=\"signature-box\" class:signed={contract.client_signed}>\n\t\t\t\t\t<h4>{content.client_label}</h4>\n\t\t\t\t\t{#if contract.client_signed}\n\t\t\t\t\t\t<div class=\"signed-display\">\n\t\t\t\t\t\t\t<span class=\"signature-name\">{contract.client_signature}</span>\n\t\t\t\t\t\t\t<span class=\"signature-date\">{format_date(contract.client_signed_date)}</span>\n\t\t\t\t\t\t\t<Icon icon=\"lucide:check-circle\" width={24} class=\"check-icon\" />\n\t\t\t\t\t\t</div>\n\t\t\t\t\t{:else}\n\t\t\t\t\t\t<div class=\"signature-input\">\n\t\t\t\t\t\t\t<input type=\"text\" bind:value={contract.client_signature} placeholder=\"Type your full name\" />\n\t\t\t\t\t\t\t<button class=\"sign-btn\" onclick={sign_client} disabled={!contract.client_signature.trim()}>\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:pen-line\" width={16} /> Sign\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t{/if}\n\t\t\t\t</div>\n\t\t\t</div>\n\t\t</section>\n\t</div>\n\n\t<footer class=\"footer no-print\">built with <a href=\"https://tinykit.studio\" target=\"_blank\">tinykit.studio</a></footer>\n</main>\n\n<style>\n\t:global(*) { box-sizing: border-box; }\n\t:global(body) {\n\t\tfont-family: var(--font-family, 'Inter', system-ui, sans-serif);\n\t\tbackground: var(--page-background, #f8fafc);\n\t\tcolor: var(--body-text, #334155);\n\t\tmargin: 0;\n\t\tline-height: 1.7;\n\t}\n\n\tmain {\n\t\tmin-height: 100vh;\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t}\n\n\t.toolbar {\n\t\tposition: sticky;\n\t\ttop: 0;\n\t\tz-index: 10;\n\t\tbackground: var(--header-background, #ffffff);\n\t\tborder-bottom: 1px solid var(--border-color, #e2e8f0);\n\t\tpadding: 0.75rem 1.5rem;\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: center;\n\t}\n\n\t.view-toggle {\n\t\tdisplay: flex;\n\t\tgap: 0.25rem;\n\t\tbackground: var(--input-background, #f1f5f9);\n\t\tpadding: 0.25rem;\n\t\tborder-radius: 8px;\n\t}\n\n\t.view-toggle button {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.375rem;\n\t\tpadding: 0.5rem 0.875rem;\n\t\tborder: none;\n\t\tbackground: transparent;\n\t\tcolor: var(--secondary-text, #64748b);\n\t\tfont-size: 0.875rem;\n\t\tfont-weight: 500;\n\t\tborder-radius: 6px;\n\t\tcursor: pointer;\n\t}\n\n\t.view-toggle button.active {\n\t\tbackground: var(--card-background, #ffffff);\n\t\tcolor: var(--heading-color, #1e293b);\n\t\tbox-shadow: 0 1px 3px rgba(0,0,0,0.1);\n\t}\n\n\t.print-btn {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.375rem;\n\t\tpadding: 0.5rem 1rem;\n\t\tbackground: var(--primary-color, #1e293b);\n\t\tcolor: #ffffff;\n\t\tborder: none;\n\t\tborder-radius: 6px;\n\t\tfont-weight: 500;\n\t\tcursor: pointer;\n\t}\n\n\t.contract-container {\n\t\tmax-width: 800px;\n\t\tmargin: 2rem auto;\n\t\tbackground: var(--card-background, #ffffff);\n\t\tborder-radius: var(--card-radius, 12px);\n\t\tbox-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);\n\t\tpadding: 3rem;\n\t\tflex: 1;\n\t}\n\n\t.status-banner {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tpadding: 0.75rem 1rem;\n\t\tborder-radius: 8px;\n\t\tmargin-bottom: 2rem;\n\t\tfont-weight: 500;\n\t}\n\n\t.status-banner.complete {\n\t\tbackground: var(--success-background, #dcfce7);\n\t\tcolor: var(--success-color, #166534);\n\t}\n\n\t.status-banner.pending {\n\t\tbackground: var(--warning-background, #fef3c7);\n\t\tcolor: var(--warning-color, #92400e);\n\t}\n\n\t.header {\n\t\ttext-align: center;\n\t\tmargin-bottom: 3rem;\n\t\tpadding-bottom: 2rem;\n\t\tborder-bottom: 2px solid var(--border-color, #e2e8f0);\n\t}\n\n\t.title-input {\n\t\tfont-size: 2rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--heading-color, #1e293b);\n\t\tborder: none;\n\t\tbackground: transparent;\n\t\ttext-align: center;\n\t\twidth: 100%;\n\t}\n\n\t.header h1 {\n\t\tfont-size: 2rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--heading-color, #1e293b);\n\t\tmargin: 0 0 0.5rem 0;\n\t}\n\n\t.effective-date {\n\t\tcolor: var(--secondary-text, #64748b);\n\t\tmargin: 0.5rem 0 0 0;\n\t}\n\n\t.effective-date input {\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tpadding: 0.25rem 0.5rem;\n\t\tborder-radius: 4px;\n\t}\n\n\t.parties-section {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: 1fr auto 1fr;\n\t\tgap: 2rem;\n\t\tmargin-bottom: 3rem;\n\t\talign-items: start;\n\t}\n\n\t.party {\n\t\tbackground: var(--input-background, #f8fafc);\n\t\tpadding: 1.5rem;\n\t\tborder-radius: 12px;\n\t}\n\n\t.party h3 {\n\t\tfont-size: 0.75rem;\n\t\ttext-transform: uppercase;\n\t\tletter-spacing: 0.05em;\n\t\tcolor: var(--secondary-text, #64748b);\n\t\tmargin: 0 0 1rem 0;\n\t}\n\n\t.party input, .party textarea {\n\t\twidth: 100%;\n\t\tpadding: 0.5rem;\n\t\tborder: none;\n\t\tbackground: transparent;\n\t\tborder-bottom: 1px solid transparent;\n\t\tfont-size: 0.9375rem;\n\t\tmargin-bottom: 0.5rem;\n\t}\n\n\t.party input:focus, .party textarea:focus {\n\t\toutline: none;\n\t\tborder-bottom-color: var(--primary-color, #2563eb);\n\t}\n\n\t.party textarea { resize: none; }\n\n\t.party-name { font-weight: 600; font-size: 1.125rem; margin: 0 0 0.25rem 0; }\n\t.party .company { color: var(--secondary-text, #64748b); margin: 0 0 0.25rem 0; }\n\t.party p { margin: 0 0 0.25rem 0; }\n\t.party .address { white-space: pre-wrap; color: var(--secondary-text, #64748b); }\n\n\t.party-divider {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tpadding-top: 3rem;\n\t}\n\n\t.party-divider span {\n\t\tfont-size: 0.875rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--secondary-text, #94a3b8);\n\t\ttext-transform: uppercase;\n\t\tletter-spacing: 0.1em;\n\t}\n\n\t.section {\n\t\tmargin-bottom: 2.5rem;\n\t}\n\n\t.section h2 {\n\t\tfont-size: 1rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #1e293b);\n\t\tmargin: 0 0 1rem 0;\n\t\ttext-transform: uppercase;\n\t\tletter-spacing: 0.025em;\n\t}\n\n\ttextarea {\n\t\twidth: 100%;\n\t\tpadding: 0.75rem;\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: 8px;\n\t\tfont-size: 0.9375rem;\n\t\tfont-family: inherit;\n\t\tline-height: 1.7;\n\t\tresize: vertical;\n\t}\n\n\ttextarea:focus {\n\t\toutline: none;\n\t\tborder-color: var(--primary-color, #2563eb);\n\t}\n\n\t.prose {\n\t\twhite-space: pre-wrap;\n\t\tmargin: 0;\n\t}\n\n\t.date-range {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 1.5rem;\n\t\tbackground: var(--input-background, #f8fafc);\n\t\tpadding: 1.5rem;\n\t\tborder-radius: 12px;\n\t}\n\n\t.date-field {\n\t\tflex: 1;\n\t}\n\n\t.date-field label {\n\t\tdisplay: block;\n\t\tfont-size: 0.75rem;\n\t\ttext-transform: uppercase;\n\t\tletter-spacing: 0.05em;\n\t\tcolor: var(--secondary-text, #64748b);\n\t\tmargin-bottom: 0.5rem;\n\t}\n\n\t.date-field input {\n\t\twidth: 100%;\n\t\tpadding: 0.5rem;\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: 6px;\n\t\tfont-size: 1rem;\n\t}\n\n\t.date-field span {\n\t\tfont-size: 1.125rem;\n\t\tfont-weight: 500;\n\t}\n\n\t.date-arrow {\n\t\tcolor: var(--secondary-text, #94a3b8);\n\t\tpadding-top: 1.25rem;\n\t}\n\n\t.payment-info {\n\t\tbackground: var(--input-background, #f8fafc);\n\t\tpadding: 1.5rem;\n\t\tborder-radius: 12px;\n\t\tmargin-bottom: 1rem;\n\t}\n\n\t.payment-amount label {\n\t\tdisplay: block;\n\t\tfont-size: 0.75rem;\n\t\ttext-transform: uppercase;\n\t\tletter-spacing: 0.05em;\n\t\tcolor: var(--secondary-text, #64748b);\n\t\tmargin-bottom: 0.5rem;\n\t}\n\n\t.amount-input {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.25rem;\n\t\tfont-size: 2rem;\n\t\tfont-weight: 700;\n\t}\n\n\t.amount-input input {\n\t\tborder: none;\n\t\tbackground: transparent;\n\t\tfont-size: inherit;\n\t\tfont-weight: inherit;\n\t\twidth: 150px;\n\t}\n\n\t.amount-display {\n\t\tfont-size: 2rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--heading-color, #1e293b);\n\t}\n\n\t.payment-schedule label {\n\t\tdisplay: block;\n\t\tfont-size: 0.8125rem;\n\t\tfont-weight: 500;\n\t\tmargin-bottom: 0.5rem;\n\t}\n\n\t.signatures-section {\n\t\tmargin-top: 3rem;\n\t\tpadding-top: 2rem;\n\t\tborder-top: 2px solid var(--border-color, #e2e8f0);\n\t}\n\n\t.signatures-section h2 {\n\t\tfont-size: 1.125rem;\n\t\tmargin: 0 0 0.5rem 0;\n\t\ttext-transform: none;\n\t}\n\n\t.signature-intro {\n\t\tcolor: var(--secondary-text, #64748b);\n\t\tmargin-bottom: 1.5rem;\n\t}\n\n\t.signature-grid {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: 1fr 1fr;\n\t\tgap: 2rem;\n\t}\n\n\t.signature-box {\n\t\tbackground: var(--input-background, #f8fafc);\n\t\tborder: 2px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: 12px;\n\t\tpadding: 1.5rem;\n\t}\n\n\t.signature-box.signed {\n\t\tbackground: var(--success-background, #dcfce7);\n\t\tborder-color: var(--success-color, #22c55e);\n\t}\n\n\t.signature-box h4 {\n\t\tfont-size: 0.75rem;\n\t\ttext-transform: uppercase;\n\t\tletter-spacing: 0.05em;\n\t\tcolor: var(--secondary-text, #64748b);\n\t\tmargin: 0 0 1rem 0;\n\t}\n\n\t.signature-input {\n\t\tdisplay: flex;\n\t\tgap: 0.75rem;\n\t}\n\n\t.signature-input input {\n\t\tflex: 1;\n\t\tpadding: 0.75rem;\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: 6px;\n\t\tfont-size: 1.125rem;\n\t\tfont-family: 'Brush Script MT', cursive;\n\t}\n\n\t.sign-btn {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.375rem;\n\t\tpadding: 0.75rem 1.25rem;\n\t\tbackground: var(--primary-color, #1e293b);\n\t\tcolor: #ffffff;\n\t\tborder: none;\n\t\tborder-radius: 6px;\n\t\tfont-weight: 500;\n\t\tcursor: pointer;\n\t}\n\n\t.sign-btn:disabled {\n\t\topacity: 0.5;\n\t\tcursor: not-allowed;\n\t}\n\n\t.signed-display {\n\t\tposition: relative;\n\t}\n\n\t.signature-name {\n\t\tdisplay: block;\n\t\tfont-size: 1.5rem;\n\t\tfont-family: 'Brush Script MT', cursive;\n\t\tcolor: var(--heading-color, #1e293b);\n\t\tmargin-bottom: 0.25rem;\n\t}\n\n\t.signature-date {\n\t\tfont-size: 0.875rem;\n\t\tcolor: var(--secondary-text, #64748b);\n\t}\n\n\t.signed-display :global(.check-icon) {\n\t\tposition: absolute;\n\t\ttop: 0;\n\t\tright: 0;\n\t\tcolor: var(--success-color, #22c55e);\n\t}\n\n\t.footer {\n\t\ttext-align: center;\n\t\tpadding: 1.5rem;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--secondary-text, #94a3b8);\n\t}\n\n\t.footer a { color: inherit; }\n\n\t@media print {\n\t\t:global(body) { background: white; }\n\t\t.no-print { display: none !important; }\n\t\t.contract-container {\n\t\t\tbox-shadow: none;\n\t\t\tmargin: 0;\n\t\t\tmax-width: 100%;\n\t\t\tborder-radius: 0;\n\t\t}\n\t\t.signatures-section { page-break-inside: avoid; }\n\t}\n\n\t@media (max-width: 768px) {\n\t\t.contract-container { padding: 1.5rem; margin: 1rem; }\n\t\t.parties-section { grid-template-columns: 1fr; }\n\t\t.party-divider { padding: 1rem 0; }\n\t\t.signature-grid { grid-template-columns: 1fr; }\n\t\t.date-range { flex-direction: column; }\n\t\t.date-arrow { transform: rotate(90deg); }\n\t}\n</style>",
+	"design": [
+		{
+			"id": "font-family",
+			"name": "Font Family",
+			"css_var": "--font-family",
+			"value": "Inter, system-ui, sans-serif",
+			"type": "font",
+			"description": "Main font for all text"
+		},
+		{
+			"id": "page-background",
+			"name": "Page Background",
+			"css_var": "--page-background",
+			"value": "#f8fafc",
+			"type": "color",
+			"description": "Overall page background"
+		},
+		{
+			"id": "card-background",
+			"name": "Card Background",
+			"css_var": "--card-background",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Contract card background"
+		},
+		{
+			"id": "header-background",
+			"name": "Header Background",
+			"css_var": "--header-background",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Toolbar background"
+		},
+		{
+			"id": "primary-color",
+			"name": "Primary Color",
+			"css_var": "--primary-color",
+			"value": "#1e293b",
+			"type": "color",
+			"description": "Main brand color"
+		},
+		{
+			"id": "success-color",
+			"name": "Success Color",
+			"css_var": "--success-color",
+			"value": "#22c55e",
+			"type": "color",
+			"description": "Signed state color"
+		},
+		{
+			"id": "success-background",
+			"name": "Success Background",
+			"css_var": "--success-background",
+			"value": "#dcfce7",
+			"type": "color",
+			"description": "Signed state background"
+		},
+		{
+			"id": "warning-color",
+			"name": "Warning Color",
+			"css_var": "--warning-color",
+			"value": "#92400e",
+			"type": "color",
+			"description": "Pending state color"
+		},
+		{
+			"id": "warning-background",
+			"name": "Warning Background",
+			"css_var": "--warning-background",
+			"value": "#fef3c7",
+			"type": "color",
+			"description": "Pending state background"
+		},
+		{
+			"id": "heading-color",
+			"name": "Heading Color",
+			"css_var": "--heading-color",
+			"value": "#1e293b",
+			"type": "color",
+			"description": "Color for headings"
+		},
+		{
+			"id": "body-text",
+			"name": "Body Text",
+			"css_var": "--body-text",
+			"value": "#334155",
+			"type": "color",
+			"description": "Main body text color"
+		},
+		{
+			"id": "secondary-text",
+			"name": "Secondary Text",
+			"css_var": "--secondary-text",
+			"value": "#64748b",
+			"type": "color",
+			"description": "Muted text color"
+		},
+		{
+			"id": "border-color",
+			"name": "Border Color",
+			"css_var": "--border-color",
+			"value": "#e2e8f0",
+			"type": "color",
+			"description": "Border and divider color"
+		},
+		{
+			"id": "input-background",
+			"name": "Input Background",
+			"css_var": "--input-background",
+			"value": "#f8fafc",
+			"type": "color",
+			"description": "Background for inputs"
+		},
+		{
+			"id": "card-radius",
+			"name": "Card Radius",
+			"css_var": "--card-radius",
+			"value": "12px",
+			"type": "radius",
+			"description": "Roundness of cards"
+		}
+	],
+	"content": [
+		{
+			"id": "effective_date_label",
+			"name": "Effective Date Label",
+			"type": "text",
+			"value": "Effective Date",
+			"description": "Label for contract date"
+		},
+		{
+			"id": "freelancer_label",
+			"name": "Freelancer Label",
+			"type": "text",
+			"value": "Service Provider",
+			"description": "Label for freelancer party"
+		},
+		{
+			"id": "client_label",
+			"name": "Client Label",
+			"type": "text",
+			"value": "Client",
+			"description": "Label for client party"
+		},
+		{
+			"id": "scope_label",
+			"name": "Scope Label",
+			"type": "text",
+			"value": "Scope of Work",
+			"description": "Section header for scope"
+		},
+		{
+			"id": "timeline_label",
+			"name": "Timeline Label",
+			"type": "text",
+			"value": "Project Timeline",
+			"description": "Section header for timeline"
+		},
+		{
+			"id": "payment_label",
+			"name": "Payment Label",
+			"type": "text",
+			"value": "Payment Terms",
+			"description": "Section header for payment"
+		},
+		{
+			"id": "revisions_label",
+			"name": "Revisions Label",
+			"type": "text",
+			"value": "Revision Policy",
+			"description": "Section header for revisions"
+		},
+		{
+			"id": "termination_label",
+			"name": "Termination Label",
+			"type": "text",
+			"value": "Termination",
+			"description": "Section header for termination"
+		},
+		{
+			"id": "additional_label",
+			"name": "Additional Terms Label",
+			"type": "text",
+			"value": "Additional Terms",
+			"description": "Section header for additional terms"
+		},
+		{
+			"id": "signatures_label",
+			"name": "Signatures Label",
+			"type": "text",
+			"value": "Signatures",
+			"description": "Section header for signatures"
+		},
+		{
+			"id": "signature_intro",
+			"name": "Signature Introduction",
+			"type": "text",
+			"value": "By signing below, both parties agree to the terms outlined in this agreement.",
+			"description": "Text before signature boxes"
+		},
+		{
+			"id": "print_button",
+			"name": "Print Button",
+			"type": "text",
+			"value": "Print / PDF",
+			"description": "Text on print button"
+		}
+	],
+	"data": {
+		"contract": {
+			"schema": [
+				{
+					"name": "id",
+					"type": "text"
+				},
+				{
+					"name": "title",
+					"type": "text"
+				},
+				{
+					"name": "effective_date",
+					"type": "text"
+				},
+				{
+					"name": "freelancer_name",
+					"type": "text"
+				},
+				{
+					"name": "freelancer_email",
+					"type": "text"
+				},
+				{
+					"name": "freelancer_address",
+					"type": "text"
+				},
+				{
+					"name": "client_name",
+					"type": "text"
+				},
+				{
+					"name": "client_company",
+					"type": "text"
+				},
+				{
+					"name": "client_email",
+					"type": "text"
+				},
+				{
+					"name": "client_address",
+					"type": "text"
+				},
+				{
+					"name": "scope_of_work",
+					"type": "text"
+				},
+				{
+					"name": "payment_amount",
+					"type": "number"
+				},
+				{
+					"name": "payment_schedule",
+					"type": "text"
+				},
+				{
+					"name": "start_date",
+					"type": "text"
+				},
+				{
+					"name": "end_date",
+					"type": "text"
+				},
+				{
+					"name": "revision_policy",
+					"type": "text"
+				},
+				{
+					"name": "termination_clause",
+					"type": "text"
+				},
+				{
+					"name": "additional_terms",
+					"type": "text"
+				},
+				{
+					"name": "freelancer_signed",
+					"type": "boolean"
+				},
+				{
+					"name": "freelancer_signed_date",
+					"type": "text"
+				},
+				{
+					"name": "freelancer_signature",
+					"type": "text"
+				},
+				{
+					"name": "client_signed",
+					"type": "boolean"
+				},
+				{
+					"name": "client_signed_date",
+					"type": "text"
+				},
+				{
+					"name": "client_signature",
+					"type": "text"
+				}
+			],
+			"records": [
+				{
+					"id": "c1",
+					"title": "Website Development Agreement",
+					"effective_date": "2024-12-15",
+					"freelancer_name": "Alex Thompson",
+					"freelancer_email": "alex@freelance.dev",
+					"freelancer_address": "123 Creative Lane\nSan Francisco, CA 94102",
+					"client_name": "Sarah Chen",
+					"client_company": "Acme Corporation",
+					"client_email": "sarah@acmecorp.com",
+					"client_address": "456 Business Ave\nNew York, NY 10001",
+					"scope_of_work": "The Service Provider agrees to design and develop a responsive website for the Client, including:\n\n\u2022 Custom homepage design with hero section and key features\n\u2022 5 additional pages (About, Services, Portfolio, Blog, Contact)\n\u2022 Mobile-responsive design across all breakpoints\n\u2022 Contact form with email integration\n\u2022 Basic SEO optimization\n\u2022 CMS integration for content management",
+					"payment_amount": 8500,
+					"payment_schedule": "50% ($4,250) due upon signing this agreement\n25% ($2,125) due upon design approval\n25% ($2,125) due upon project completion",
+					"start_date": "2024-12-20",
+					"end_date": "2025-02-15",
+					"revision_policy": "This agreement includes two (2) rounds of design revisions. Additional revision rounds will be billed at $150 per hour. A revision round is defined as a consolidated set of feedback received within 48 hours of design delivery.",
+					"termination_clause": "Either party may terminate this agreement with 14 days written notice. In case of termination:\n\u2022 Client pays for all work completed up to the termination date\n\u2022 Service Provider delivers all completed work and assets\n\u2022 Any unused deposit is refunded proportionally",
+					"additional_terms": "",
+					"freelancer_signed": false,
+					"freelancer_signed_date": "",
+					"freelancer_signature": "",
+					"client_signed": false,
+					"client_signed_date": "",
+					"client_signature": ""
+				}
+			],
+			"icon": "lucide:scroll-text"
+		}
+	}
+}

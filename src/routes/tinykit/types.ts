@@ -1,11 +1,22 @@
 // Shared types for tinykit admin interface
 
+// Kit type (matches Pocketbase _tk_kits collection)
+export type Kit = {
+	id: string
+	name: string
+	icon: string
+	builder_theme_id?: string
+	created: string
+	updated: string
+}
+
 // Project type (matches Pocketbase _tk_projects collection)
 export type Project = {
 	id: string
 	collectionId?: string
 	name: string
-	domain: string
+	domain?: string
+	kit: string
 	frontend_code: string
 	backend_code: string
 	published_html: string
@@ -25,10 +36,46 @@ export type ProjectSettings = {
 	vibe_zone_enabled?: boolean
 	project_title?: string
 	domain?: string
+	builder_theme_id?: string
+	// Service configurations
+	services?: ServiceConfigs
+}
+
+// Service configuration types
+export type ServiceConfigs = {
+	ai?: AIServiceConfig
+	email?: EmailServiceConfig
+	payments?: PaymentsServiceConfig
+	secrets?: SecretsServiceConfig
+}
+
+export type AIServiceConfig = {
+	provider: "tinykit" | "byok"
+	openai_key?: string
+	allow_client: boolean
+	require_login: boolean
+	rate_limit: number
+}
+
+export type EmailServiceConfig = {
+	provider: "resend" | "sendgrid"
+	api_key?: string
+	from_address?: string
+}
+
+export type PaymentsServiceConfig = {
+	mode: "test" | "live"
+	secret_key?: string
+	webhook_secret?: string
+	allow_checkout: boolean
+}
+
+export type SecretsServiceConfig = {
+	variables: Array<{ key: string; value: string }>
 }
 
 // Tab IDs
-export type TabId = "agent" | "code" | "content" | "design" | "data" | "history" | "config"
+export type TabId = "agent" | "code" | "content" | "design" | "data" | "history"
 
 // Preview position
 export type PreviewPosition = "right" | "left" | "bottom"
@@ -61,6 +108,7 @@ export type TokenUsage = {
 	completionTokens: number
 	totalTokens: number
 	cost: number
+	duration?: number // seconds
 }
 
 // File types
@@ -69,6 +117,14 @@ export type FileTreeItem = {
 	path: string
 	type: "file" | "directory"
 	children?: FileTreeItem[]
+}
+
+// API endpoint type (placeholder for future backend API routing)
+export type ApiEndpoint = {
+	id: string
+	path: string
+	method: "GET" | "POST" | "PUT" | "DELETE"
+	handler: string
 }
 
 export type EditorLanguage = "javascript" | "typescript" | "html" | "css" | "json" | "markdown" | "svelte"

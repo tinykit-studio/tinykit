@@ -6,8 +6,9 @@
 	// Lazy-load Iconify script on first use (SSR-safe)
 	$effect(() => {
 		if (typeof window === 'undefined') return
-		if (window._iconifyLoaded || document.querySelector('script[data-iconify]')) return
-		window._iconifyLoaded = true
+		const win = /** @type {any} */ (window)
+		if (win._iconifyLoaded || document.querySelector('script[data-iconify]')) return
+		win._iconifyLoaded = true
 		const script = document.createElement('script')
 		script.src = 'https://code.iconify.design/iconify-icon/2.3.0/iconify-icon.min.js'
 		script.setAttribute('data-iconify', 'true')

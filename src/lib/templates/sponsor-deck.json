@@ -1,0 +1,433 @@
+{
+	"id": "sponsor-deck",
+	"name": "Sponsor Deck",
+	"description": "Partnership pitch deck with packages and testimonials",
+	"preview": "lucide:presentation",
+	"tags": [
+		"creator",
+		"intermediate",
+		"business"
+	],
+	"kits": [
+		"creator"
+	],
+	"frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet packages = $state([])\n\tlet testimonials = $state([])\n\tlet case_studies = $state([])\n\tlet loading = $state(true)\n\n\tdata.packages.subscribe(items => {\n\t\tpackages = items.sort((a, b) => (a.order || 0) - (b.order || 0))\n\t})\n\n\tdata.testimonials.subscribe(items => {\n\t\ttestimonials = items\n\t})\n\n\tdata.case_studies.subscribe(items => {\n\t\tcase_studies = items.sort((a, b) => (a.order || 0) - (b.order || 0))\n\t\tloading = false\n\t})\n</script>\n\n<div class=\"page\">\n\t<header class=\"hero\">\n\t\t<div class=\"hero-content\">\n\t\t\t<span class=\"badge\">{content.badge_text}</span>\n\t\t\t<h1>{content.headline}</h1>\n\t\t\t<p class=\"subheadline\">{content.subheadline}</p>\n\t\t</div>\n\t</header>\n\n\t<main class=\"container\">\n\t\t<section class=\"section about\">\n\t\t\t<div class=\"about-content\">\n\t\t\t\t<img class=\"creator-photo\" src={content.photo_url} alt={content.creator_name} />\n\t\t\t\t<div class=\"about-text\">\n\t\t\t\t\t<h2>About {content.creator_name}</h2>\n\t\t\t\t\t<p>{content.about_text}</p>\n\t\t\t\t\t<div class=\"quick-stats\">\n\t\t\t\t\t\t<div class=\"quick-stat\">\n\t\t\t\t\t\t\t<span class=\"stat-num\">{content.total_reach}</span>\n\t\t\t\t\t\t\t<span class=\"stat-label\">Total Reach</span>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t\t<div class=\"quick-stat\">\n\t\t\t\t\t\t\t<span class=\"stat-num\">{content.engagement_rate}</span>\n\t\t\t\t\t\t\t<span class=\"stat-label\">Engagement</span>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t\t<div class=\"quick-stat\">\n\t\t\t\t\t\t\t<span class=\"stat-num\">{content.avg_views}</span>\n\t\t\t\t\t\t\t<span class=\"stat-label\">Avg Views</span>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t</div>\n\t\t\t</div>\n\t\t</section>\n\n\t\t<section class=\"section why-section\">\n\t\t\t<h2 class=\"section-title\"><Icon icon=\"lucide:sparkles\" width={24} /> Why Partner With Me?</h2>\n\t\t\t<div class=\"why-grid\">\n\t\t\t\t<div class=\"why-card\">\n\t\t\t\t\t<Icon icon=\"lucide:target\" width={32} />\n\t\t\t\t\t<h3>Engaged Audience</h3>\n\t\t\t\t\t<p>{content.why_1}</p>\n\t\t\t\t</div>\n\t\t\t\t<div class=\"why-card\">\n\t\t\t\t\t<Icon icon=\"lucide:palette\" width={32} />\n\t\t\t\t\t<h3>Creative Excellence</h3>\n\t\t\t\t\t<p>{content.why_2}</p>\n\t\t\t\t</div>\n\t\t\t\t<div class=\"why-card\">\n\t\t\t\t\t<Icon icon=\"lucide:trending-up\" width={32} />\n\t\t\t\t\t<h3>Proven Results</h3>\n\t\t\t\t\t<p>{content.why_3}</p>\n\t\t\t\t</div>\n\t\t\t</div>\n\t\t</section>\n\n\t\t<section class=\"section\">\n\t\t\t<h2 class=\"section-title\"><Icon icon=\"lucide:package\" width={24} /> Partnership Tiers</h2>\n\t\t\t<div class=\"packages-grid\">\n\t\t\t\t{#each packages as pkg (pkg.id)}\n\t\t\t\t\t<div class=\"package-card\" class:featured={pkg.featured}>\n\t\t\t\t\t\t{#if pkg.featured}\n\t\t\t\t\t\t\t<span class=\"featured-ribbon\">Best Value</span>\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t<div class=\"package-icon\">\n\t\t\t\t\t\t\t<Icon icon={pkg.icon || 'lucide:box'} width={28} />\n\t\t\t\t\t\t</div>\n\t\t\t\t\t\t<h3>{pkg.name}</h3>\n\t\t\t\t\t\t<p class=\"package-type\">{pkg.type}</p>\n\t\t\t\t\t\t<p class=\"package-price\">{pkg.price}</p>\n\t\t\t\t\t\t<p class=\"package-desc\">{pkg.description}</p>\n\t\t\t\t\t\t{#if pkg.deliverables}\n\t\t\t\t\t\t\t<ul class=\"deliverables\">\n\t\t\t\t\t\t\t\t{#each pkg.deliverables.split('|') as item}\n\t\t\t\t\t\t\t\t\t<li><Icon icon=\"lucide:check\" width={16} /> {item.trim()}</li>\n\t\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t\t</ul>\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t</div>\n\t\t\t\t{/each}\n\t\t\t</div>\n\t\t</section>\n\n\t\t<section class=\"section\">\n\t\t\t<h2 class=\"section-title\"><Icon icon=\"lucide:quote\" width={24} /> What Brands Say</h2>\n\t\t\t<div class=\"testimonials-grid\">\n\t\t\t\t{#each testimonials as t (t.id)}\n\t\t\t\t\t<div class=\"testimonial-card\">\n\t\t\t\t\t\t<Icon icon=\"lucide:quote\" width={24} class=\"quote-icon\" />\n\t\t\t\t\t\t<p class=\"testimonial-text\">{t.quote}</p>\n\t\t\t\t\t\t<div class=\"testimonial-author\">\n\t\t\t\t\t\t\t<span class=\"author-name\">{t.name}</span>\n\t\t\t\t\t\t\t<span class=\"author-role\">{t.role}, {t.company}</span>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t{/each}\n\t\t\t</div>\n\t\t</section>\n\n\t\t<section class=\"section\">\n\t\t\t<h2 class=\"section-title\"><Icon icon=\"lucide:trophy\" width={24} /> Case Studies</h2>\n\t\t\t<div class=\"case-studies\">\n\t\t\t\t{#each case_studies as study (study.id)}\n\t\t\t\t\t<div class=\"case-card\">\n\t\t\t\t\t\t<div class=\"case-header\">\n\t\t\t\t\t\t\t<span class=\"case-brand\">{study.brand}</span>\n\t\t\t\t\t\t\t<span class=\"case-type\">{study.campaign_type}</span>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t\t<p class=\"case-goal\">{study.goal}</p>\n\t\t\t\t\t\t<div class=\"case-results\">\n\t\t\t\t\t\t\t{#if study.result_1}\n\t\t\t\t\t\t\t\t<div class=\"result\">\n\t\t\t\t\t\t\t\t\t<span class=\"result-value\">{study.result_1}</span>\n\t\t\t\t\t\t\t\t\t<span class=\"result-label\">{study.result_1_label}</span>\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t\t{#if study.result_2}\n\t\t\t\t\t\t\t\t<div class=\"result\">\n\t\t\t\t\t\t\t\t\t<span class=\"result-value\">{study.result_2}</span>\n\t\t\t\t\t\t\t\t\t<span class=\"result-label\">{study.result_2_label}</span>\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t\t{#if study.result_3}\n\t\t\t\t\t\t\t\t<div class=\"result\">\n\t\t\t\t\t\t\t\t\t<span class=\"result-value\">{study.result_3}</span>\n\t\t\t\t\t\t\t\t\t<span class=\"result-label\">{study.result_3_label}</span>\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t{/each}\n\t\t\t</div>\n\t\t</section>\n\n\t\t<section class=\"section cta-section\">\n\t\t\t<div class=\"cta-content\">\n\t\t\t\t<h2>{content.cta_headline}</h2>\n\t\t\t\t<p>{content.cta_text}</p>\n\t\t\t\t<a href=\"mailto:{content.email}\" class=\"cta-button\">\n\t\t\t\t\t<Icon icon=\"lucide:mail\" width={20} /> {content.cta_button}\n\t\t\t\t</a>\n\t\t\t</div>\n\t\t</section>\n\t</main>\n\n\t<footer class=\"footer\">built with <a href=\"https://tinykit.studio\" target=\"_blank\">tinykit.studio</a></footer>\n</div>\n\n<style>\n\t.page {\n\t\tmin-height: 100vh;\n\t\tbackground: var(--page-background, #ffffff);\n\t\tfont-family: var(--body-font, 'Inter', system-ui, sans-serif);\n\t\tcolor: var(--body-text-color, #1a1a1a);\n\t}\n\n\t.hero {\n\t\tbackground: linear-gradient(135deg, var(--gradient-start, #ff6b6b) 0%, var(--gradient-end, #feca57) 100%);\n\t\tpadding: 5rem 2rem;\n\t\ttext-align: center;\n\t}\n\n\t.hero-content {\n\t\tmax-width: 700px;\n\t\tmargin: 0 auto;\n\t}\n\n\t.badge {\n\t\tdisplay: inline-block;\n\t\tbackground: rgba(255, 255, 255, 0.2);\n\t\tcolor: #ffffff;\n\t\tpadding: 0.5rem 1rem;\n\t\tborder-radius: 50px;\n\t\tfont-size: 0.85rem;\n\t\tfont-weight: 600;\n\t\ttext-transform: uppercase;\n\t\tletter-spacing: 0.1em;\n\t\tmargin-bottom: 1.5rem;\n\t}\n\n\t.hero h1 {\n\t\tmargin: 0;\n\t\tfont-size: 3rem;\n\t\tfont-weight: 800;\n\t\tcolor: #ffffff;\n\t\tline-height: 1.2;\n\t}\n\n\t.subheadline {\n\t\tmargin: 1rem 0 0;\n\t\tfont-size: 1.25rem;\n\t\tcolor: rgba(255, 255, 255, 0.9);\n\t}\n\n\t.container {\n\t\tmax-width: 1000px;\n\t\tmargin: 0 auto;\n\t\tpadding: 2rem;\n\t}\n\n\t.section {\n\t\tmargin-bottom: 4rem;\n\t}\n\n\t.section-title {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.75rem;\n\t\tfont-size: 1.5rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--heading-color, #1a1a1a);\n\t\tmargin: 0 0 2rem 0;\n\t}\n\n\t.section-title :global(svg) {\n\t\tcolor: var(--accent-color, #ff6b6b);\n\t}\n\n\t.about {\n\t\tpadding: 3rem 0;\n\t}\n\n\t.about-content {\n\t\tdisplay: flex;\n\t\tgap: 3rem;\n\t\talign-items: center;\n\t\tflex-wrap: wrap;\n\t}\n\n\t.creator-photo {\n\t\twidth: 200px;\n\t\theight: 200px;\n\t\tborder-radius: 50%;\n\t\tobject-fit: cover;\n\t\tbox-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);\n\t}\n\n\t.about-text {\n\t\tflex: 1;\n\t\tmin-width: 280px;\n\t}\n\n\t.about-text h2 {\n\t\tmargin: 0 0 1rem 0;\n\t\tfont-size: 1.75rem;\n\t\tcolor: var(--heading-color, #1a1a1a);\n\t}\n\n\t.about-text p {\n\t\tcolor: var(--secondary-text-color, #666666);\n\t\tline-height: 1.7;\n\t\tmargin: 0 0 1.5rem 0;\n\t}\n\n\t.quick-stats {\n\t\tdisplay: flex;\n\t\tgap: 2rem;\n\t\tflex-wrap: wrap;\n\t}\n\n\t.quick-stat {\n\t\ttext-align: center;\n\t}\n\n\t.stat-num {\n\t\tdisplay: block;\n\t\tfont-size: 1.75rem;\n\t\tfont-weight: 800;\n\t\tcolor: var(--accent-color, #ff6b6b);\n\t}\n\n\t.stat-label {\n\t\tfont-size: 0.8rem;\n\t\tcolor: var(--secondary-text-color, #666666);\n\t\ttext-transform: uppercase;\n\t\tletter-spacing: 0.05em;\n\t}\n\n\t.why-grid {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(auto-fit, minmax(250px, 1fr));\n\t\tgap: 1.5rem;\n\t}\n\n\t.why-card {\n\t\tbackground: var(--card-background, #f8f9fa);\n\t\tborder-radius: var(--card-radius, 16px);\n\t\tpadding: 2rem;\n\t\ttext-align: center;\n\t}\n\n\t.why-card :global(svg) {\n\t\tcolor: var(--accent-color, #ff6b6b);\n\t\tmargin-bottom: 1rem;\n\t}\n\n\t.why-card h3 {\n\t\tmargin: 0 0 0.75rem 0;\n\t\tfont-size: 1.1rem;\n\t\tcolor: var(--heading-color, #1a1a1a);\n\t}\n\n\t.why-card p {\n\t\tmargin: 0;\n\t\tcolor: var(--secondary-text-color, #666666);\n\t\tfont-size: 0.95rem;\n\t\tline-height: 1.6;\n\t}\n\n\t.packages-grid {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(auto-fit, minmax(280px, 1fr));\n\t\tgap: 1.5rem;\n\t}\n\n\t.package-card {\n\t\tbackground: var(--card-background, #f8f9fa);\n\t\tborder: 2px solid var(--border-color, #e9ecef);\n\t\tborder-radius: var(--card-radius, 16px);\n\t\tpadding: 2rem;\n\t\tposition: relative;\n\t\ttransition: all 0.3s ease;\n\t}\n\n\t.package-card:hover {\n\t\ttransform: translateY(-4px);\n\t\tbox-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);\n\t}\n\n\t.package-card.featured {\n\t\tborder-color: var(--accent-color, #ff6b6b);\n\t\tbackground: linear-gradient(135deg, rgba(255, 107, 107, 0.05) 0%, rgba(254, 202, 87, 0.05) 100%);\n\t}\n\n\t.featured-ribbon {\n\t\tposition: absolute;\n\t\ttop: -12px;\n\t\tright: 20px;\n\t\tbackground: linear-gradient(90deg, var(--gradient-start, #ff6b6b), var(--gradient-end, #feca57));\n\t\tcolor: #ffffff;\n\t\tpadding: 0.4rem 1rem;\n\t\tborder-radius: 20px;\n\t\tfont-size: 0.75rem;\n\t\tfont-weight: 700;\n\t\ttext-transform: uppercase;\n\t}\n\n\t.package-icon {\n\t\twidth: 56px;\n\t\theight: 56px;\n\t\tbackground: linear-gradient(135deg, var(--gradient-start, #ff6b6b), var(--gradient-end, #feca57));\n\t\tborder-radius: 12px;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tcolor: #ffffff;\n\t\tmargin-bottom: 1rem;\n\t}\n\n\t.package-card h3 {\n\t\tmargin: 0 0 0.25rem 0;\n\t\tfont-size: 1.25rem;\n\t\tcolor: var(--heading-color, #1a1a1a);\n\t}\n\n\t.package-type {\n\t\tmargin: 0 0 0.75rem 0;\n\t\tfont-size: 0.85rem;\n\t\tcolor: var(--secondary-text-color, #666666);\n\t\ttext-transform: uppercase;\n\t\tletter-spacing: 0.05em;\n\t}\n\n\t.package-price {\n\t\tmargin: 0 0 1rem 0;\n\t\tfont-size: 2rem;\n\t\tfont-weight: 800;\n\t\tcolor: var(--accent-color, #ff6b6b);\n\t}\n\n\t.package-desc {\n\t\tmargin: 0 0 1rem 0;\n\t\tcolor: var(--secondary-text-color, #666666);\n\t\tfont-size: 0.9rem;\n\t\tline-height: 1.5;\n\t}\n\n\t.deliverables {\n\t\tlist-style: none;\n\t\tpadding: 0;\n\t\tmargin: 0;\n\t}\n\n\t.deliverables li {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tpadding: 0.4rem 0;\n\t\tfont-size: 0.9rem;\n\t\tcolor: var(--body-text-color, #1a1a1a);\n\t}\n\n\t.deliverables li :global(svg) {\n\t\tcolor: var(--success-color, #22c55e);\n\t}\n\n\t.testimonials-grid {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(auto-fit, minmax(300px, 1fr));\n\t\tgap: 1.5rem;\n\t}\n\n\t.testimonial-card {\n\t\tbackground: var(--card-background, #f8f9fa);\n\t\tborder-radius: var(--card-radius, 16px);\n\t\tpadding: 2rem;\n\t\tposition: relative;\n\t}\n\n\t.testimonial-card :global(.quote-icon) {\n\t\tcolor: var(--accent-color, #ff6b6b);\n\t\topacity: 0.3;\n\t\tposition: absolute;\n\t\ttop: 1rem;\n\t\tright: 1rem;\n\t}\n\n\t.testimonial-text {\n\t\tmargin: 0 0 1.5rem 0;\n\t\tfont-size: 1rem;\n\t\tline-height: 1.7;\n\t\tcolor: var(--body-text-color, #1a1a1a);\n\t\tfont-style: italic;\n\t}\n\n\t.testimonial-author {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t}\n\n\t.author-name {\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #1a1a1a);\n\t}\n\n\t.author-role {\n\t\tfont-size: 0.85rem;\n\t\tcolor: var(--secondary-text-color, #666666);\n\t}\n\n\t.case-studies {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tgap: 1.5rem;\n\t}\n\n\t.case-card {\n\t\tbackground: var(--card-background, #f8f9fa);\n\t\tborder-radius: var(--card-radius, 16px);\n\t\tpadding: 2rem;\n\t}\n\n\t.case-header {\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: center;\n\t\tmargin-bottom: 0.75rem;\n\t\tflex-wrap: wrap;\n\t\tgap: 0.5rem;\n\t}\n\n\t.case-brand {\n\t\tfont-size: 1.25rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--heading-color, #1a1a1a);\n\t}\n\n\t.case-type {\n\t\tbackground: rgba(255, 107, 107, 0.1);\n\t\tcolor: var(--accent-color, #ff6b6b);\n\t\tpadding: 0.25rem 0.75rem;\n\t\tborder-radius: 20px;\n\t\tfont-size: 0.8rem;\n\t\tfont-weight: 600;\n\t}\n\n\t.case-goal {\n\t\tmargin: 0 0 1.5rem 0;\n\t\tcolor: var(--secondary-text-color, #666666);\n\t\tline-height: 1.6;\n\t}\n\n\t.case-results {\n\t\tdisplay: flex;\n\t\tgap: 2rem;\n\t\tflex-wrap: wrap;\n\t}\n\n\t.result {\n\t\ttext-align: center;\n\t}\n\n\t.result-value {\n\t\tdisplay: block;\n\t\tfont-size: 1.5rem;\n\t\tfont-weight: 800;\n\t\tcolor: var(--accent-color, #ff6b6b);\n\t}\n\n\t.result-label {\n\t\tfont-size: 0.8rem;\n\t\tcolor: var(--secondary-text-color, #666666);\n\t}\n\n\t.cta-section {\n\t\tbackground: linear-gradient(135deg, var(--gradient-start, #ff6b6b) 0%, var(--gradient-end, #feca57) 100%);\n\t\tborder-radius: var(--card-radius, 16px);\n\t\tpadding: 4rem 2rem;\n\t\ttext-align: center;\n\t}\n\n\t.cta-content h2 {\n\t\tmargin: 0 0 1rem 0;\n\t\tfont-size: 2rem;\n\t\tcolor: #ffffff;\n\t}\n\n\t.cta-content p {\n\t\tmargin: 0 0 2rem 0;\n\t\tcolor: rgba(255, 255, 255, 0.9);\n\t\tfont-size: 1.1rem;\n\t}\n\n\t.cta-button {\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tbackground: #ffffff;\n\t\tcolor: var(--accent-color, #ff6b6b);\n\t\tpadding: 1rem 2rem;\n\t\tborder-radius: 50px;\n\t\tfont-weight: 700;\n\t\tfont-size: 1rem;\n\t\ttext-decoration: none;\n\t\ttransition: all 0.2s;\n\t\tbox-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);\n\t}\n\n\t.cta-button:hover {\n\t\ttransform: translateY(-2px);\n\t\tbox-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);\n\t}\n\n\t.footer {\n\t\ttext-align: center;\n\t\tpadding: 2rem;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--secondary-text-color, #999999);\n\t}\n\n\t.footer a {\n\t\tcolor: inherit;\n\t\ttext-decoration: none;\n\t}\n\n\t.footer a:hover {\n\t\ttext-decoration: underline;\n\t}\n\n\t@media (max-width: 600px) {\n\t\t.hero {\n\t\t\tpadding: 3rem 1.5rem;\n\t\t}\n\n\t\t.hero h1 {\n\t\t\tfont-size: 2rem;\n\t\t}\n\n\t\t.container {\n\t\t\tpadding: 1.5rem 1rem;\n\t\t}\n\n\t\t.about-content {\n\t\t\tjustify-content: center;\n\t\t\ttext-align: center;\n\t\t}\n\n\t\t.quick-stats {\n\t\t\tjustify-content: center;\n\t\t}\n\t}\n</style>",
+	"design": [
+		{
+			"id": "body-font",
+			"name": "Font",
+			"css_var": "--body-font",
+			"value": "'Inter', system-ui, sans-serif",
+			"type": "font",
+			"description": "Main font for all text"
+		},
+		{
+			"id": "page-background",
+			"name": "Page Background",
+			"css_var": "--page-background",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Page background color"
+		},
+		{
+			"id": "gradient-start",
+			"name": "Gradient Start",
+			"css_var": "--gradient-start",
+			"value": "#ff6b6b",
+			"type": "color",
+			"description": "Hero gradient start"
+		},
+		{
+			"id": "gradient-end",
+			"name": "Gradient End",
+			"css_var": "--gradient-end",
+			"value": "#feca57",
+			"type": "color",
+			"description": "Hero gradient end"
+		},
+		{
+			"id": "card-background",
+			"name": "Card Background",
+			"css_var": "--card-background",
+			"value": "#f8f9fa",
+			"type": "color",
+			"description": "Card background color"
+		},
+		{
+			"id": "heading-color",
+			"name": "Heading Color",
+			"css_var": "--heading-color",
+			"value": "#1a1a1a",
+			"type": "color",
+			"description": "Heading text color"
+		},
+		{
+			"id": "body-text-color",
+			"name": "Body Text",
+			"css_var": "--body-text-color",
+			"value": "#1a1a1a",
+			"type": "color",
+			"description": "Main text color"
+		},
+		{
+			"id": "secondary-text-color",
+			"name": "Secondary Text",
+			"css_var": "--secondary-text-color",
+			"value": "#666666",
+			"type": "color",
+			"description": "Muted text color"
+		},
+		{
+			"id": "accent-color",
+			"name": "Accent Color",
+			"css_var": "--accent-color",
+			"value": "#ff6b6b",
+			"type": "color",
+			"description": "Primary accent color"
+		},
+		{
+			"id": "border-color",
+			"name": "Border Color",
+			"css_var": "--border-color",
+			"value": "#e9ecef",
+			"type": "color",
+			"description": "Border color"
+		},
+		{
+			"id": "card-radius",
+			"name": "Card Radius",
+			"css_var": "--card-radius",
+			"value": "16px",
+			"type": "radius",
+			"description": "Roundness of cards"
+		}
+	],
+	"content": [
+		{
+			"id": "badge_text",
+			"name": "Badge Text",
+			"type": "text",
+			"value": "Partnership Opportunities",
+			"description": "Hero badge text"
+		},
+		{
+			"id": "headline",
+			"name": "Headline",
+			"type": "text",
+			"value": "Let's Create Something Amazing Together",
+			"description": "Main hero headline"
+		},
+		{
+			"id": "subheadline",
+			"name": "Subheadline",
+			"type": "text",
+			"value": "Authentic content that converts. Real results for ambitious brands.",
+			"description": "Hero subheadline"
+		},
+		{
+			"id": "creator_name",
+			"name": "Creator Name",
+			"type": "text",
+			"value": "Jordan Chen",
+			"description": "Your name"
+		},
+		{
+			"id": "photo_url",
+			"name": "Photo URL",
+			"type": "text",
+			"value": "https://placehold.co/400x400/6366f1/ffffff?text=JC",
+			"description": "Your professional photo"
+		},
+		{
+			"id": "about_text",
+			"name": "About Text",
+			"type": "textarea",
+			"value": "I'm a lifestyle and wellness creator who helps brands connect with health-conscious millennials. My content focuses on sustainable living, mindful productivity, and authentic self-improvement. I believe in partnerships that feel natural and provide real value to my audience.",
+			"description": "About you paragraph"
+		},
+		{
+			"id": "total_reach",
+			"name": "Total Reach",
+			"type": "text",
+			"value": "850K+",
+			"description": "Total follower count"
+		},
+		{
+			"id": "engagement_rate",
+			"name": "Engagement Rate",
+			"type": "text",
+			"value": "5.2%",
+			"description": "Average engagement"
+		},
+		{
+			"id": "avg_views",
+			"name": "Avg Views",
+			"type": "text",
+			"value": "120K",
+			"description": "Average views per post"
+		},
+		{
+			"id": "why_1",
+			"name": "Why 1",
+			"type": "text",
+			"value": "My audience trusts my recommendations because I only partner with brands I genuinely use and believe in.",
+			"description": "First reason to partner"
+		},
+		{
+			"id": "why_2",
+			"name": "Why 2",
+			"type": "text",
+			"value": "I bring a unique aesthetic and storytelling approach that makes sponsored content feel native and engaging.",
+			"description": "Second reason to partner"
+		},
+		{
+			"id": "why_3",
+			"name": "Why 3",
+			"type": "text",
+			"value": "Past partnerships have seen 3-5x ROI with conversion rates well above industry averages.",
+			"description": "Third reason to partner"
+		},
+		{
+			"id": "cta_headline",
+			"name": "CTA Headline",
+			"type": "text",
+			"value": "Ready to Get Started?",
+			"description": "Call to action headline"
+		},
+		{
+			"id": "cta_text",
+			"name": "CTA Text",
+			"type": "text",
+			"value": "I'd love to hear about your brand and explore how we can work together.",
+			"description": "Call to action text"
+		},
+		{
+			"id": "cta_button",
+			"name": "CTA Button",
+			"type": "text",
+			"value": "Get in Touch",
+			"description": "Button text"
+		},
+		{
+			"id": "email",
+			"name": "Email",
+			"type": "text",
+			"value": "partnerships@jordanchen.com",
+			"description": "Contact email"
+		}
+	],
+	"data": {
+		"packages": {
+			"schema": [
+				{
+					"name": "id",
+					"type": "text"
+				},
+				{
+					"name": "name",
+					"type": "text"
+				},
+				{
+					"name": "type",
+					"type": "text"
+				},
+				{
+					"name": "price",
+					"type": "text"
+				},
+				{
+					"name": "description",
+					"type": "text"
+				},
+				{
+					"name": "deliverables",
+					"type": "text"
+				},
+				{
+					"name": "icon",
+					"type": "text"
+				},
+				{
+					"name": "featured",
+					"type": "boolean"
+				},
+				{
+					"name": "order",
+					"type": "number"
+				}
+			],
+			"records": [
+				{
+					"id": "pkg1",
+					"name": "Story Spotlight",
+					"type": "Instagram Stories",
+					"price": "$600",
+					"description": "Quick, authentic product features perfect for launches and promos.",
+					"deliverables": "5 Stories with swipe-up|24hr highlight save|Authentic integration",
+					"icon": "lucide:smartphone",
+					"featured": false,
+					"order": 1
+				},
+				{
+					"id": "pkg2",
+					"name": "Reel Magic",
+					"type": "Video Content",
+					"price": "$2,000",
+					"description": "High-quality short-form video content optimized for maximum engagement.",
+					"deliverables": "1 Instagram Reel (30-60s)|TikTok cross-post|Original audio/trend usage|2 revision rounds",
+					"icon": "lucide:video",
+					"featured": true,
+					"order": 2
+				},
+				{
+					"id": "pkg3",
+					"name": "YouTube Deep Dive",
+					"type": "Long-form Video",
+					"price": "$4,500",
+					"description": "In-depth review or dedicated video for complex products.",
+					"deliverables": "8-15 min dedicated video|Pinned comment placement|Community tab post|Playlist inclusion",
+					"icon": "mdi:youtube",
+					"featured": false,
+					"order": 3
+				},
+				{
+					"id": "pkg4",
+					"name": "Brand Bundle",
+					"type": "Multi-Platform",
+					"price": "$6,000",
+					"description": "Comprehensive campaign across all my platforms for maximum impact.",
+					"deliverables": "1 YouTube video|2 Reels/TikToks|5 Stories|1 carousel post|30-day usage rights",
+					"icon": "lucide:package",
+					"featured": false,
+					"order": 4
+				}
+			],
+			"icon": "lucide:box"
+		},
+		"testimonials": {
+			"schema": [
+				{
+					"name": "id",
+					"type": "text"
+				},
+				{
+					"name": "quote",
+					"type": "text"
+				},
+				{
+					"name": "name",
+					"type": "text"
+				},
+				{
+					"name": "role",
+					"type": "text"
+				},
+				{
+					"name": "company",
+					"type": "text"
+				}
+			],
+			"records": [
+				{
+					"id": "t1",
+					"quote": "Working with Jordan was effortless. The content exceeded our expectations and drove real results for our launch campaign.",
+					"name": "Sarah Mitchell",
+					"role": "Marketing Director",
+					"company": "GlowUp Skincare"
+				},
+				{
+					"id": "t2",
+					"quote": "Jordan's audience engagement is unreal. We saw a 340% increase in website traffic from a single video.",
+					"name": "Marcus Lee",
+					"role": "Founder",
+					"company": "ZenDesk Co."
+				},
+				{
+					"id": "t3",
+					"quote": "Authentic, creative, and professional. Jordan understands how to tell a story that resonates.",
+					"name": "Emma Thornton",
+					"role": "Brand Manager",
+					"company": "EcoLife"
+				}
+			],
+			"icon": "lucide:folder"
+		},
+		"case_studies": {
+			"schema": [
+				{
+					"name": "id",
+					"type": "text"
+				},
+				{
+					"name": "brand",
+					"type": "text"
+				},
+				{
+					"name": "campaign_type",
+					"type": "text"
+				},
+				{
+					"name": "goal",
+					"type": "text"
+				},
+				{
+					"name": "result_1",
+					"type": "text"
+				},
+				{
+					"name": "result_1_label",
+					"type": "text"
+				},
+				{
+					"name": "result_2",
+					"type": "text"
+				},
+				{
+					"name": "result_2_label",
+					"type": "text"
+				},
+				{
+					"name": "result_3",
+					"type": "text"
+				},
+				{
+					"name": "result_3_label",
+					"type": "text"
+				},
+				{
+					"name": "order",
+					"type": "number"
+				}
+			],
+			"records": [
+				{
+					"id": "c1",
+					"brand": "GlowUp Skincare",
+					"campaign_type": "Product Launch",
+					"goal": "Drive awareness and sales for new vitamin C serum launch targeting 25-35 demographic.",
+					"result_1": "2.1M",
+					"result_1_label": "Impressions",
+					"result_2": "8,400",
+					"result_2_label": "Link Clicks",
+					"result_3": "$45K",
+					"result_3_label": "Revenue Tracked",
+					"order": 1
+				},
+				{
+					"id": "c2",
+					"brand": "MindfulApp",
+					"campaign_type": "App Install Campaign",
+					"goal": "Increase app downloads and trial sign-ups for meditation app.",
+					"result_1": "12,000+",
+					"result_1_label": "App Installs",
+					"result_2": "4.2%",
+					"result_2_label": "Conversion Rate",
+					"result_3": "3.8x",
+					"result_3_label": "ROAS",
+					"order": 2
+				}
+			],
+			"icon": "lucide:briefcase"
+		}
+	}
+}

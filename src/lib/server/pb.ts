@@ -52,6 +52,12 @@ async function ensureAuth(): Promise<boolean> {
 		return true
 	}
 
+	// If token expired, clear state and re-authenticate
+	if (isAuthenticated && !pb.authStore.isValid) {
+		console.log('[PB] Auth token expired, re-authenticating...')
+		isAuthenticated = false
+	}
+
 	// Check for new credentials every 5 seconds if not authenticated
 	const now = Date.now()
 	if (!isAuthenticated && now - lastCredentialsCheck < 5000) {
@@ -69,11 +75,12 @@ async function ensureAuth(): Promise<boolean> {
 		// PocketBase 0.23+ uses _superusers collection for admin auth
 		await pb.collection('_superusers').authWithPassword(creds.email, creds.password)
 		isAuthenticated = true
+		console.log('[PB] Server authenticated successfully')
 		return true
 	} catch (error: any) {
 		// Don't throw - just log and return false
 		// This allows the app to work before setup is complete
-		console.warn('[PB] Auth failed (server may need setup):', error.message || error)
+		console.error('[PB] Auth failed:', error.message || error)
 		isAuthenticated = false
 		return false
 	}
@@ -86,6 +93,7 @@ export type Project = {
 	collectionName: string
 	name: string
 	domain: string
+	kit: string
 	frontend_code: string
 	backend_code: string
 	published_html: string // filename of the compiled HTML file attachment
@@ -134,11 +142,15 @@ export async function listProjects(): Promise<Project[]> {
  */
 export async function getProject(id: string): Promise<Project | null> {
 	const authed = await ensureAuth()
-	if (!authed) return null
+	if (!authed) {
+		console.error(`[PB] Cannot get project ${id}: Server auth not available`)
+		return null
+	}
 
 	try {
 		return await pb.collection('_tk_projects').getOne(id)
-	} catch {
+	} catch (err: any) {
+		console.error(`[PB] Failed to get project ${id}:`, err?.message || err)
 		return null
 	}
 }
@@ -173,7 +185,8 @@ export async function getProjectByDomain(domain: string): Promise<Project | null
  */
 export async function createProject(data: {
 	name: string
-	domain: string
+	domain?: string
+	kit?: string
 	frontend_code?: string
 	design?: any[]
 	content?: any[]
@@ -184,7 +197,8 @@ export async function createProject(data: {
 
 	const project_data: any = {
 		name: data.name,
-		domain: data.domain.toLowerCase(),
+		domain: data.domain?.toLowerCase() || '',
+		kit: data.kit || 'custom',
 		frontend_code: data.frontend_code || '',
 		backend_code: '',
 		design: data.design || [],
@@ -352,7 +366,7 @@ export async function deleteSnapshot(projectId: string, snapshotId: string) {
  * LLM configuration type
  */
 export interface LLMSettings {
-	provider: 'openai' | 'anthropic' | 'gemini' | 'deepseek'
+	provider: 'openai' | 'anthropic' | 'gemini'
 	api_key: string
 	model: string
 	base_url?: string
@@ -626,4 +640,118 @@ export async function insertDataRecords(
 		await updateProject(projectId, { data: current_data })
 		return { success: true, message: `Inserted ${records.length} records into "${collectionName}"` }
 	})
+}
+
+// ==========================================
+// Available domains tracking
+// ==========================================
+
+type AvailableDomain = {
+	hostname: string
+	first_seen: string
+	last_seen: string
+}
+
+/**
+ * Track an incoming hostname as available (not assigned to any project)
+ * Ignores localhost and common dev domains
+ */
+export async function trackAvailableDomain(hostname: string): Promise<void> {
+	// Skip localhost and dev domains
+	if (
+		hostname === 'localhost' ||
+		hostname.startsWith('localhost:') ||
+		hostname.startsWith('127.0.0.1') ||
+		hostname.endsWith('.local')
+	) {
+		return
+	}
+
+	const authed = await ensureAuth()
+	if (!authed) return
+
+	try {
+		// Get current available domains
+		let record: any
+		try {
+			record = await pb.collection('_tk_settings').getOne('available_domains')
+		} catch {
+			// Create if doesn't exist
+			record = await pb.collection('_tk_settings').create({
+				id: 'available_domains',
+				value: { domains: [] }
+			})
+		}
+
+		const domains: AvailableDomain[] = record?.value?.domains || []
+		const now = new Date().toISOString()
+
+		// Check if already tracked
+		const existing = domains.find(d => d.hostname === hostname)
+		if (existing) {
+			// Update last_seen
+			existing.last_seen = now
+		} else {
+			// Add new
+			domains.push({
+				hostname,
+				first_seen: now,
+				last_seen: now
+			})
+		}
+
+		// Keep only last 50 domains, sorted by last_seen
+		const trimmed = domains
+			.sort((a, b) => new Date(b.last_seen).getTime() - new Date(a.last_seen).getTime())
+			.slice(0, 50)
+
+		await pb.collection('_tk_settings').update('available_domains', {
+			value: { domains: trimmed }
+		})
+	} catch (err) {
+		// Silently fail - tracking is best-effort
+		console.warn('[PB] Failed to track available domain:', err)
+	}
+}
+
+/**
+ * Get list of available domains (not assigned to any project)
+ */
+export async function getAvailableDomains(): Promise<AvailableDomain[]> {
+	const authed = await ensureAuth()
+	if (!authed) return []
+
+	try {
+		const record = await pb.collection('_tk_settings').getOne('available_domains')
+		const domains: AvailableDomain[] = record?.value?.domains || []
+
+		// Filter out domains that are now assigned to projects
+		const projects = await listProjects()
+		const assigned = new Set(projects.map(p => p.domain).filter(Boolean))
+
+		return domains.filter(d => !assigned.has(d.hostname))
+	} catch {
+		return []
+	}
+}
+
+/**
+ * Remove a domain from available list (when assigned to a project)
+ */
+export async function removeAvailableDomain(hostname: string): Promise<void> {
+	const authed = await ensureAuth()
+	if (!authed) return
+
+	try {
+		const record = await pb.collection('_tk_settings').getOne('available_domains')
+		const domains: AvailableDomain[] = record?.value?.domains || []
+
+		const filtered = domains.filter(d => d.hostname !== hostname)
+
+		await pb.collection('_tk_settings').update('available_domains', {
+			value: { domains: filtered }
+		})
+	} catch {
+		// Silently fail
+	}
 }

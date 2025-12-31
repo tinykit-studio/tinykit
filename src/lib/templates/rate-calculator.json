@@ -1,0 +1,170 @@
+{
+	"id": "rate-calculator",
+	"name": "Rate Calculator",
+	"description": "Calculate your ideal freelance hourly rate based on salary goals, expenses, and availability",
+	"preview": "lucide:calculator",
+	"tags": [
+		"business",
+		"freelance",
+		"beginner"
+	],
+	"kits": ["freelance"],
+	"frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\n\t// Income goals\n\tlet annual_salary_goal = $state(100000)\n\tlet profit_margin = $state(20)\n\n\t// Business expenses (annual)\n\tlet software_tools = $state(2400)\n\tlet office_equipment = $state(1200)\n\tlet insurance = $state(3600)\n\tlet marketing = $state(2400)\n\tlet accounting = $state(1200)\n\tlet other_expenses = $state(1200)\n\n\t// Taxes\n\tlet tax_rate = $state(30)\n\tlet retirement_contribution = $state(10)\n\n\t// Availability\n\tlet hours_per_week = $state(40)\n\tlet billable_percentage = $state(60)\n\tlet weeks_per_year = $state(48)\n\n\t// Scenario comparison\n\tlet scenarios = $state([\n\t\t{ name: 'Conservative', billable_pct: 50 },\n\t\t{ name: 'Moderate', billable_pct: 65 },\n\t\t{ name: 'Optimistic', billable_pct: 80 }\n\t])\n\n\t// Calculations\n\tlet total_expenses = $derived(\n\t\tsoftware_tools + office_equipment + insurance + marketing + accounting + other_expenses\n\t)\n\n\tlet gross_income_needed = $derived(\n\t\tannual_salary_goal * (1 + profit_margin / 100)\n\t)\n\n\tlet pre_tax_income = $derived(\n\t\tgross_income_needed + total_expenses\n\t)\n\n\tlet total_revenue_needed = $derived(\n\t\tpre_tax_income / (1 - (tax_rate + retirement_contribution) / 100)\n\t)\n\n\tlet billable_hours_per_week = $derived(\n\t\thours_per_week * (billable_percentage / 100)\n\t)\n\n\tlet annual_billable_hours = $derived(\n\t\tbillable_hours_per_week * weeks_per_year\n\t)\n\n\tlet hourly_rate = $derived(\n\t\tannual_billable_hours > 0 ? total_revenue_needed / annual_billable_hours : 0\n\t)\n\n\tlet daily_rate = $derived(hourly_rate * 8)\n\tlet project_rate_estimate = $derived(hourly_rate * 40)\n\n\tlet scenario_rates = $derived(\n\t\tscenarios.map(s => {\n\t\t\tconst billable = hours_per_week * (s.billable_pct / 100) * weeks_per_year\n\t\t\treturn {\n\t\t\t\t...s,\n\t\t\t\thours: billable,\n\t\t\t\trate: billable > 0 ? total_revenue_needed / billable : 0\n\t\t\t}\n\t\t})\n\t)\n\n\tfunction format_currency(amount) {\n\t\treturn new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount)\n\t}\n\n\tfunction format_rate(amount) {\n\t\treturn new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount)\n\t}\n</script>\n\n<main>\n\t<header class=\"header\">\n\t\t<h1>{content.title}</h1>\n\t\t<p class=\"subtitle\">{content.subtitle}</p>\n\t</header>\n\n\t<div class=\"calculator-grid\">\n\t\t<div class=\"inputs-section\">\n\t\t\t<section class=\"input-group\">\n\t\t\t\t<h2><Icon icon=\"lucide:target\" width={20} /> {content.income_goals_label}</h2>\n\t\t\t\t<div class=\"input-field\">\n\t\t\t\t\t<label>Annual Salary Goal</label>\n\t\t\t\t\t<div class=\"input-with-prefix\">\n\t\t\t\t\t\t<span>$</span>\n\t\t\t\t\t\t<input type=\"number\" bind:value={annual_salary_goal} step=\"5000\" />\n\t\t\t\t\t</div>\n\t\t\t\t\t<span class=\"hint\">What you want to take home</span>\n\t\t\t\t</div>\n\t\t\t\t<div class=\"input-field\">\n\t\t\t\t\t<label>Profit Margin</label>\n\t\t\t\t\t<div class=\"input-with-suffix\">\n\t\t\t\t\t\t<input type=\"number\" bind:value={profit_margin} min=\"0\" max=\"50\" />\n\t\t\t\t\t\t<span>%</span>\n\t\t\t\t\t</div>\n\t\t\t\t\t<span class=\"hint\">Buffer for growth & savings</span>\n\t\t\t\t</div>\n\t\t\t</section>\n\n\t\t\t<section class=\"input-group\">\n\t\t\t\t<h2><Icon icon=\"lucide:receipt\" width={20} /> {content.expenses_label}</h2>\n\t\t\t\t<div class=\"expense-grid\">\n\t\t\t\t\t<div class=\"input-field compact\">\n\t\t\t\t\t\t<label>Software & Tools</label>\n\t\t\t\t\t\t<div class=\"input-with-prefix\">\n\t\t\t\t\t\t\t<span>$</span>\n\t\t\t\t\t\t\t<input type=\"number\" bind:value={software_tools} />\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"input-field compact\">\n\t\t\t\t\t\t<label>Equipment</label>\n\t\t\t\t\t\t<div class=\"input-with-prefix\">\n\t\t\t\t\t\t\t<span>$</span>\n\t\t\t\t\t\t\t<input type=\"number\" bind:value={office_equipment} />\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"input-field compact\">\n\t\t\t\t\t\t<label>Insurance</label>\n\t\t\t\t\t\t<div class=\"input-with-prefix\">\n\t\t\t\t\t\t\t<span>$</span>\n\t\t\t\t\t\t\t<input type=\"number\" bind:value={insurance} />\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"input-field compact\">\n\t\t\t\t\t\t<label>Marketing</label>\n\t\t\t\t\t\t<div class=\"input-with-prefix\">\n\t\t\t\t\t\t\t<span>$</span>\n\t\t\t\t\t\t\t<input type=\"number\" bind:value={marketing} />\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"input-field compact\">\n\t\t\t\t\t\t<label>Accounting</label>\n\t\t\t\t\t\t<div class=\"input-with-prefix\">\n\t\t\t\t\t\t\t<span>$</span>\n\t\t\t\t\t\t\t<input type=\"number\" bind:value={accounting} />\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"input-field compact\">\n\t\t\t\t\t\t<label>Other</label>\n\t\t\t\t\t\t<div class=\"input-with-prefix\">\n\t\t\t\t\t\t\t<span>$</span>\n\t\t\t\t\t\t\t<input type=\"number\" bind:value={other_expenses} />\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t</div>\n\t\t\t\t<div class=\"expense-total\">\n\t\t\t\t\t<span>Total Annual Expenses</span>\n\t\t\t\t\t<strong>{format_currency(total_expenses)}</strong>\n\t\t\t\t</div>\n\t\t\t</section>\n\n\t\t\t<section class=\"input-group\">\n\t\t\t\t<h2><Icon icon=\"lucide:landmark\" width={20} /> {content.taxes_label}</h2>\n\t\t\t\t<div class=\"input-field\">\n\t\t\t\t\t<label>Estimated Tax Rate</label>\n\t\t\t\t\t<div class=\"input-with-suffix\">\n\t\t\t\t\t\t<input type=\"number\" bind:value={tax_rate} min=\"0\" max=\"50\" />\n\t\t\t\t\t\t<span>%</span>\n\t\t\t\t\t</div>\n\t\t\t\t\t<span class=\"hint\">Federal + State + Self-employment</span>\n\t\t\t\t</div>\n\t\t\t\t<div class=\"input-field\">\n\t\t\t\t\t<label>Retirement Contribution</label>\n\t\t\t\t\t<div class=\"input-with-suffix\">\n\t\t\t\t\t\t<input type=\"number\" bind:value={retirement_contribution} min=\"0\" max=\"30\" />\n\t\t\t\t\t\t<span>%</span>\n\t\t\t\t\t</div>\n\t\t\t\t\t<span class=\"hint\">401k, SEP-IRA, etc.</span>\n\t\t\t\t</div>\n\t\t\t</section>\n\n\t\t\t<section class=\"input-group\">\n\t\t\t\t<h2><Icon icon=\"lucide:clock\" width={20} /> {content.availability_label}</h2>\n\t\t\t\t<div class=\"input-field\">\n\t\t\t\t\t<label>Hours Per Week</label>\n\t\t\t\t\t<input type=\"number\" bind:value={hours_per_week} min=\"1\" max=\"80\" />\n\t\t\t\t\t<span class=\"hint\">Total working hours</span>\n\t\t\t\t</div>\n\t\t\t\t<div class=\"input-field\">\n\t\t\t\t\t<label>Billable Percentage</label>\n\t\t\t\t\t<div class=\"input-with-suffix\">\n\t\t\t\t\t\t<input type=\"number\" bind:value={billable_percentage} min=\"10\" max=\"100\" />\n\t\t\t\t\t\t<span>%</span>\n\t\t\t\t\t</div>\n\t\t\t\t\t<span class=\"hint\">Realistic: 50-70% (admin, marketing, learning)</span>\n\t\t\t\t</div>\n\t\t\t\t<div class=\"input-field\">\n\t\t\t\t\t<label>Working Weeks Per Year</label>\n\t\t\t\t\t<input type=\"number\" bind:value={weeks_per_year} min=\"1\" max=\"52\" />\n\t\t\t\t\t<span class=\"hint\">Account for vacation & sick time</span>\n\t\t\t\t</div>\n\t\t\t\t<div class=\"billable-summary\">\n\t\t\t\t\t<span>{billable_hours_per_week.toFixed(1)} billable hrs/week</span>\n\t\t\t\t\t<span>&times;</span>\n\t\t\t\t\t<span>{weeks_per_year} weeks</span>\n\t\t\t\t\t<span>=</span>\n\t\t\t\t\t<strong>{annual_billable_hours.toFixed(0)} hrs/year</strong>\n\t\t\t\t</div>\n\t\t\t</section>\n\t\t</div>\n\n\t\t<div class=\"results-section\">\n\t\t\t<div class=\"rate-result\">\n\t\t\t\t<div class=\"rate-label\">{content.your_rate_label}</div>\n\t\t\t\t<div class=\"rate-value\">{format_rate(hourly_rate)}<span>/hr</span></div>\n\t\t\t\t<div class=\"rate-recommendation\">\n\t\t\t\t\t<Icon icon=\"lucide:info\" width={16} />\n\t\t\t\t\t{content.recommendation_text}\n\t\t\t\t</div>\n\t\t\t</div>\n\n\t\t\t<div class=\"rate-formats\">\n\t\t\t\t<div class=\"format-card\">\n\t\t\t\t\t<span class=\"format-label\">Daily Rate (8hr)</span>\n\t\t\t\t\t<span class=\"format-value\">{format_rate(daily_rate)}</span>\n\t\t\t\t</div>\n\t\t\t\t<div class=\"format-card\">\n\t\t\t\t\t<span class=\"format-label\">Week (40hr)</span>\n\t\t\t\t\t<span class=\"format-value\">{format_rate(project_rate_estimate)}</span>\n\t\t\t\t</div>\n\t\t\t\t<div class=\"format-card\">\n\t\t\t\t\t<span class=\"format-label\">Monthly Retainer</span>\n\t\t\t\t\t<span class=\"format-value\">{format_rate(hourly_rate * billable_hours_per_week * 4)}</span>\n\t\t\t\t</div>\n\t\t\t</div>\n\n\t\t\t<div class=\"breakdown\">\n\t\t\t\t<h3>Revenue Breakdown</h3>\n\t\t\t\t<div class=\"breakdown-items\">\n\t\t\t\t\t<div class=\"breakdown-item\">\n\t\t\t\t\t\t<span>Your Salary</span>\n\t\t\t\t\t\t<span>{format_currency(annual_salary_goal)}</span>\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"breakdown-item\">\n\t\t\t\t\t\t<span>+ Profit Margin ({profit_margin}%)</span>\n\t\t\t\t\t\t<span>{format_currency(annual_salary_goal * profit_margin / 100)}</span>\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"breakdown-item\">\n\t\t\t\t\t\t<span>+ Business Expenses</span>\n\t\t\t\t\t\t<span>{format_currency(total_expenses)}</span>\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"breakdown-item\">\n\t\t\t\t\t\t<span>+ Taxes & Retirement</span>\n\t\t\t\t\t\t<span>{format_currency(total_revenue_needed - pre_tax_income)}</span>\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"breakdown-item total\">\n\t\t\t\t\t\t<span>Total Revenue Needed</span>\n\t\t\t\t\t\t<span>{format_currency(total_revenue_needed)}</span>\n\t\t\t\t\t</div>\n\t\t\t\t</div>\n\t\t\t</div>\n\n\t\t\t<div class=\"scenarios\">\n\t\t\t\t<h3>Scenario Comparison</h3>\n\t\t\t\t<div class=\"scenario-cards\">\n\t\t\t\t\t{#each scenario_rates as scenario}\n\t\t\t\t\t\t<div class=\"scenario-card\" class:current={scenario.billable_pct === billable_percentage}>\n\t\t\t\t\t\t\t<span class=\"scenario-name\">{scenario.name}</span>\n\t\t\t\t\t\t\t<span class=\"scenario-pct\">{scenario.billable_pct}% billable</span>\n\t\t\t\t\t\t\t<span class=\"scenario-hours\">{scenario.hours.toFixed(0)} hrs/yr</span>\n\t\t\t\t\t\t\t<span class=\"scenario-rate\">{format_rate(scenario.rate)}/hr</span>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t{/each}\n\t\t\t\t</div>\n\t\t\t</div>\n\t\t</div>\n\t</div>\n\n\t<footer class=\"footer\">built with <a href=\"https://tinykit.studio\" target=\"_blank\">tinykit.studio</a></footer>\n</main>\n\n<style>\n\t:global(*) { box-sizing: border-box; }\n\t:global(body) {\n\t\tfont-family: var(--font-family, 'Inter', system-ui, sans-serif);\n\t\tbackground: var(--page-background, #f8fafc);\n\t\tcolor: var(--body-text, #334155);\n\t\tmargin: 0;\n\t\tline-height: 1.5;\n\t}\n\n\tmain {\n\t\tmin-height: 100vh;\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t}\n\n\t.header {\n\t\tbackground: var(--header-background, #ffffff);\n\t\tpadding: 2rem;\n\t\ttext-align: center;\n\t\tborder-bottom: 1px solid var(--border-color, #e2e8f0);\n\t}\n\n\t.header h1 {\n\t\tmargin: 0 0 0.5rem 0;\n\t\tfont-size: 1.75rem;\n\t\tcolor: var(--heading-color, #1e293b);\n\t}\n\n\t.subtitle {\n\t\tmargin: 0;\n\t\tcolor: var(--secondary-text, #64748b);\n\t}\n\n\t.calculator-grid {\n\t\tflex: 1;\n\t\tdisplay: grid;\n\t\tgrid-template-columns: 1fr 1fr;\n\t\tgap: 0;\n\t\tmax-width: 1200px;\n\t\tmargin: 0 auto;\n\t\twidth: 100%;\n\t}\n\n\t.inputs-section {\n\t\tpadding: 2rem;\n\t\tbackground: var(--card-background, #ffffff);\n\t\tborder-right: 1px solid var(--border-color, #e2e8f0);\n\t\toverflow-y: auto;\n\t}\n\n\t.input-group {\n\t\tmargin-bottom: 2rem;\n\t}\n\n\t.input-group h2 {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tfont-size: 0.9375rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #1e293b);\n\t\tmargin: 0 0 1rem 0;\n\t\tpadding-bottom: 0.5rem;\n\t\tborder-bottom: 1px solid var(--border-color, #e2e8f0);\n\t}\n\n\t.input-field {\n\t\tmargin-bottom: 1rem;\n\t}\n\n\t.input-field label {\n\t\tdisplay: block;\n\t\tfont-size: 0.8125rem;\n\t\tfont-weight: 500;\n\t\tcolor: var(--body-text, #334155);\n\t\tmargin-bottom: 0.375rem;\n\t}\n\n\t.input-field input {\n\t\twidth: 100%;\n\t\tpadding: 0.625rem 0.75rem;\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: 8px;\n\t\tfont-size: 1rem;\n\t\tcolor: var(--heading-color, #1e293b);\n\t}\n\n\t.input-field input:focus {\n\t\toutline: none;\n\t\tborder-color: var(--primary-color, #2563eb);\n\t\tbox-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);\n\t}\n\n\t.input-with-prefix, .input-with-suffix {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t}\n\n\t.input-with-prefix span, .input-with-suffix span {\n\t\tcolor: var(--secondary-text, #64748b);\n\t\tfont-weight: 500;\n\t}\n\n\t.input-with-prefix input, .input-with-suffix input {\n\t\tflex: 1;\n\t}\n\n\t.hint {\n\t\tdisplay: block;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--secondary-text, #94a3b8);\n\t\tmargin-top: 0.25rem;\n\t}\n\n\t.expense-grid {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: 1fr 1fr;\n\t\tgap: 0.75rem;\n\t}\n\n\t.input-field.compact {\n\t\tmargin-bottom: 0;\n\t}\n\n\t.expense-total {\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: center;\n\t\tmargin-top: 1rem;\n\t\tpadding: 0.75rem;\n\t\tbackground: var(--input-background, #f8fafc);\n\t\tborder-radius: 8px;\n\t\tfont-size: 0.875rem;\n\t}\n\n\t.expense-total strong {\n\t\tcolor: var(--heading-color, #1e293b);\n\t}\n\n\t.billable-summary {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tmargin-top: 1rem;\n\t\tpadding: 0.75rem;\n\t\tbackground: var(--input-background, #f8fafc);\n\t\tborder-radius: 8px;\n\t\tfont-size: 0.8125rem;\n\t\tcolor: var(--secondary-text, #64748b);\n\t}\n\n\t.billable-summary strong {\n\t\tcolor: var(--primary-color, #2563eb);\n\t}\n\n\t.results-section {\n\t\tpadding: 2rem;\n\t\tbackground: var(--results-background, #f8fafc);\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tgap: 2rem;\n\t}\n\n\t.rate-result {\n\t\ttext-align: center;\n\t\tpadding: 2rem;\n\t\tbackground: var(--primary-color, #1e293b);\n\t\tborder-radius: 16px;\n\t\tcolor: #ffffff;\n\t}\n\n\t.rate-label {\n\t\tfont-size: 0.875rem;\n\t\ttext-transform: uppercase;\n\t\tletter-spacing: 0.1em;\n\t\topacity: 0.8;\n\t\tmargin-bottom: 0.5rem;\n\t}\n\n\t.rate-value {\n\t\tfont-size: 4rem;\n\t\tfont-weight: 700;\n\t\tline-height: 1;\n\t\tmargin-bottom: 1rem;\n\t}\n\n\t.rate-value span {\n\t\tfont-size: 1.5rem;\n\t\topacity: 0.7;\n\t}\n\n\t.rate-recommendation {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tgap: 0.5rem;\n\t\tfont-size: 0.875rem;\n\t\topacity: 0.9;\n\t\tpadding: 0.75rem 1rem;\n\t\tbackground: rgba(255,255,255,0.1);\n\t\tborder-radius: 8px;\n\t}\n\n\t.rate-formats {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(3, 1fr);\n\t\tgap: 1rem;\n\t}\n\n\t.format-card {\n\t\tbackground: var(--card-background, #ffffff);\n\t\tpadding: 1rem;\n\t\tborder-radius: 12px;\n\t\ttext-align: center;\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t}\n\n\t.format-label {\n\t\tdisplay: block;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--secondary-text, #64748b);\n\t\tmargin-bottom: 0.25rem;\n\t}\n\n\t.format-value {\n\t\tfont-size: 1.25rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #1e293b);\n\t}\n\n\t.breakdown {\n\t\tbackground: var(--card-background, #ffffff);\n\t\tpadding: 1.5rem;\n\t\tborder-radius: 12px;\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t}\n\n\t.breakdown h3 {\n\t\tmargin: 0 0 1rem 0;\n\t\tfont-size: 0.9375rem;\n\t\tcolor: var(--heading-color, #1e293b);\n\t}\n\n\t.breakdown-item {\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\tpadding: 0.5rem 0;\n\t\tfont-size: 0.875rem;\n\t\tborder-bottom: 1px solid var(--border-color, #f1f5f9);\n\t}\n\n\t.breakdown-item.total {\n\t\tborder-bottom: none;\n\t\tborder-top: 2px solid var(--border-color, #e2e8f0);\n\t\tmargin-top: 0.5rem;\n\t\tpadding-top: 0.75rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #1e293b);\n\t}\n\n\t.scenarios {\n\t\tbackground: var(--card-background, #ffffff);\n\t\tpadding: 1.5rem;\n\t\tborder-radius: 12px;\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t}\n\n\t.scenarios h3 {\n\t\tmargin: 0 0 1rem 0;\n\t\tfont-size: 0.9375rem;\n\t\tcolor: var(--heading-color, #1e293b);\n\t}\n\n\t.scenario-cards {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(3, 1fr);\n\t\tgap: 0.75rem;\n\t}\n\n\t.scenario-card {\n\t\tpadding: 1rem;\n\t\tbackground: var(--input-background, #f8fafc);\n\t\tborder-radius: 8px;\n\t\ttext-align: center;\n\t\tborder: 2px solid transparent;\n\t}\n\n\t.scenario-card.current {\n\t\tborder-color: var(--primary-color, #2563eb);\n\t\tbackground: var(--primary-light, #eff6ff);\n\t}\n\n\t.scenario-name {\n\t\tdisplay: block;\n\t\tfont-weight: 600;\n\t\tfont-size: 0.875rem;\n\t\tcolor: var(--heading-color, #1e293b);\n\t}\n\n\t.scenario-pct {\n\t\tdisplay: block;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--secondary-text, #64748b);\n\t\tmargin-bottom: 0.5rem;\n\t}\n\n\t.scenario-hours {\n\t\tdisplay: block;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--secondary-text, #94a3b8);\n\t}\n\n\t.scenario-rate {\n\t\tdisplay: block;\n\t\tfont-size: 1.125rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--primary-color, #2563eb);\n\t\tmargin-top: 0.5rem;\n\t}\n\n\t.footer {\n\t\ttext-align: center;\n\t\tpadding: 1.5rem;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--secondary-text, #94a3b8);\n\t\tbackground: var(--card-background, #ffffff);\n\t\tborder-top: 1px solid var(--border-color, #e2e8f0);\n\t}\n\n\t.footer a { color: inherit; }\n\n\t@media (max-width: 900px) {\n\t\t.calculator-grid {\n\t\t\tgrid-template-columns: 1fr;\n\t\t}\n\t\t.inputs-section {\n\t\t\tborder-right: none;\n\t\t\tborder-bottom: 1px solid var(--border-color, #e2e8f0);\n\t\t}\n\t\t.rate-value { font-size: 3rem; }\n\t\t.rate-formats { grid-template-columns: 1fr; }\n\t\t.scenario-cards { grid-template-columns: 1fr; }\n\t}\n</style>",
+	"design": [
+		{
+			"id": "font-family",
+			"name": "Font Family",
+			"css_var": "--font-family",
+			"value": "Inter, system-ui, sans-serif",
+			"type": "font",
+			"description": "Main font"
+		},
+		{
+			"id": "page-background",
+			"name": "Page Background",
+			"css_var": "--page-background",
+			"value": "#f8fafc",
+			"type": "color",
+			"description": "Page background"
+		},
+		{
+			"id": "card-background",
+			"name": "Card Background",
+			"css_var": "--card-background",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Card background"
+		},
+		{
+			"id": "header-background",
+			"name": "Header Background",
+			"css_var": "--header-background",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Header background"
+		},
+		{
+			"id": "results-background",
+			"name": "Results Background",
+			"css_var": "--results-background",
+			"value": "#f8fafc",
+			"type": "color",
+			"description": "Results section background"
+		},
+		{
+			"id": "primary-color",
+			"name": "Primary Color",
+			"css_var": "--primary-color",
+			"value": "#1e293b",
+			"type": "color",
+			"description": "Primary accent color"
+		},
+		{
+			"id": "primary-light",
+			"name": "Primary Light",
+			"css_var": "--primary-light",
+			"value": "#f1f5f9",
+			"type": "color",
+			"description": "Light version of primary"
+		},
+		{
+			"id": "heading-color",
+			"name": "Heading Color",
+			"css_var": "--heading-color",
+			"value": "#1e293b",
+			"type": "color",
+			"description": "Heading color"
+		},
+		{
+			"id": "body-text",
+			"name": "Body Text",
+			"css_var": "--body-text",
+			"value": "#334155",
+			"type": "color",
+			"description": "Body text color"
+		},
+		{
+			"id": "secondary-text",
+			"name": "Secondary Text",
+			"css_var": "--secondary-text",
+			"value": "#64748b",
+			"type": "color",
+			"description": "Secondary text color"
+		},
+		{
+			"id": "border-color",
+			"name": "Border Color",
+			"css_var": "--border-color",
+			"value": "#e2e8f0",
+			"type": "color",
+			"description": "Border color"
+		},
+		{
+			"id": "input-background",
+			"name": "Input Background",
+			"css_var": "--input-background",
+			"value": "#f8fafc",
+			"type": "color",
+			"description": "Input field background"
+		}
+	],
+	"content": [
+		{
+			"id": "title",
+			"name": "Title",
+			"type": "text",
+			"value": "Freelance Rate Calculator",
+			"description": "Page title"
+		},
+		{
+			"id": "subtitle",
+			"name": "Subtitle",
+			"type": "text",
+			"value": "Find your ideal hourly rate based on your salary goals, expenses, and availability",
+			"description": "Page subtitle"
+		},
+		{
+			"id": "income_goals_label",
+			"name": "Income Goals Label",
+			"type": "text",
+			"value": "Income Goals",
+			"description": "Section label for income"
+		},
+		{
+			"id": "expenses_label",
+			"name": "Expenses Label",
+			"type": "text",
+			"value": "Business Expenses (Annual)",
+			"description": "Section label for expenses"
+		},
+		{
+			"id": "taxes_label",
+			"name": "Taxes Label",
+			"type": "text",
+			"value": "Taxes & Retirement",
+			"description": "Section label for taxes"
+		},
+		{
+			"id": "availability_label",
+			"name": "Availability Label",
+			"type": "text",
+			"value": "Availability",
+			"description": "Section label for hours"
+		},
+		{
+			"id": "your_rate_label",
+			"name": "Your Rate Label",
+			"type": "text",
+			"value": "Your Minimum Rate",
+			"description": "Label for rate result"
+		},
+		{
+			"id": "recommendation_text",
+			"name": "Recommendation Text",
+			"type": "text",
+			"value": "Round up and add 10-20% for negotiation room",
+			"description": "Rate recommendation text"
+		}
+	],
+	"data": {}
+}

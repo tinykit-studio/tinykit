@@ -101,11 +101,13 @@ export async function write_code(project_id: string, content: string): Promise<v
 export async function send_prompt(
 	project_id: string,
 	prompt: string,
-	spec_content?: string
+	spec_content?: string,
+	display_prompt?: string
 ): Promise<Response> {
 	// The agent endpoint still needs to be server-side for LLM API keys
 	const body: any = {
 		prompt,
+		display_prompt: display_prompt || prompt,
 		stream: true
 	}
 	if (spec_content) {
@@ -918,7 +920,14 @@ export async function reset_project(project_id: string): Promise<void> {
 		content: [],
 		agent_chat: [],
 		data: {}
-	}, true) // force=true to allow clearing frontend_code
+	})
+}
+
+// Clear agent messages
+export async function clear_messages(project_id: string): Promise<void> {
+	await update_project(project_id, {
+		agent_chat: []
+	})
 }
 
 // Projects API - use project_service

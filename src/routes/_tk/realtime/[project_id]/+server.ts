@@ -4,8 +4,7 @@ import { EventSource } from 'eventsource'
 
 // Polyfill EventSource for Node.js (PocketBase SDK needs it for realtime)
 if (typeof globalThis.EventSource === 'undefined') {
-	// @ts-expect-error - polyfill global
-	globalThis.EventSource = EventSource
+	(globalThis as any).EventSource = EventSource
 }
 
 /**
@@ -37,7 +36,7 @@ export const GET: RequestHandler = async ({ params }) => {
 			controller.enqueue(encoder.encode('event: connected\ndata: {}\n\n'))
 
 			// Subscribe to project changes
-			let unsubscribe: (() => void) | null = null
+			let unsubscribe: (() => Promise<void>) | null = null
 			let ping_interval: ReturnType<typeof setInterval> | null = null
 
 			try {
@@ -76,11 +75,8 @@ export const GET: RequestHandler = async ({ params }) => {
 					ping_interval = null
 				}
 				if (unsubscribe) {
-					try {
-						unsubscribe()
-					} catch {
-						// Ignore unsubscribe errors
-					}
+					// Catch async errors - SSE connection may already be closed
+					unsubscribe()?.catch?.(() => {})
 					unsubscribe = null
 				}
 			}

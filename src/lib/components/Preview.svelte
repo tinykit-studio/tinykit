@@ -13,7 +13,7 @@
   // We need the value to access state.
   // Using relative path to access route-level store
   import { getProjectStore } from "$tinykit/studio/project.svelte";
-  import _ from "lodash-es";
+  import { debounce, isEqual, cloneDeep } from "lodash-es";
   let {
     project_id,
   }: {
@@ -32,38 +32,68 @@
   let is_mounted = false;
 
   let preview_iframe = $state<HTMLIFrameElement | null>(null);
-  let channel: BroadcastChannel | null = null;
   let iframe_loaded = $state(false);
   let compiled_app = $state<string | null>(null);
   let compile_error = $state<string | null>(null);
   let error_type = $state<"compile" | "runtime">("compile");
   let is_compiling = $state(false);
 
+  // Infinite loop detection via heartbeat monitoring
+  let last_heartbeat = $state(0);
+  let heartbeat_check_interval: ReturnType<typeof setInterval> | null = null;
+  let freeze_detected = $state(false); // Prevents auto-recompile after freeze
+  let mounting_in_progress = $state(false); // Track if mount is in progress
+  let mount_started_at = $state(0); // When mount started
+  let last_code_change_at = $state(0); // When code last changed (for grace period)
+  const HEARTBEAT_TIMEOUT = 1200; // Consider frozen if no heartbeat for 1.2s
+  const MOUNT_TIMEOUT = 600; // Very tight timeout during mount (600ms)
+  const CODE_CHANGE_GRACE_PERIOD = 1000; // Grace period after code change before freeze detection
+
   // Use store processing state if available
   let is_processing = $derived(store?.is_processing);
 
+  // Debounced compilation to avoid rapid re-compiles
+  const debounced_compile = debounce(() => {
+    if (!is_processing && active_code && !freeze_detected) {
+      compile_component();
+    }
+  }, 150);
+
   // Watch for code changes
   const active_code = $derived(store?.project?.frontend_code);
+  let last_code_snapshot = ""; // Track code to detect actual changes
   watch(
     () => ({ is_processing, active_code }),
     ({ is_processing, active_code }) => {
       if (is_processing) return;
+      // Clear freeze flag when code actually changes (user edited or snapshot restored)
+      if (active_code && active_code !== last_code_snapshot) {
+        freeze_detected = false;
+        last_code_snapshot = active_code;
+        last_code_change_at = Date.now(); // Track for grace period
+      }
       if (active_code) {
-        compile_component();
+        debounced_compile();
       } else if (!active_code) {
         compiled_app = null;
         compile_error = null;
-        channel?.postMessage({ event: "CLEAR_APP" });
+        post_to_iframe({ event: "CLEAR_APP" });
       }
     },
   );
 
+  // Send message to iframe via postMessage
+  function post_to_iframe(message: any) {
+    if (!preview_iframe?.contentWindow) return;
+    preview_iframe.contentWindow.postMessage(message, "*");
+  }
+
   // Watch for app data changes (debounced to prevent rapid-fire updates)
   let last_sent_data: any;
-  const send_data_update = _.debounce((data: any) => {
-    if (_.isEqual(data, last_sent_data)) return;
-    const cloned_data = _.cloneDeep(data);
-    channel?.postMessage({
+  const send_data_update = debounce((data: any) => {
+    if (isEqual(data, last_sent_data)) return;
+    const cloned_data = cloneDeep(data);
+    post_to_iframe({
       event: "DATA_UPDATED",
       payload: { data: cloned_data },
     });
@@ -80,7 +110,6 @@
   let data_collections = $state<string[]>([]);
 
   let srcdoc = $state("");
-  const broadcast_id = $derived(`crud-preview-${project_id}`);
   let pending_config_update = $state(false);
   let compilation_version = 0;
 
@@ -88,11 +117,6 @@
   watch(
     () => project_id,
     () => {
-      // Close old channel and create new one
-      channel?.close();
-      channel = new BroadcastChannel(broadcast_id);
-      channel.onmessage = handle_channel_message;
-
       // Reset all state
       iframe_loaded = false;
       compiled_app = null;
@@ -126,31 +150,102 @@
     await apply_config_update(new_content, new_design, new_data);
   }
 
-  function handle_channel_message({ data }: MessageEvent) {
-    const { event } = data;
+  function handle_iframe_message(e: MessageEvent) {
+    // Only handle messages from our iframe
+    if (e.source !== preview_iframe?.contentWindow) return;
+    const { event, payload } = e.data || {};
+    if (!event) return;
+
     if (event === "INITIALIZED") {
       iframe_loaded = true;
+      last_heartbeat = Date.now();
       if (compiled_app) {
         send_to_iframe();
       }
+    } else if (event === "HEARTBEAT") {
+      last_heartbeat = Date.now();
+    } else if (event === "PRE_MOUNT") {
+      // Mount is about to start - set tight timeout
+      mounting_in_progress = true;
+      mount_started_at = Date.now();
+    } else if (event === "MOUNTED") {
+      // Component mounted successfully
+      mounting_in_progress = false;
     } else if (event === "SET_ERROR") {
-      compile_error = data.payload?.error || "Unknown runtime error";
+      compile_error = payload?.error || "Unknown runtime error";
       error_type = "runtime";
     } else if (event === "BEGIN") {
       compile_error = null;
     }
   }
 
+  function check_for_freeze() {
+    if (!iframe_loaded) return;
+
+    // Skip freeze detection during grace period after code change (e.g., snapshot restore)
+    if (last_code_change_at > 0) {
+      const grace_elapsed = Date.now() - last_code_change_at;
+      if (grace_elapsed < CODE_CHANGE_GRACE_PERIOD) {
+        return;
+      }
+    }
+
+    // Check mount timeout first (very tight - 600ms)
+    if (mounting_in_progress && mount_started_at > 0) {
+      const mount_elapsed = Date.now() - mount_started_at;
+      if (mount_elapsed > MOUNT_TIMEOUT) {
+        trigger_freeze_recovery("Infinite loop detected during component mount. Fix your code and save to retry.");
+        return;
+      }
+    }
+
+    // Check heartbeat timeout (general freeze detection)
+    if (last_heartbeat > 0) {
+      const elapsed = Date.now() - last_heartbeat;
+      if (elapsed > HEARTBEAT_TIMEOUT) {
+        trigger_freeze_recovery("Infinite loop detected - your code is blocking the main thread. Fix the loop and save to retry.");
+        return;
+      }
+    }
+  }
+
+  function trigger_freeze_recovery(message: string) {
+    compile_error = message;
+    error_type = "runtime";
+    freeze_detected = true; // Prevent auto-recompile until code changes
+    mounting_in_progress = false;
+    mount_started_at = 0;
+    // Clear compiled app so it won't auto-resend after reload
+    compiled_app = null;
+    // Force iframe reload by resetting srcdoc
+    const current_srcdoc = srcdoc;
+    srcdoc = "";
+    iframe_loaded = false;
+    last_heartbeat = 0;
+    // Restore empty iframe shell
+    setTimeout(() => {
+      srcdoc = current_srcdoc;
+    }, 50);
+  }
+
   onMount(() => {
     is_mounted = true;
 
-    channel = new BroadcastChannel(broadcast_id);
-    channel.onmessage = handle_channel_message;
+    // Listen for messages from iframe via postMessage
+    window.addEventListener("message", handle_iframe_message);
+
+    // Start heartbeat monitoring for infinite loop detection (check every 400ms for faster response)
+    heartbeat_check_interval = setInterval(check_for_freeze, 400);
 
     return () => {
       is_mounted = false;
-      channel?.close();
+      window.removeEventListener("message", handle_iframe_message);
       send_data_update.cancel();
+      debounced_compile.cancel();
+      if (heartbeat_check_interval) {
+        clearInterval(heartbeat_check_interval);
+        heartbeat_check_interval = null;
+      }
     };
   });
 
@@ -162,9 +257,9 @@
     new_data_collections: string[],
   ) {
     // Check if fields actually changed
-    const content_changed = !_.isEqual(new_content, content_fields);
-    const design_changed = !_.isEqual(new_design, design_fields);
-    const data_changed = !_.isEqual(new_data_collections, data_collections);
+    const content_changed = !isEqual(new_content, content_fields);
+    const design_changed = !isEqual(new_design, design_fields);
+    const data_changed = !isEqual(new_data_collections, data_collections);
 
     // No srcdoc yet or data collections changed - need full reload
     if (!srcdoc || data_changed) {
@@ -175,7 +270,7 @@
         design_fields = new_design;
         data_collections = new_data_collections;
 
-        srcdoc = dynamic_iframe_srcdoc("", broadcast_id, {
+        srcdoc = dynamic_iframe_srcdoc("", {
           content: content_fields,
           design: design_fields,
           project_id,
@@ -191,7 +286,7 @@
     // Content changes: update global and remount (no full reload)
     if (content_changed) {
       content_fields = new_content;
-      channel?.postMessage({
+      post_to_iframe({
         event: "UPDATE_CONTENT",
         payload: { content: transform_content_fields(new_content, project_id) },
       });
@@ -200,13 +295,13 @@
     // Design changes: inject CSS (no reload needed)
     if (design_changed) {
       design_fields = new_design;
-      channel?.postMessage({
+      post_to_iframe({
         event: "UPDATE_CSS_VARS",
         payload: { css: generate_design_css(new_design) },
       });
       const fonts = extract_web_fonts(new_design);
       if (fonts.length > 0) {
-        channel?.postMessage({
+        post_to_iframe({
           event: "UPDATE_FONTS",
           payload: { fonts },
         });
@@ -215,6 +310,9 @@
   }
 
   async function compile_component() {
+    // Don't compile if we just detected a freeze (user must edit code first)
+    if (freeze_detected) return;
+
     const my_version = ++compilation_version;
 
     is_compiling = true;
@@ -261,12 +359,15 @@
   }
 
   function send_to_iframe() {
-    if (!channel || !compiled_app) return;
-    channel.postMessage({
+    if (!compiled_app) return;
+    // Send project data to pre-populate collections before mount
+    // Clone to avoid DataCloneError from Svelte 5 reactive proxies
+    const project_data = cloneDeep(store?.project?.data || {});
+    post_to_iframe({
       event: "SET_APP",
       payload: {
         componentApp: compiled_app,
-        data: {},
+        data: project_data,
       },
     });
   }
@@ -276,6 +377,7 @@
 <div
   class="preview-container"
   class:is-building={is_compiling || is_processing}
+  style="view-transition-name: preview-{project_id}"
 >
   {#if is_compiling || is_processing}
     <div class="building-border"></div>
@@ -311,6 +413,7 @@
       bind:this={preview_iframe}
       title="Preview"
       {srcdoc}
+      sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"
       class="preview-iframe"
       class:has-error={compile_error}
       class:is-updating={is_compiling}

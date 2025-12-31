@@ -1,0 +1,327 @@
+{
+	"id": "merch-store",
+	"name": "Merch Store",
+	"description": "Simple product showcase with external shop links",
+	"preview": "lucide:shopping-bag",
+	"tags": [
+		"creator",
+		"beginner",
+		"ecommerce"
+	],
+	"kits": [
+		"creator"
+	],
+	"frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet products = $state([])\n\tlet categories = $state([])\n\tlet loading = $state(true)\n\tlet active_category = $state('all')\n\tlet selected_product = $state(null)\n\tlet selected_variant = $state('')\n\n\tdata.products.subscribe(items => {\n\t\tproducts = items.sort((a, b) => {\n\t\t\tif (a.featured && !b.featured) return -1\n\t\t\tif (!a.featured && b.featured) return 1\n\t\t\treturn (a.order || 0) - (b.order || 0)\n\t\t})\n\t\tloading = false\n\t})\n\n\tdata.categories.subscribe(items => {\n\t\tcategories = items.sort((a, b) => (a.order || 0) - (b.order || 0))\n\t})\n\n\tfunction get_filtered_products() {\n\t\tif (active_category === 'all') return products\n\t\treturn products.filter(p => p.category === active_category)\n\t}\n\n\tfunction open_product(product) {\n\t\tselected_product = product\n\t\tselected_variant = product.variants?.split(',')[0]?.trim() || ''\n\t}\n\n\tfunction close_modal() {\n\t\tselected_product = null\n\t\tselected_variant = ''\n\t}\n\n\tfunction handle_backdrop_click(e) {\n\t\tif (e.target === e.currentTarget) close_modal()\n\t}\n</script>\n\n<div class=\"page\">\n\t<header class=\"header\">\n\t\t<div class=\"header-content\">\n\t\t\t{#if content.logo_url}\n\t\t\t\t<img src={content.logo_url} alt={content.store_name} class=\"logo\" />\n\t\t\t{:else}\n\t\t\t\t<h1>{content.store_name}</h1>\n\t\t\t{/if}\n\t\t\t<p class=\"tagline\">{content.tagline}</p>\n\t\t</div>\n\t</header>\n\n\t<main class=\"container\">\n\t\t{#if categories.length > 1}\n\t\t\t<nav class=\"categories\">\n\t\t\t\t<button\n\t\t\t\t\tclass=\"category-btn\"\n\t\t\t\t\tclass:active={active_category === 'all'}\n\t\t\t\t\tonclick={() => active_category = 'all'}\n\t\t\t\t>\n\t\t\t\t\tAll\n\t\t\t\t</button>\n\t\t\t\t{#each categories as cat (cat.id)}\n\t\t\t\t\t<button\n\t\t\t\t\t\tclass=\"category-btn\"\n\t\t\t\t\t\tclass:active={active_category === cat.slug}\n\t\t\t\t\t\tonclick={() => active_category = cat.slug}\n\t\t\t\t\t>\n\t\t\t\t\t\t{cat.name}\n\t\t\t\t\t</button>\n\t\t\t\t{/each}\n\t\t\t</nav>\n\t\t{/if}\n\n\t\t{#if loading}\n\t\t\t<div class=\"loading\">\n\t\t\t\t<Icon icon=\"lucide:loader-2\" width={24} class=\"spin\" />\n\t\t\t\t<span>Loading products...</span>\n\t\t\t</div>\n\t\t{:else}\n\t\t\t<div class=\"products-grid\">\n\t\t\t\t{#each get_filtered_products() as product (product.id)}\n\t\t\t\t\t<button class=\"product-card\" onclick={() => open_product(product)}>\n\t\t\t\t\t\t{#if product.badge}\n\t\t\t\t\t\t\t<span class=\"product-badge\">{product.badge}</span>\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t<div class=\"product-image\">\n\t\t\t\t\t\t\t{#if product.image_url}\n\t\t\t\t\t\t\t\t<img src={product.image_url} alt={product.name} />\n\t\t\t\t\t\t\t{:else}\n\t\t\t\t\t\t\t\t<div class=\"placeholder-image\">\n\t\t\t\t\t\t\t\t\t<Icon icon=\"lucide:image\" width={48} />\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t</div>\n\t\t\t\t\t\t<div class=\"product-info\">\n\t\t\t\t\t\t\t<h3>{product.name}</h3>\n\t\t\t\t\t\t\t<p class=\"product-price\">{product.price}</p>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</button>\n\t\t\t\t{:else}\n\t\t\t\t\t<div class=\"empty-state\">\n\t\t\t\t\t\t<Icon icon=\"lucide:package-x\" width={48} />\n\t\t\t\t\t\t<p>No products in this category yet.</p>\n\t\t\t\t\t</div>\n\t\t\t\t{/each}\n\t\t\t</div>\n\t\t{/if}\n\t</main>\n\n\t{#if selected_product}\n\t\t<div class=\"modal-backdrop\" onclick={handle_backdrop_click}>\n\t\t\t<div class=\"modal\">\n\t\t\t\t<button class=\"close-btn\" onclick={close_modal}>\n\t\t\t\t\t<Icon icon=\"lucide:x\" width={24} />\n\t\t\t\t</button>\n\n\t\t\t\t<div class=\"modal-image\">\n\t\t\t\t\t{#if selected_product.image_url}\n\t\t\t\t\t\t<img src={selected_product.image_url} alt={selected_product.name} />\n\t\t\t\t\t{:else}\n\t\t\t\t\t\t<div class=\"placeholder-image\">\n\t\t\t\t\t\t\t<Icon icon=\"lucide:image\" width={64} />\n\t\t\t\t\t\t</div>\n\t\t\t\t\t{/if}\n\t\t\t\t</div>\n\n\t\t\t\t<div class=\"modal-content\">\n\t\t\t\t\t{#if selected_product.badge}\n\t\t\t\t\t\t<span class=\"modal-badge\">{selected_product.badge}</span>\n\t\t\t\t\t{/if}\n\t\t\t\t\t<h2>{selected_product.name}</h2>\n\t\t\t\t\t<p class=\"modal-price\">{selected_product.price}</p>\n\n\t\t\t\t\t{#if selected_product.description}\n\t\t\t\t\t\t<p class=\"modal-description\">{selected_product.description}</p>\n\t\t\t\t\t{/if}\n\n\t\t\t\t\t{#if selected_product.variants}\n\t\t\t\t\t\t<div class=\"variants\">\n\t\t\t\t\t\t\t<label>Select Option:</label>\n\t\t\t\t\t\t\t<div class=\"variant-options\">\n\t\t\t\t\t\t\t\t{#each selected_product.variants.split(',') as variant}\n\t\t\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\t\t\tclass=\"variant-btn\"\n\t\t\t\t\t\t\t\t\t\tclass:active={selected_variant === variant.trim()}\n\t\t\t\t\t\t\t\t\t\tonclick={() => selected_variant = variant.trim()}\n\t\t\t\t\t\t\t\t\t>\n\t\t\t\t\t\t\t\t\t\t{variant.trim()}\n\t\t\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t{/if}\n\n\t\t\t\t\t<a\n\t\t\t\t\t\thref={selected_product.shop_url || content.default_shop_url}\n\t\t\t\t\t\ttarget=\"_blank\"\n\t\t\t\t\t\trel=\"noopener\"\n\t\t\t\t\t\tclass=\"buy-btn\"\n\t\t\t\t\t>\n\t\t\t\t\t\t<Icon icon=\"lucide:external-link\" width={18} />\n\t\t\t\t\t\t{content.buy_button_text}\n\t\t\t\t\t</a>\n\t\t\t\t</div>\n\t\t\t</div>\n\t\t</div>\n\t{/if}\n\n\t<footer class=\"footer\">\n\t\t{#if content.instagram_url}\n\t\t\t<a href={content.instagram_url} target=\"_blank\" rel=\"noopener\" aria-label=\"Instagram\">\n\t\t\t\t<Icon icon=\"mdi:instagram\" width={24} />\n\t\t\t</a>\n\t\t{/if}\n\t\t{#if content.tiktok_url}\n\t\t\t<a href={content.tiktok_url} target=\"_blank\" rel=\"noopener\" aria-label=\"TikTok\">\n\t\t\t\t<Icon icon=\"ic:baseline-tiktok\" width={24} />\n\t\t\t</a>\n\t\t{/if}\n\t\t{#if content.youtube_url}\n\t\t\t<a href={content.youtube_url} target=\"_blank\" rel=\"noopener\" aria-label=\"YouTube\">\n\t\t\t\t<Icon icon=\"mdi:youtube\" width={24} />\n\t\t\t</a>\n\t\t{/if}\n\t\t<p>built with <a href=\"https://tinykit.studio\" target=\"_blank\">tinykit.studio</a></p>\n\t</footer>\n</div>\n\n<style>\n\t.page {\n\t\tmin-height: 100vh;\n\t\tbackground: var(--page-background, #ffffff);\n\t\tfont-family: var(--body-font, 'Inter', system-ui, sans-serif);\n\t\tcolor: var(--body-text-color, #1a1a1a);\n\t}\n\n\t.header {\n\t\tbackground: var(--header-background, #000000);\n\t\tpadding: 3rem 2rem;\n\t\ttext-align: center;\n\t}\n\n\t.header-content {\n\t\tmax-width: 600px;\n\t\tmargin: 0 auto;\n\t}\n\n\t.logo {\n\t\tmax-width: 200px;\n\t\theight: auto;\n\t\tmargin-bottom: 1rem;\n\t}\n\n\t.header h1 {\n\t\tmargin: 0;\n\t\tfont-size: 2rem;\n\t\tfont-weight: 800;\n\t\tcolor: var(--header-text-color, #ffffff);\n\t\tletter-spacing: -0.02em;\n\t}\n\n\t.tagline {\n\t\tmargin: 0.5rem 0 0;\n\t\tcolor: var(--header-muted-color, rgba(255, 255, 255, 0.7));\n\t\tfont-size: 1rem;\n\t}\n\n\t.container {\n\t\tmax-width: 1200px;\n\t\tmargin: 0 auto;\n\t\tpadding: 2rem;\n\t}\n\n\t.categories {\n\t\tdisplay: flex;\n\t\tgap: 0.5rem;\n\t\tjustify-content: center;\n\t\tflex-wrap: wrap;\n\t\tmargin-bottom: 2rem;\n\t}\n\n\t.category-btn {\n\t\tbackground: var(--category-bg, #f1f5f9);\n\t\tborder: none;\n\t\tpadding: 0.5rem 1.25rem;\n\t\tborder-radius: 50px;\n\t\tfont-size: 0.9rem;\n\t\tfont-weight: 500;\n\t\tcolor: var(--secondary-text-color, #64748b);\n\t\tcursor: pointer;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.category-btn:hover {\n\t\tbackground: var(--category-hover-bg, #e2e8f0);\n\t}\n\n\t.category-btn.active {\n\t\tbackground: var(--accent-color, #000000);\n\t\tcolor: #ffffff;\n\t}\n\n\t.products-grid {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(auto-fill, minmax(250px, 1fr));\n\t\tgap: 1.5rem;\n\t}\n\n\t.product-card {\n\t\tbackground: var(--card-background, #ffffff);\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: var(--card-radius, 12px);\n\t\toverflow: hidden;\n\t\tcursor: pointer;\n\t\ttransition: all 0.2s;\n\t\tposition: relative;\n\t\ttext-align: left;\n\t\tpadding: 0;\n\t}\n\n\t.product-card:hover {\n\t\ttransform: translateY(-4px);\n\t\tbox-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);\n\t}\n\n\t.product-badge {\n\t\tposition: absolute;\n\t\ttop: 1rem;\n\t\tleft: 1rem;\n\t\tbackground: var(--accent-color, #000000);\n\t\tcolor: #ffffff;\n\t\tpadding: 0.25rem 0.75rem;\n\t\tborder-radius: 4px;\n\t\tfont-size: 0.75rem;\n\t\tfont-weight: 700;\n\t\ttext-transform: uppercase;\n\t\tz-index: 1;\n\t}\n\n\t.product-image {\n\t\taspect-ratio: 1;\n\t\tbackground: var(--image-background, #f8f9fa);\n\t\toverflow: hidden;\n\t}\n\n\t.product-image img {\n\t\twidth: 100%;\n\t\theight: 100%;\n\t\tobject-fit: cover;\n\t\ttransition: transform 0.3s;\n\t}\n\n\t.product-card:hover .product-image img {\n\t\ttransform: scale(1.05);\n\t}\n\n\t.placeholder-image {\n\t\twidth: 100%;\n\t\theight: 100%;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tcolor: var(--secondary-text-color, #94a3b8);\n\t}\n\n\t.product-info {\n\t\tpadding: 1.25rem;\n\t}\n\n\t.product-info h3 {\n\t\tmargin: 0 0 0.5rem 0;\n\t\tfont-size: 1rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #1a1a1a);\n\t}\n\n\t.product-price {\n\t\tmargin: 0;\n\t\tfont-size: 1.1rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--accent-color, #000000);\n\t}\n\n\t.empty-state {\n\t\tgrid-column: 1 / -1;\n\t\ttext-align: center;\n\t\tpadding: 4rem 2rem;\n\t\tcolor: var(--secondary-text-color, #64748b);\n\t}\n\n\t.loading {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tgap: 0.75rem;\n\t\tpadding: 4rem 2rem;\n\t\tcolor: var(--secondary-text-color, #64748b);\n\t}\n\n\t:global(.spin) {\n\t\tanimation: spin 1s linear infinite;\n\t}\n\n\t@keyframes spin {\n\t\tfrom { transform: rotate(0deg); }\n\t\tto { transform: rotate(360deg); }\n\t}\n\n\t.modal-backdrop {\n\t\tposition: fixed;\n\t\tinset: 0;\n\t\tbackground: rgba(0, 0, 0, 0.7);\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tpadding: 1rem;\n\t\tz-index: 100;\n\t}\n\n\t.modal {\n\t\tbackground: var(--card-background, #ffffff);\n\t\tborder-radius: var(--card-radius, 12px);\n\t\tmax-width: 500px;\n\t\twidth: 100%;\n\t\tmax-height: 90vh;\n\t\toverflow-y: auto;\n\t\tposition: relative;\n\t}\n\n\t.close-btn {\n\t\tposition: absolute;\n\t\ttop: 1rem;\n\t\tright: 1rem;\n\t\tbackground: rgba(0, 0, 0, 0.5);\n\t\tborder: none;\n\t\tcolor: #ffffff;\n\t\twidth: 40px;\n\t\theight: 40px;\n\t\tborder-radius: 50%;\n\t\tcursor: pointer;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tz-index: 10;\n\t\ttransition: background 0.2s;\n\t}\n\n\t.close-btn:hover {\n\t\tbackground: rgba(0, 0, 0, 0.7);\n\t}\n\n\t.modal-image {\n\t\taspect-ratio: 1;\n\t\tbackground: var(--image-background, #f8f9fa);\n\t}\n\n\t.modal-image img {\n\t\twidth: 100%;\n\t\theight: 100%;\n\t\tobject-fit: cover;\n\t}\n\n\t.modal-content {\n\t\tpadding: 1.5rem;\n\t}\n\n\t.modal-badge {\n\t\tdisplay: inline-block;\n\t\tbackground: var(--accent-color, #000000);\n\t\tcolor: #ffffff;\n\t\tpadding: 0.25rem 0.75rem;\n\t\tborder-radius: 4px;\n\t\tfont-size: 0.75rem;\n\t\tfont-weight: 700;\n\t\ttext-transform: uppercase;\n\t\tmargin-bottom: 0.75rem;\n\t}\n\n\t.modal-content h2 {\n\t\tmargin: 0 0 0.5rem 0;\n\t\tfont-size: 1.5rem;\n\t\tcolor: var(--heading-color, #1a1a1a);\n\t}\n\n\t.modal-price {\n\t\tmargin: 0 0 1rem 0;\n\t\tfont-size: 1.5rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--accent-color, #000000);\n\t}\n\n\t.modal-description {\n\t\tmargin: 0 0 1.5rem 0;\n\t\tcolor: var(--secondary-text-color, #64748b);\n\t\tline-height: 1.6;\n\t}\n\n\t.variants {\n\t\tmargin-bottom: 1.5rem;\n\t}\n\n\t.variants label {\n\t\tdisplay: block;\n\t\tfont-size: 0.85rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #1a1a1a);\n\t\tmargin-bottom: 0.5rem;\n\t}\n\n\t.variant-options {\n\t\tdisplay: flex;\n\t\tgap: 0.5rem;\n\t\tflex-wrap: wrap;\n\t}\n\n\t.variant-btn {\n\t\tbackground: var(--category-bg, #f1f5f9);\n\t\tborder: 2px solid transparent;\n\t\tpadding: 0.5rem 1rem;\n\t\tborder-radius: 6px;\n\t\tfont-size: 0.9rem;\n\t\tcursor: pointer;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.variant-btn:hover {\n\t\tborder-color: var(--accent-color, #000000);\n\t}\n\n\t.variant-btn.active {\n\t\tbackground: var(--accent-color, #000000);\n\t\tcolor: #ffffff;\n\t\tborder-color: var(--accent-color, #000000);\n\t}\n\n\t.buy-btn {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tgap: 0.5rem;\n\t\twidth: 100%;\n\t\tpadding: 1rem;\n\t\tbackground: var(--accent-color, #000000);\n\t\tcolor: #ffffff;\n\t\tborder: none;\n\t\tborder-radius: 8px;\n\t\tfont-size: 1rem;\n\t\tfont-weight: 600;\n\t\ttext-decoration: none;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.buy-btn:hover {\n\t\tfilter: brightness(1.1);\n\t\ttransform: translateY(-2px);\n\t}\n\n\t.footer {\n\t\ttext-align: center;\n\t\tpadding: 3rem 2rem;\n\t\tbackground: var(--header-background, #000000);\n\t}\n\n\t.footer a {\n\t\tcolor: var(--header-muted-color, rgba(255, 255, 255, 0.7));\n\t\ttext-decoration: none;\n\t\tmargin: 0 0.5rem;\n\t\ttransition: color 0.2s;\n\t}\n\n\t.footer a:hover {\n\t\tcolor: var(--header-text-color, #ffffff);\n\t}\n\n\t.footer p {\n\t\tmargin: 1.5rem 0 0;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--header-muted-color, rgba(255, 255, 255, 0.5));\n\t}\n\n\t@media (max-width: 600px) {\n\t\t.header {\n\t\t\tpadding: 2rem 1rem;\n\t\t}\n\n\t\t.container {\n\t\t\tpadding: 1.5rem 1rem;\n\t\t}\n\n\t\t.products-grid {\n\t\t\tgrid-template-columns: repeat(2, 1fr);\n\t\t\tgap: 1rem;\n\t\t}\n\n\t\t.product-info {\n\t\t\tpadding: 1rem;\n\t\t}\n\n\t\t.product-info h3 {\n\t\t\tfont-size: 0.9rem;\n\t\t}\n\t}\n</style>",
+	"design": [
+		{
+			"id": "body-font",
+			"name": "Font",
+			"css_var": "--body-font",
+			"value": "'Inter', system-ui, sans-serif",
+			"type": "font",
+			"description": "Main font for all text"
+		},
+		{
+			"id": "page-background",
+			"name": "Page Background",
+			"css_var": "--page-background",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Page background color"
+		},
+		{
+			"id": "header-background",
+			"name": "Header Background",
+			"css_var": "--header-background",
+			"value": "#000000",
+			"type": "color",
+			"description": "Header/footer background"
+		},
+		{
+			"id": "header-text-color",
+			"name": "Header Text",
+			"css_var": "--header-text-color",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Header text color"
+		},
+		{
+			"id": "accent-color",
+			"name": "Accent Color",
+			"css_var": "--accent-color",
+			"value": "#000000",
+			"type": "color",
+			"description": "Primary accent color"
+		},
+		{
+			"id": "heading-color",
+			"name": "Heading Color",
+			"css_var": "--heading-color",
+			"value": "#1a1a1a",
+			"type": "color",
+			"description": "Heading text color"
+		},
+		{
+			"id": "body-text-color",
+			"name": "Body Text",
+			"css_var": "--body-text-color",
+			"value": "#1a1a1a",
+			"type": "color",
+			"description": "Main text color"
+		},
+		{
+			"id": "secondary-text-color",
+			"name": "Secondary Text",
+			"css_var": "--secondary-text-color",
+			"value": "#64748b",
+			"type": "color",
+			"description": "Muted text color"
+		},
+		{
+			"id": "border-color",
+			"name": "Border Color",
+			"css_var": "--border-color",
+			"value": "#e2e8f0",
+			"type": "color",
+			"description": "Border color"
+		},
+		{
+			"id": "card-radius",
+			"name": "Card Radius",
+			"css_var": "--card-radius",
+			"value": "12px",
+			"type": "radius",
+			"description": "Roundness of cards"
+		}
+	],
+	"content": [
+		{
+			"id": "store_name",
+			"name": "Store Name",
+			"type": "text",
+			"value": "CREATOR MERCH",
+			"description": "Your store name"
+		},
+		{
+			"id": "logo_url",
+			"name": "Logo URL",
+			"type": "text",
+			"value": "",
+			"description": "Logo image URL (optional)"
+		},
+		{
+			"id": "tagline",
+			"name": "Tagline",
+			"type": "text",
+			"value": "Official merch for the community",
+			"description": "Store tagline"
+		},
+		{
+			"id": "buy_button_text",
+			"name": "Buy Button Text",
+			"type": "text",
+			"value": "Buy Now",
+			"description": "Text for buy button"
+		},
+		{
+			"id": "default_shop_url",
+			"name": "Default Shop URL",
+			"type": "text",
+			"value": "https://example.com/shop",
+			"description": "Default link for products without specific URLs"
+		},
+		{
+			"id": "instagram_url",
+			"name": "Instagram URL",
+			"type": "text",
+			"value": "https://instagram.com",
+			"description": "Instagram link"
+		},
+		{
+			"id": "tiktok_url",
+			"name": "TikTok URL",
+			"type": "text",
+			"value": "",
+			"description": "TikTok link"
+		},
+		{
+			"id": "youtube_url",
+			"name": "YouTube URL",
+			"type": "text",
+			"value": "",
+			"description": "YouTube link"
+		}
+	],
+	"data": {
+		"categories": {
+			"schema": [
+				{
+					"name": "id",
+					"type": "text"
+				},
+				{
+					"name": "name",
+					"type": "text"
+				},
+				{
+					"name": "slug",
+					"type": "text"
+				},
+				{
+					"name": "order",
+					"type": "number"
+				}
+			],
+			"records": [
+				{
+					"id": "cat1",
+					"name": "Apparel",
+					"slug": "apparel",
+					"order": 1
+				},
+				{
+					"id": "cat2",
+					"name": "Accessories",
+					"slug": "accessories",
+					"order": 2
+				},
+				{
+					"id": "cat3",
+					"name": "Stickers",
+					"slug": "stickers",
+					"order": 3
+				}
+			],
+			"icon": "lucide:tag"
+		},
+		"products": {
+			"schema": [
+				{
+					"name": "id",
+					"type": "text"
+				},
+				{
+					"name": "name",
+					"type": "text"
+				},
+				{
+					"name": "price",
+					"type": "text"
+				},
+				{
+					"name": "image_url",
+					"type": "text"
+				},
+				{
+					"name": "description",
+					"type": "text"
+				},
+				{
+					"name": "category",
+					"type": "text"
+				},
+				{
+					"name": "variants",
+					"type": "text"
+				},
+				{
+					"name": "badge",
+					"type": "text"
+				},
+				{
+					"name": "shop_url",
+					"type": "text"
+				},
+				{
+					"name": "featured",
+					"type": "boolean"
+				},
+				{
+					"name": "order",
+					"type": "number"
+				}
+			],
+			"records": [
+				{
+					"id": "p1",
+					"name": "Classic Logo Tee",
+					"price": "$29",
+					"image_url": "https://placehold.co/500x500/374151/ffffff?text=Tee",
+					"description": "Premium cotton t-shirt with our signature logo. Comfortable, durable, and looks great.",
+					"category": "apparel",
+					"variants": "S, M, L, XL, 2XL",
+					"badge": "Bestseller",
+					"shop_url": "",
+					"featured": true,
+					"order": 1
+				},
+				{
+					"id": "p2",
+					"name": "Cozy Hoodie",
+					"price": "$59",
+					"image_url": "https://placehold.co/500x500/1e293b/ffffff?text=Hoodie",
+					"description": "Super soft hoodie perfect for chilly days. Features embroidered logo on chest.",
+					"category": "apparel",
+					"variants": "S, M, L, XL",
+					"badge": "",
+					"shop_url": "",
+					"featured": false,
+					"order": 2
+				},
+				{
+					"id": "p3",
+					"name": "Dad Cap",
+					"price": "$24",
+					"image_url": "https://placehold.co/500x500/1f2937/ffffff?text=Cap",
+					"description": "Classic dad cap with adjustable strap. One size fits all.",
+					"category": "accessories",
+					"variants": "Black, White, Navy",
+					"badge": "New",
+					"shop_url": "",
+					"featured": true,
+					"order": 3
+				},
+				{
+					"id": "p4",
+					"name": "Sticker Pack",
+					"price": "$12",
+					"image_url": "https://placehold.co/500x500/7c3aed/ffffff?text=Stickers",
+					"description": "Pack of 10 die-cut vinyl stickers. Waterproof and durable.",
+					"category": "stickers",
+					"variants": "",
+					"badge": "",
+					"shop_url": "",
+					"featured": false,
+					"order": 4
+				},
+				{
+					"id": "p5",
+					"name": "Enamel Pin Set",
+					"price": "$18",
+					"image_url": "https://placehold.co/500x500/ec4899/ffffff?text=Pins",
+					"description": "Set of 3 high-quality enamel pins with secure rubber backs.",
+					"category": "accessories",
+					"variants": "",
+					"badge": "",
+					"shop_url": "",
+					"featured": false,
+					"order": 5
+				},
+				{
+					"id": "p6",
+					"name": "Oversized Tee",
+					"price": "$34",
+					"image_url": "https://placehold.co/500x500/475569/ffffff?text=Tee",
+					"description": "Trendy oversized fit with back print design. Drop shoulders.",
+					"category": "apparel",
+					"variants": "M, L, XL",
+					"badge": "Limited",
+					"shop_url": "",
+					"featured": false,
+					"order": 6
+				}
+			],
+			"icon": "lucide:box"
+		}
+	}
+}

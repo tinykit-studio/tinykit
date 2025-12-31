@@ -7,6 +7,10 @@ export const GET: RequestHandler = async ({ params }) => {
 	try {
 		const project = await getProject(params.id)
 
+		if (!project) {
+			return json({ error: 'Project not found' }, { status: 404 })
+		}
+
 		// Return exportable project data
 		return json({
 			name: project.name,

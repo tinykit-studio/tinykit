@@ -1,0 +1,404 @@
+{
+	"id": "media-kit",
+	"name": "Media Kit",
+	"description": "Professional press kit with bio, stats, and brand assets",
+	"preview": "lucide:badge-check",
+	"tags": [
+		"creator",
+		"intermediate",
+		"portfolio"
+	],
+	"kits": [
+		"creator"
+	],
+	"frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet stats = $state([])\n\tlet demographics = $state([])\n\tlet brands = $state([])\n\tlet packages = $state([])\n\tlet loading = $state(true)\n\n\tdata.stats.subscribe(items => {\n\t\tstats = items.sort((a, b) => (a.order || 0) - (b.order || 0))\n\t})\n\n\tdata.demographics.subscribe(items => {\n\t\tdemographics = items\n\t})\n\n\tdata.brands.subscribe(items => {\n\t\tbrands = items.sort((a, b) => (a.order || 0) - (b.order || 0))\n\t})\n\n\tdata.packages.subscribe(items => {\n\t\tpackages = items.sort((a, b) => (a.order || 0) - (b.order || 0))\n\t\tloading = false\n\t})\n\n\tfunction format_number(num) {\n\t\tif (num >= 1000000) return (num / 1000000).toFixed(1) + 'M'\n\t\tif (num >= 1000) return (num / 1000).toFixed(1) + 'K'\n\t\treturn num.toString()\n\t}\n</script>\n\n<div class=\"page\">\n\t<header class=\"hero\">\n\t\t<div class=\"hero-content\">\n\t\t\t<img class=\"avatar\" src={content.photo_url} alt={content.creator_name} />\n\t\t\t<div class=\"hero-text\">\n\t\t\t\t<h1>{content.creator_name}</h1>\n\t\t\t\t<p class=\"handle\">{content.handle}</p>\n\t\t\t\t<p class=\"tagline\">{content.tagline}</p>\n\t\t\t</div>\n\t\t</div>\n\t</header>\n\n\t<main class=\"container\">\n\t\t<section class=\"section\">\n\t\t\t<h2><Icon icon=\"lucide:user\" width={20} /> About Me</h2>\n\t\t\t<p class=\"bio\">{content.bio}</p>\n\t\t</section>\n\n\t\t<section class=\"section\">\n\t\t\t<h2><Icon icon=\"lucide:bar-chart-3\" width={20} /> Platform Stats</h2>\n\t\t\t<div class=\"stats-grid\">\n\t\t\t\t{#each stats as stat (stat.id)}\n\t\t\t\t\t<div class=\"stat-card\">\n\t\t\t\t\t\t{#if stat.icon}\n\t\t\t\t\t\t\t<Icon icon={stat.icon} width={24} class=\"stat-icon\" />\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t<span class=\"stat-value\">{format_number(stat.value)}</span>\n\t\t\t\t\t\t<span class=\"stat-label\">{stat.label}</span>\n\t\t\t\t\t\t{#if stat.platform}\n\t\t\t\t\t\t\t<span class=\"stat-platform\">{stat.platform}</span>\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t</div>\n\t\t\t\t{/each}\n\t\t\t</div>\n\t\t</section>\n\n\t\t<section class=\"section\">\n\t\t\t<h2><Icon icon=\"lucide:users\" width={20} /> Audience Demographics</h2>\n\t\t\t<div class=\"demographics\">\n\t\t\t\t{#each demographics as demo (demo.id)}\n\t\t\t\t\t<div class=\"demo-item\">\n\t\t\t\t\t\t<div class=\"demo-header\">\n\t\t\t\t\t\t\t<span class=\"demo-category\">{demo.category}</span>\n\t\t\t\t\t\t\t<span class=\"demo-value\">{demo.value}</span>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t\t{#if demo.percentage}\n\t\t\t\t\t\t\t<div class=\"demo-bar\">\n\t\t\t\t\t\t\t\t<div class=\"demo-fill\" style=\"width: {demo.percentage}%\"></div>\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t</div>\n\t\t\t\t{/each}\n\t\t\t</div>\n\t\t</section>\n\n\t\t<section class=\"section\">\n\t\t\t<h2><Icon icon=\"lucide:handshake\" width={20} /> Past Collaborations</h2>\n\t\t\t<div class=\"brands-grid\">\n\t\t\t\t{#each brands as brand (brand.id)}\n\t\t\t\t\t<div class=\"brand-card\">\n\t\t\t\t\t\t{#if brand.logo_url}\n\t\t\t\t\t\t\t<img src={brand.logo_url} alt={brand.name} class=\"brand-logo\" />\n\t\t\t\t\t\t{:else}\n\t\t\t\t\t\t\t<span class=\"brand-name\">{brand.name}</span>\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t</div>\n\t\t\t\t{/each}\n\t\t\t</div>\n\t\t</section>\n\n\t\t<section class=\"section\">\n\t\t\t<h2><Icon icon=\"lucide:package\" width={20} /> Pricing Packages</h2>\n\t\t\t<div class=\"packages-grid\">\n\t\t\t\t{#each packages as pkg (pkg.id)}\n\t\t\t\t\t<div class=\"package-card\" class:featured={pkg.featured}>\n\t\t\t\t\t\t{#if pkg.featured}\n\t\t\t\t\t\t\t<span class=\"featured-badge\">Most Popular</span>\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t<h3>{pkg.name}</h3>\n\t\t\t\t\t\t<p class=\"package-price\">{pkg.price}</p>\n\t\t\t\t\t\t<p class=\"package-description\">{pkg.description}</p>\n\t\t\t\t\t\t{#if pkg.includes}\n\t\t\t\t\t\t\t<ul class=\"package-includes\">\n\t\t\t\t\t\t\t\t{#each pkg.includes.split(',') as item}\n\t\t\t\t\t\t\t\t\t<li><Icon icon=\"lucide:check\" width={14} /> {item.trim()}</li>\n\t\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t\t</ul>\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t</div>\n\t\t\t\t{/each}\n\t\t\t</div>\n\t\t</section>\n\n\t\t<section class=\"section contact-section\">\n\t\t\t<h2><Icon icon=\"lucide:mail\" width={20} /> Let's Work Together</h2>\n\t\t\t<p class=\"contact-text\">{content.contact_cta}</p>\n\t\t\t<div class=\"contact-buttons\">\n\t\t\t\t<a href=\"mailto:{content.email}\" class=\"btn primary\">\n\t\t\t\t\t<Icon icon=\"lucide:mail\" width={18} /> Email Me\n\t\t\t\t</a>\n\t\t\t\t{#if content.calendar_url}\n\t\t\t\t\t<a href={content.calendar_url} target=\"_blank\" rel=\"noopener\" class=\"btn secondary\">\n\t\t\t\t\t\t<Icon icon=\"lucide:calendar\" width={18} /> Book a Call\n\t\t\t\t\t</a>\n\t\t\t\t{/if}\n\t\t\t</div>\n\t\t</section>\n\t</main>\n\n\t<footer class=\"footer\">built with <a href=\"https://tinykit.studio\" target=\"_blank\">tinykit.studio</a></footer>\n</div>\n\n<style>\n\t.page {\n\t\tmin-height: 100vh;\n\t\tbackground: var(--page-background, #0f0f0f);\n\t\tfont-family: var(--body-font, 'Inter', system-ui, sans-serif);\n\t\tcolor: var(--body-text-color, #ffffff);\n\t}\n\n\t.hero {\n\t\tbackground: linear-gradient(135deg, var(--gradient-start, #667eea) 0%, var(--gradient-end, #764ba2) 100%);\n\t\tpadding: 4rem 2rem;\n\t}\n\n\t.hero-content {\n\t\tmax-width: 800px;\n\t\tmargin: 0 auto;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 2rem;\n\t\tflex-wrap: wrap;\n\t\tjustify-content: center;\n\t}\n\n\t.avatar {\n\t\twidth: 150px;\n\t\theight: 150px;\n\t\tborder-radius: 50%;\n\t\tobject-fit: cover;\n\t\tborder: 4px solid rgba(255, 255, 255, 0.3);\n\t\tbox-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);\n\t}\n\n\t.hero-text {\n\t\ttext-align: center;\n\t}\n\n\t.hero h1 {\n\t\tmargin: 0;\n\t\tfont-size: 2.5rem;\n\t\tfont-weight: 800;\n\t\tcolor: #ffffff;\n\t}\n\n\t.handle {\n\t\tmargin: 0.5rem 0;\n\t\tfont-size: 1.1rem;\n\t\tcolor: rgba(255, 255, 255, 0.8);\n\t}\n\n\t.tagline {\n\t\tmargin: 0;\n\t\tfont-size: 1.2rem;\n\t\tcolor: rgba(255, 255, 255, 0.9);\n\t\tfont-weight: 500;\n\t}\n\n\t.container {\n\t\tmax-width: 900px;\n\t\tmargin: 0 auto;\n\t\tpadding: 2rem;\n\t}\n\n\t.section {\n\t\tmargin-bottom: 3rem;\n\t}\n\n\t.section h2 {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tfont-size: 1.25rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--heading-color, #ffffff);\n\t\tmargin: 0 0 1.5rem 0;\n\t\tpadding-bottom: 0.75rem;\n\t\tborder-bottom: 2px solid var(--accent-color, #667eea);\n\t}\n\n\t.bio {\n\t\tline-height: 1.8;\n\t\tcolor: var(--secondary-text-color, #a0a0a0);\n\t\tfont-size: 1.05rem;\n\t}\n\n\t.stats-grid {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(auto-fit, minmax(140px, 1fr));\n\t\tgap: 1rem;\n\t}\n\n\t.stat-card {\n\t\tbackground: var(--card-background, #1a1a1a);\n\t\tborder: 1px solid var(--border-color, #2a2a2a);\n\t\tborder-radius: var(--card-radius, 12px);\n\t\tpadding: 1.5rem;\n\t\ttext-align: center;\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t}\n\n\t.stat-card :global(.stat-icon) {\n\t\tcolor: var(--accent-color, #667eea);\n\t}\n\n\t.stat-value {\n\t\tfont-size: 2rem;\n\t\tfont-weight: 800;\n\t\tcolor: var(--heading-color, #ffffff);\n\t}\n\n\t.stat-label {\n\t\tfont-size: 0.85rem;\n\t\tcolor: var(--secondary-text-color, #a0a0a0);\n\t\ttext-transform: uppercase;\n\t\tletter-spacing: 0.05em;\n\t}\n\n\t.stat-platform {\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--accent-color, #667eea);\n\t\tbackground: rgba(102, 126, 234, 0.1);\n\t\tpadding: 0.25rem 0.5rem;\n\t\tborder-radius: 4px;\n\t}\n\n\t.demographics {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tgap: 1rem;\n\t}\n\n\t.demo-item {\n\t\tbackground: var(--card-background, #1a1a1a);\n\t\tborder: 1px solid var(--border-color, #2a2a2a);\n\t\tborder-radius: var(--card-radius, 12px);\n\t\tpadding: 1rem 1.25rem;\n\t}\n\n\t.demo-header {\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\tmargin-bottom: 0.5rem;\n\t}\n\n\t.demo-category {\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #ffffff);\n\t}\n\n\t.demo-value {\n\t\tcolor: var(--accent-color, #667eea);\n\t\tfont-weight: 600;\n\t}\n\n\t.demo-bar {\n\t\theight: 6px;\n\t\tbackground: var(--border-color, #2a2a2a);\n\t\tborder-radius: 3px;\n\t\toverflow: hidden;\n\t}\n\n\t.demo-fill {\n\t\theight: 100%;\n\t\tbackground: linear-gradient(90deg, var(--gradient-start, #667eea), var(--gradient-end, #764ba2));\n\t\tborder-radius: 3px;\n\t}\n\n\t.brands-grid {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(auto-fit, minmax(120px, 1fr));\n\t\tgap: 1rem;\n\t}\n\n\t.brand-card {\n\t\tbackground: var(--card-background, #1a1a1a);\n\t\tborder: 1px solid var(--border-color, #2a2a2a);\n\t\tborder-radius: var(--card-radius, 12px);\n\t\tpadding: 1.5rem;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tmin-height: 80px;\n\t}\n\n\t.brand-logo {\n\t\tmax-width: 80px;\n\t\tmax-height: 40px;\n\t\tobject-fit: contain;\n\t\tfilter: grayscale(100%) brightness(2);\n\t\topacity: 0.7;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.brand-card:hover .brand-logo {\n\t\tfilter: none;\n\t\topacity: 1;\n\t}\n\n\t.brand-name {\n\t\tfont-weight: 600;\n\t\tcolor: var(--secondary-text-color, #a0a0a0);\n\t}\n\n\t.packages-grid {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(auto-fit, minmax(250px, 1fr));\n\t\tgap: 1.5rem;\n\t}\n\n\t.package-card {\n\t\tbackground: var(--card-background, #1a1a1a);\n\t\tborder: 1px solid var(--border-color, #2a2a2a);\n\t\tborder-radius: var(--card-radius, 12px);\n\t\tpadding: 1.5rem;\n\t\tposition: relative;\n\t}\n\n\t.package-card.featured {\n\t\tborder-color: var(--accent-color, #667eea);\n\t\tbox-shadow: 0 0 20px rgba(102, 126, 234, 0.2);\n\t}\n\n\t.featured-badge {\n\t\tposition: absolute;\n\t\ttop: -10px;\n\t\tleft: 50%;\n\t\ttransform: translateX(-50%);\n\t\tbackground: linear-gradient(90deg, var(--gradient-start, #667eea), var(--gradient-end, #764ba2));\n\t\tcolor: #ffffff;\n\t\tfont-size: 0.7rem;\n\t\tfont-weight: 700;\n\t\ttext-transform: uppercase;\n\t\tpadding: 0.25rem 0.75rem;\n\t\tborder-radius: 20px;\n\t}\n\n\t.package-card h3 {\n\t\tmargin: 0 0 0.5rem 0;\n\t\tfont-size: 1.1rem;\n\t\tcolor: var(--heading-color, #ffffff);\n\t}\n\n\t.package-price {\n\t\tmargin: 0 0 1rem 0;\n\t\tfont-size: 1.75rem;\n\t\tfont-weight: 800;\n\t\tcolor: var(--accent-color, #667eea);\n\t}\n\n\t.package-description {\n\t\tmargin: 0 0 1rem 0;\n\t\tcolor: var(--secondary-text-color, #a0a0a0);\n\t\tfont-size: 0.9rem;\n\t\tline-height: 1.5;\n\t}\n\n\t.package-includes {\n\t\tlist-style: none;\n\t\tpadding: 0;\n\t\tmargin: 0;\n\t}\n\n\t.package-includes li {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tpadding: 0.4rem 0;\n\t\tfont-size: 0.85rem;\n\t\tcolor: var(--body-text-color, #ffffff);\n\t}\n\n\t.package-includes li :global(svg) {\n\t\tcolor: var(--success-color, #22c55e);\n\t}\n\n\t.contact-section {\n\t\ttext-align: center;\n\t\tpadding: 2rem;\n\t\tbackground: var(--card-background, #1a1a1a);\n\t\tborder-radius: var(--card-radius, 12px);\n\t\tborder: 1px solid var(--border-color, #2a2a2a);\n\t}\n\n\t.contact-text {\n\t\tcolor: var(--secondary-text-color, #a0a0a0);\n\t\tmargin-bottom: 1.5rem;\n\t}\n\n\t.contact-buttons {\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t\tjustify-content: center;\n\t\tflex-wrap: wrap;\n\t}\n\n\t.btn {\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tpadding: 0.875rem 1.5rem;\n\t\tborder-radius: 8px;\n\t\tfont-weight: 600;\n\t\ttext-decoration: none;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.btn.primary {\n\t\tbackground: linear-gradient(90deg, var(--gradient-start, #667eea), var(--gradient-end, #764ba2));\n\t\tcolor: #ffffff;\n\t}\n\n\t.btn.primary:hover {\n\t\ttransform: translateY(-2px);\n\t\tbox-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);\n\t}\n\n\t.btn.secondary {\n\t\tbackground: transparent;\n\t\tborder: 2px solid var(--accent-color, #667eea);\n\t\tcolor: var(--accent-color, #667eea);\n\t}\n\n\t.btn.secondary:hover {\n\t\tbackground: var(--accent-color, #667eea);\n\t\tcolor: #ffffff;\n\t}\n\n\t.footer {\n\t\ttext-align: center;\n\t\tpadding: 2rem;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--secondary-text-color, #666666);\n\t}\n\n\t.footer a {\n\t\tcolor: inherit;\n\t\ttext-decoration: none;\n\t}\n\n\t.footer a:hover {\n\t\ttext-decoration: underline;\n\t}\n\n\t@media (max-width: 600px) {\n\t\t.hero {\n\t\t\tpadding: 2rem 1rem;\n\t\t}\n\n\t\t.hero h1 {\n\t\t\tfont-size: 1.75rem;\n\t\t}\n\n\t\t.avatar {\n\t\t\twidth: 100px;\n\t\t\theight: 100px;\n\t\t}\n\n\t\t.container {\n\t\t\tpadding: 1.5rem 1rem;\n\t\t}\n\t}\n</style>",
+	"design": [
+		{
+			"id": "body-font",
+			"name": "Font",
+			"css_var": "--body-font",
+			"value": "'Inter', system-ui, sans-serif",
+			"type": "font",
+			"description": "Main font for all text"
+		},
+		{
+			"id": "page-background",
+			"name": "Page Background",
+			"css_var": "--page-background",
+			"value": "#0f0f0f",
+			"type": "color",
+			"description": "Dark page background"
+		},
+		{
+			"id": "gradient-start",
+			"name": "Gradient Start",
+			"css_var": "--gradient-start",
+			"value": "#667eea",
+			"type": "color",
+			"description": "Hero gradient start"
+		},
+		{
+			"id": "gradient-end",
+			"name": "Gradient End",
+			"css_var": "--gradient-end",
+			"value": "#764ba2",
+			"type": "color",
+			"description": "Hero gradient end"
+		},
+		{
+			"id": "card-background",
+			"name": "Card Background",
+			"css_var": "--card-background",
+			"value": "#1a1a1a",
+			"type": "color",
+			"description": "Card and section background"
+		},
+		{
+			"id": "heading-color",
+			"name": "Heading Color",
+			"css_var": "--heading-color",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Heading text color"
+		},
+		{
+			"id": "body-text-color",
+			"name": "Body Text",
+			"css_var": "--body-text-color",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Main text color"
+		},
+		{
+			"id": "secondary-text-color",
+			"name": "Secondary Text",
+			"css_var": "--secondary-text-color",
+			"value": "#a0a0a0",
+			"type": "color",
+			"description": "Muted text color"
+		},
+		{
+			"id": "accent-color",
+			"name": "Accent Color",
+			"css_var": "--accent-color",
+			"value": "#667eea",
+			"type": "color",
+			"description": "Primary accent color"
+		},
+		{
+			"id": "border-color",
+			"name": "Border Color",
+			"css_var": "--border-color",
+			"value": "#2a2a2a",
+			"type": "color",
+			"description": "Border and divider color"
+		},
+		{
+			"id": "card-radius",
+			"name": "Card Radius",
+			"css_var": "--card-radius",
+			"value": "12px",
+			"type": "radius",
+			"description": "Roundness of cards"
+		}
+	],
+	"content": [
+		{
+			"id": "creator_name",
+			"name": "Creator Name",
+			"type": "text",
+			"value": "Alex Rivera",
+			"description": "Your name or brand name"
+		},
+		{
+			"id": "handle",
+			"name": "Handle",
+			"type": "text",
+			"value": "@alexrivera",
+			"description": "Your social media handle"
+		},
+		{
+			"id": "tagline",
+			"name": "Tagline",
+			"type": "text",
+			"value": "Tech Lifestyle & Productivity Creator",
+			"description": "Short tagline describing your niche"
+		},
+		{
+			"id": "photo_url",
+			"name": "Photo URL",
+			"type": "text",
+			"value": "https://placehold.co/400x400/6366f1/ffffff?text=Photo",
+			"description": "Your professional headshot URL"
+		},
+		{
+			"id": "bio",
+			"name": "Bio",
+			"type": "textarea",
+			"value": "I create content that helps people optimize their digital lives and work smarter. With over 500K followers across platforms, I specialize in tech reviews, productivity hacks, and lifestyle content that resonates with millennials and Gen Z professionals.",
+			"description": "Your full bio for press"
+		},
+		{
+			"id": "email",
+			"name": "Email",
+			"type": "text",
+			"value": "partnerships@alexrivera.com",
+			"description": "Contact email for partnerships"
+		},
+		{
+			"id": "calendar_url",
+			"name": "Calendar URL",
+			"type": "text",
+			"value": "https://cal.com/alexrivera",
+			"description": "Booking link (optional)"
+		},
+		{
+			"id": "contact_cta",
+			"name": "Contact CTA",
+			"type": "text",
+			"value": "Ready to create something amazing together? Let's chat about how we can collaborate.",
+			"description": "Call to action text for contact section"
+		}
+	],
+	"data": {
+		"stats": {
+			"schema": [
+				{
+					"name": "id",
+					"type": "text"
+				},
+				{
+					"name": "platform",
+					"type": "text"
+				},
+				{
+					"name": "label",
+					"type": "text"
+				},
+				{
+					"name": "value",
+					"type": "number"
+				},
+				{
+					"name": "icon",
+					"type": "text"
+				},
+				{
+					"name": "order",
+					"type": "number"
+				}
+			],
+			"records": [
+				{
+					"id": "s1",
+					"platform": "Instagram",
+					"label": "Followers",
+					"value": 285000,
+					"icon": "mdi:instagram",
+					"order": 1
+				},
+				{
+					"id": "s2",
+					"platform": "TikTok",
+					"label": "Followers",
+					"value": 450000,
+					"icon": "ic:baseline-tiktok",
+					"order": 2
+				},
+				{
+					"id": "s3",
+					"platform": "YouTube",
+					"label": "Subscribers",
+					"value": 125000,
+					"icon": "mdi:youtube",
+					"order": 3
+				},
+				{
+					"id": "s4",
+					"platform": "",
+					"label": "Avg Views",
+					"value": 85000,
+					"icon": "lucide:eye",
+					"order": 4
+				},
+				{
+					"id": "s5",
+					"platform": "",
+					"label": "Engagement",
+					"value": 4.8,
+					"icon": "lucide:heart",
+					"order": 5
+				}
+			],
+			"icon": "lucide:bar-chart"
+		},
+		"demographics": {
+			"schema": [
+				{
+					"name": "id",
+					"type": "text"
+				},
+				{
+					"name": "category",
+					"type": "text"
+				},
+				{
+					"name": "value",
+					"type": "text"
+				},
+				{
+					"name": "percentage",
+					"type": "number"
+				}
+			],
+			"records": [
+				{
+					"id": "d1",
+					"category": "Age Range",
+					"value": "18-34 (78%)",
+					"percentage": 78
+				},
+				{
+					"id": "d2",
+					"category": "Gender",
+					"value": "55% Male, 45% Female",
+					"percentage": 55
+				},
+				{
+					"id": "d3",
+					"category": "Top Location",
+					"value": "United States (62%)",
+					"percentage": 62
+				},
+				{
+					"id": "d4",
+					"category": "Interests",
+					"value": "Tech, Business, Lifestyle",
+					"percentage": 0
+				}
+			],
+			"icon": "lucide:users"
+		},
+		"brands": {
+			"schema": [
+				{
+					"name": "id",
+					"type": "text"
+				},
+				{
+					"name": "name",
+					"type": "text"
+				},
+				{
+					"name": "logo_url",
+					"type": "text"
+				},
+				{
+					"name": "order",
+					"type": "number"
+				}
+			],
+			"records": [
+				{
+					"id": "b1",
+					"name": "Apple",
+					"logo_url": "",
+					"order": 1
+				},
+				{
+					"id": "b2",
+					"name": "Samsung",
+					"logo_url": "",
+					"order": 2
+				},
+				{
+					"id": "b3",
+					"name": "Notion",
+					"logo_url": "",
+					"order": 3
+				},
+				{
+					"id": "b4",
+					"name": "Skillshare",
+					"logo_url": "",
+					"order": 4
+				},
+				{
+					"id": "b5",
+					"name": "NordVPN",
+					"logo_url": "",
+					"order": 5
+				},
+				{
+					"id": "b6",
+					"name": "Adobe",
+					"logo_url": "",
+					"order": 6
+				}
+			],
+			"icon": "lucide:badge-check"
+		},
+		"packages": {
+			"schema": [
+				{
+					"name": "id",
+					"type": "text"
+				},
+				{
+					"name": "name",
+					"type": "text"
+				},
+				{
+					"name": "price",
+					"type": "text"
+				},
+				{
+					"name": "description",
+					"type": "text"
+				},
+				{
+					"name": "includes",
+					"type": "text"
+				},
+				{
+					"name": "featured",
+					"type": "boolean"
+				},
+				{
+					"name": "order",
+					"type": "number"
+				}
+			],
+			"records": [
+				{
+					"id": "p1",
+					"name": "Story Package",
+					"price": "$500",
+					"description": "Perfect for product launches and quick promotions.",
+					"includes": "3 Instagram Stories, Link sticker, 24-hour availability",
+					"featured": false,
+					"order": 1
+				},
+				{
+					"id": "p2",
+					"name": "Reel Package",
+					"price": "$1,500",
+					"description": "High-engagement video content for maximum reach.",
+					"includes": "1 Instagram Reel, Cross-post to TikTok, Caption & hashtags, 1 revision round",
+					"featured": true,
+					"order": 2
+				},
+				{
+					"id": "p3",
+					"name": "YouTube Integration",
+					"price": "$3,000",
+					"description": "In-depth product review or dedicated video.",
+					"includes": "60-90 second integration, Pinned comment, Community post, Link in description",
+					"featured": false,
+					"order": 3
+				}
+			],
+			"icon": "lucide:box"
+		}
+	}
+}

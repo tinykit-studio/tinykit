@@ -1,0 +1,375 @@
+{
+	"id": "analytics-dashboard",
+	"name": "Analytics Dashboard",
+	"description": "Track growth metrics and performance across platforms",
+	"preview": "lucide:bar-chart-3",
+	"tags": [
+		"creator",
+		"intermediate",
+		"analytics"
+	],
+	"kits": [
+		"creator",
+		"dash"
+	],
+	"frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet platforms = $state([])\n\tlet metrics = $state([])\n\tlet top_content = $state([])\n\tlet goals = $state([])\n\tlet loading = $state(true)\n\tlet active_platform = $state('all')\n\n\tdata.platforms.subscribe(items => {\n\t\tplatforms = items.sort((a, b) => (a.order || 0) - (b.order || 0))\n\t})\n\n\tdata.metrics.subscribe(items => {\n\t\tmetrics = items\n\t})\n\n\tdata.top_content.subscribe(items => {\n\t\ttop_content = items.sort((a, b) => (b.views || 0) - (a.views || 0))\n\t})\n\n\tdata.goals.subscribe(items => {\n\t\tgoals = items.sort((a, b) => (a.order || 0) - (b.order || 0))\n\t\tloading = false\n\t})\n\n\tconst platform_icons = {\n\t\tinstagram: { icon: 'mdi:instagram', color: '#E4405F' },\n\t\ttiktok: { icon: 'ic:baseline-tiktok', color: '#000000' },\n\t\tyoutube: { icon: 'mdi:youtube', color: '#FF0000' },\n\t\ttwitter: { icon: 'ri:twitter-x-fill', color: '#000000' },\n\t\tlinkedin: { icon: 'mdi:linkedin', color: '#0A66C2' }\n\t}\n\n\tfunction get_platform_info(id) {\n\t\treturn platform_icons[id] || { icon: 'lucide:globe', color: '#666666' }\n\t}\n\n\tfunction get_filtered_platforms() {\n\t\tif (active_platform === 'all') return platforms\n\t\treturn platforms.filter(p => p.id === active_platform)\n\t}\n\n\tfunction get_filtered_content() {\n\t\tif (active_platform === 'all') return top_content\n\t\treturn top_content.filter(c => c.platform === active_platform)\n\t}\n\n\tfunction format_number(num) {\n\t\tif (!num) return '0'\n\t\tif (num >= 1000000) return (num / 1000000).toFixed(1) + 'M'\n\t\tif (num >= 1000) return (num / 1000).toFixed(1) + 'K'\n\t\treturn num.toLocaleString()\n\t}\n\n\tfunction get_growth_class(growth) {\n\t\tif (!growth) return 'neutral'\n\t\treturn parseFloat(growth) >= 0 ? 'positive' : 'negative'\n\t}\n\n\tfunction get_progress_percent(current, target) {\n\t\tif (!target) return 0\n\t\treturn Math.min(100, Math.round((current / target) * 100))\n\t}\n\n\tfunction get_chart_bars(data_str) {\n\t\tif (!data_str) return []\n\t\tconst values = data_str.split(',').map(v => parseFloat(v.trim()) || 0)\n\t\tconst max = Math.max(...values)\n\t\treturn values.map(v => (max > 0 ? (v / max) * 100 : 0))\n\t}\n</script>\n\n<div class=\"page\">\n\t<header class=\"header\">\n\t\t<div class=\"header-content\">\n\t\t\t<div class=\"header-left\">\n\t\t\t\t<h1>{content.dashboard_title}</h1>\n\t\t\t\t<p class=\"subtitle\">{content.subtitle}</p>\n\t\t\t</div>\n\t\t\t<div class=\"platform-filter\">\n\t\t\t\t<button\n\t\t\t\t\tclass=\"filter-btn\"\n\t\t\t\t\tclass:active={active_platform === 'all'}\n\t\t\t\t\tonclick={() => active_platform = 'all'}\n\t\t\t\t>\n\t\t\t\t\tAll Platforms\n\t\t\t\t</button>\n\t\t\t\t{#each platforms as platform (platform.id)}\n\t\t\t\t\t<button\n\t\t\t\t\t\tclass=\"filter-btn icon-only\"\n\t\t\t\t\t\tclass:active={active_platform === platform.id}\n\t\t\t\t\t\tonclick={() => active_platform = platform.id}\n\t\t\t\t\t\ttitle={platform.name}\n\t\t\t\t\t\tstyle=\"--platform-color: {get_platform_info(platform.id).color}\"\n\t\t\t\t\t>\n\t\t\t\t\t\t<Icon icon={get_platform_info(platform.id).icon} width={18} />\n\t\t\t\t\t</button>\n\t\t\t\t{/each}\n\t\t\t</div>\n\t\t</div>\n\t</header>\n\n\t<main class=\"container\">\n\t\t{#if loading}\n\t\t\t<div class=\"loading\">\n\t\t\t\t<Icon icon=\"lucide:loader-2\" width={24} class=\"spin\" />\n\t\t\t\t<span>Loading analytics...</span>\n\t\t\t</div>\n\t\t{:else}\n\t\t\t<section class=\"stats-section\">\n\t\t\t\t<div class=\"stats-grid\">\n\t\t\t\t\t{#each get_filtered_platforms() as platform (platform.id)}\n\t\t\t\t\t\t<div class=\"stat-card\">\n\t\t\t\t\t\t\t<div class=\"stat-header\">\n\t\t\t\t\t\t\t\t<div class=\"platform-icon\" style=\"background: {get_platform_info(platform.id).color}\">\n\t\t\t\t\t\t\t\t\t<Icon icon={get_platform_info(platform.id).icon} width={20} />\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t\t<span class=\"platform-name\">{platform.name}</span>\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t<div class=\"stat-value\">{format_number(platform.followers)}</div>\n\t\t\t\t\t\t\t<div class=\"stat-label\">Followers</div>\n\t\t\t\t\t\t\t{#if platform.growth}\n\t\t\t\t\t\t\t\t<div class=\"stat-growth {get_growth_class(platform.growth)}\">\n\t\t\t\t\t\t\t\t\t<Icon icon={parseFloat(platform.growth) >= 0 ? 'lucide:trending-up' : 'lucide:trending-down'} width={14} />\n\t\t\t\t\t\t\t\t\t{platform.growth}%\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t\t{#if platform.chart_data}\n\t\t\t\t\t\t\t\t<div class=\"mini-chart\">\n\t\t\t\t\t\t\t\t\t{#each get_chart_bars(platform.chart_data) as height, i}\n\t\t\t\t\t\t\t\t\t\t<div class=\"bar\" style=\"height: {height}%; background: {get_platform_info(platform.id).color}\"></div>\n\t\t\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t</div>\n\t\t\t\t\t{/each}\n\t\t\t\t</div>\n\t\t\t</section>\n\n\t\t\t<section class=\"metrics-section\">\n\t\t\t\t<h2><Icon icon=\"lucide:activity\" width={20} /> Key Metrics</h2>\n\t\t\t\t<div class=\"metrics-grid\">\n\t\t\t\t\t{#each metrics as metric (metric.id)}\n\t\t\t\t\t\t<div class=\"metric-card\">\n\t\t\t\t\t\t\t<div class=\"metric-icon\">\n\t\t\t\t\t\t\t\t<Icon icon={metric.icon || 'lucide:bar-chart-2'} width={24} />\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t<div class=\"metric-content\">\n\t\t\t\t\t\t\t\t<span class=\"metric-value\">{metric.value}</span>\n\t\t\t\t\t\t\t\t<span class=\"metric-label\">{metric.label}</span>\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t{#if metric.change}\n\t\t\t\t\t\t\t\t<span class=\"metric-change {get_growth_class(metric.change)}\">\n\t\t\t\t\t\t\t\t\t{parseFloat(metric.change) >= 0 ? '+' : ''}{metric.change}%\n\t\t\t\t\t\t\t\t</span>\n\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t</div>\n\t\t\t\t\t{/each}\n\t\t\t\t</div>\n\t\t\t</section>\n\n\t\t\t<div class=\"two-col\">\n\t\t\t\t<section class=\"top-content-section\">\n\t\t\t\t\t<h2><Icon icon=\"lucide:trophy\" width={20} /> Top Performing Content</h2>\n\t\t\t\t\t<div class=\"content-list\">\n\t\t\t\t\t\t{#each get_filtered_content().slice(0, 5) as item, i (item.id)}\n\t\t\t\t\t\t\t<div class=\"content-item\">\n\t\t\t\t\t\t\t\t<span class=\"content-rank\">#{i + 1}</span>\n\t\t\t\t\t\t\t\t<div class=\"content-info\">\n\t\t\t\t\t\t\t\t\t<span class=\"content-title\">{item.title}</span>\n\t\t\t\t\t\t\t\t\t<div class=\"content-meta\">\n\t\t\t\t\t\t\t\t\t\t<Icon icon={get_platform_info(item.platform).icon} width={14} style=\"color: {get_platform_info(item.platform).color}\" />\n\t\t\t\t\t\t\t\t\t\t<span>{item.type}</span>\n\t\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t\t<div class=\"content-stats\">\n\t\t\t\t\t\t\t\t\t<span class=\"views\">\n\t\t\t\t\t\t\t\t\t\t<Icon icon=\"lucide:eye\" width={14} />\n\t\t\t\t\t\t\t\t\t\t{format_number(item.views)}\n\t\t\t\t\t\t\t\t\t</span>\n\t\t\t\t\t\t\t\t\t<span class=\"engagement\">\n\t\t\t\t\t\t\t\t\t\t<Icon icon=\"lucide:heart\" width={14} />\n\t\t\t\t\t\t\t\t\t\t{item.engagement_rate}%\n\t\t\t\t\t\t\t\t\t</span>\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t{:else}\n\t\t\t\t\t\t\t<div class=\"empty-state\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:bar-chart-2\" width={32} />\n\t\t\t\t\t\t\t\t<p>No content data yet</p>\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t{/each}\n\t\t\t\t\t</div>\n\t\t\t\t</section>\n\n\t\t\t\t<section class=\"goals-section\">\n\t\t\t\t\t<h2><Icon icon=\"lucide:target\" width={20} /> Goals & Progress</h2>\n\t\t\t\t\t<div class=\"goals-list\">\n\t\t\t\t\t\t{#each goals as goal (goal.id)}\n\t\t\t\t\t\t\t{@const progress = get_progress_percent(goal.current, goal.target)}\n\t\t\t\t\t\t\t<div class=\"goal-item\">\n\t\t\t\t\t\t\t\t<div class=\"goal-header\">\n\t\t\t\t\t\t\t\t\t<span class=\"goal-title\">{goal.title}</span>\n\t\t\t\t\t\t\t\t\t<span class=\"goal-values\">\n\t\t\t\t\t\t\t\t\t\t{format_number(goal.current)} / {format_number(goal.target)}\n\t\t\t\t\t\t\t\t\t</span>\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t\t<div class=\"goal-bar\">\n\t\t\t\t\t\t\t\t\t<div class=\"goal-fill\" style=\"width: {progress}%\"></div>\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t\t<div class=\"goal-footer\">\n\t\t\t\t\t\t\t\t\t<span class=\"goal-percent\">{progress}%</span>\n\t\t\t\t\t\t\t\t\t{#if goal.deadline}\n\t\t\t\t\t\t\t\t\t\t<span class=\"goal-deadline\">\n\t\t\t\t\t\t\t\t\t\t\t<Icon icon=\"lucide:calendar\" width={12} />\n\t\t\t\t\t\t\t\t\t\t\t{goal.deadline}\n\t\t\t\t\t\t\t\t\t\t</span>\n\t\t\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t{:else}\n\t\t\t\t\t\t\t<div class=\"empty-state\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:target\" width={32} />\n\t\t\t\t\t\t\t\t<p>No goals set yet</p>\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t{/each}\n\t\t\t\t\t</div>\n\t\t\t\t</section>\n\t\t\t</div>\n\n\t\t\t<p class=\"data-note\">\n\t\t\t\t<Icon icon=\"lucide:info\" width={14} />\n\t\t\t\t{content.data_note}\n\t\t\t</p>\n\t\t{/if}\n\t</main>\n\n\t<footer class=\"footer\">built with <a href=\"https://tinykit.studio\" target=\"_blank\">tinykit.studio</a></footer>\n</div>\n\n<style>\n\t.page {\n\t\tmin-height: 100vh;\n\t\tbackground: var(--page-background, #0f172a);\n\t\tfont-family: var(--body-font, 'Inter', system-ui, sans-serif);\n\t\tcolor: var(--body-text-color, #e2e8f0);\n\t}\n\n\t.header {\n\t\tbackground: var(--header-background, #1e293b);\n\t\tborder-bottom: 1px solid var(--border-color, #334155);\n\t\tpadding: 1.25rem 2rem;\n\t}\n\n\t.header-content {\n\t\tmax-width: 1200px;\n\t\tmargin: 0 auto;\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: center;\n\t\tflex-wrap: wrap;\n\t\tgap: 1rem;\n\t}\n\n\t.header h1 {\n\t\tmargin: 0;\n\t\tfont-size: 1.5rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--heading-color, #ffffff);\n\t}\n\n\t.subtitle {\n\t\tmargin: 0.25rem 0 0;\n\t\tfont-size: 0.85rem;\n\t\tcolor: var(--secondary-text-color, #94a3b8);\n\t}\n\n\t.platform-filter {\n\t\tdisplay: flex;\n\t\tgap: 0.5rem;\n\t}\n\n\t.filter-btn {\n\t\tbackground: var(--card-background, #1e293b);\n\t\tborder: 1px solid var(--border-color, #334155);\n\t\tcolor: var(--secondary-text-color, #94a3b8);\n\t\tpadding: 0.5rem 1rem;\n\t\tborder-radius: 8px;\n\t\tfont-size: 0.85rem;\n\t\tfont-weight: 500;\n\t\tcursor: pointer;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.filter-btn.icon-only {\n\t\tpadding: 0.5rem;\n\t\twidth: 36px;\n\t\theight: 36px;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t}\n\n\t.filter-btn:hover {\n\t\tborder-color: var(--accent-color, #8b5cf6);\n\t}\n\n\t.filter-btn.active {\n\t\tbackground: var(--accent-color, #8b5cf6);\n\t\tborder-color: var(--accent-color, #8b5cf6);\n\t\tcolor: #ffffff;\n\t}\n\n\t.filter-btn.icon-only.active {\n\t\tbackground: var(--platform-color);\n\t\tborder-color: var(--platform-color);\n\t}\n\n\t.container {\n\t\tmax-width: 1200px;\n\t\tmargin: 0 auto;\n\t\tpadding: 2rem;\n\t}\n\n\t.loading {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tgap: 0.75rem;\n\t\tpadding: 4rem 2rem;\n\t\tcolor: var(--secondary-text-color, #94a3b8);\n\t}\n\n\t:global(.spin) {\n\t\tanimation: spin 1s linear infinite;\n\t}\n\n\t@keyframes spin {\n\t\tfrom { transform: rotate(0deg); }\n\t\tto { transform: rotate(360deg); }\n\t}\n\n\t.stats-grid {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(auto-fit, minmax(240px, 1fr));\n\t\tgap: 1.25rem;\n\t\tmargin-bottom: 2rem;\n\t}\n\n\t.stat-card {\n\t\tbackground: var(--card-background, #1e293b);\n\t\tborder: 1px solid var(--border-color, #334155);\n\t\tborder-radius: var(--card-radius, 12px);\n\t\tpadding: 1.25rem;\n\t\tposition: relative;\n\t}\n\n\t.stat-header {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tmargin-bottom: 1rem;\n\t}\n\n\t.platform-icon {\n\t\twidth: 32px;\n\t\theight: 32px;\n\t\tborder-radius: 8px;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tcolor: #ffffff;\n\t}\n\n\t.platform-name {\n\t\tfont-size: 0.85rem;\n\t\tfont-weight: 500;\n\t\tcolor: var(--secondary-text-color, #94a3b8);\n\t}\n\n\t.stat-value {\n\t\tfont-size: 2rem;\n\t\tfont-weight: 800;\n\t\tcolor: var(--heading-color, #ffffff);\n\t\tline-height: 1;\n\t}\n\n\t.stat-label {\n\t\tfont-size: 0.8rem;\n\t\tcolor: var(--secondary-text-color, #94a3b8);\n\t\tmargin-top: 0.25rem;\n\t}\n\n\t.stat-growth {\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tgap: 0.25rem;\n\t\tposition: absolute;\n\t\ttop: 1.25rem;\n\t\tright: 1.25rem;\n\t\tpadding: 0.25rem 0.5rem;\n\t\tborder-radius: 4px;\n\t\tfont-size: 0.75rem;\n\t\tfont-weight: 600;\n\t}\n\n\t.stat-growth.positive {\n\t\tbackground: rgba(34, 197, 94, 0.15);\n\t\tcolor: #22c55e;\n\t}\n\n\t.stat-growth.negative {\n\t\tbackground: rgba(239, 68, 68, 0.15);\n\t\tcolor: #ef4444;\n\t}\n\n\t.mini-chart {\n\t\tdisplay: flex;\n\t\talign-items: flex-end;\n\t\tgap: 2px;\n\t\theight: 40px;\n\t\tmargin-top: 1rem;\n\t}\n\n\t.mini-chart .bar {\n\t\tflex: 1;\n\t\tmin-width: 8px;\n\t\tborder-radius: 2px 2px 0 0;\n\t\topacity: 0.7;\n\t\ttransition: opacity 0.2s;\n\t}\n\n\t.stat-card:hover .mini-chart .bar {\n\t\topacity: 1;\n\t}\n\n\t.metrics-section, .top-content-section, .goals-section {\n\t\tmargin-bottom: 2rem;\n\t}\n\n\t.metrics-section h2, .top-content-section h2, .goals-section h2 {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tfont-size: 1.1rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #ffffff);\n\t\tmargin: 0 0 1rem 0;\n\t}\n\n\t.metrics-section h2 :global(svg),\n\t.top-content-section h2 :global(svg),\n\t.goals-section h2 :global(svg) {\n\t\tcolor: var(--accent-color, #8b5cf6);\n\t}\n\n\t.metrics-grid {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(auto-fit, minmax(200px, 1fr));\n\t\tgap: 1rem;\n\t}\n\n\t.metric-card {\n\t\tbackground: var(--card-background, #1e293b);\n\t\tborder: 1px solid var(--border-color, #334155);\n\t\tborder-radius: var(--card-radius, 12px);\n\t\tpadding: 1rem;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 1rem;\n\t}\n\n\t.metric-icon {\n\t\twidth: 48px;\n\t\theight: 48px;\n\t\tbackground: rgba(139, 92, 246, 0.15);\n\t\tborder-radius: 10px;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tcolor: var(--accent-color, #8b5cf6);\n\t}\n\n\t.metric-content {\n\t\tflex: 1;\n\t}\n\n\t.metric-value {\n\t\tdisplay: block;\n\t\tfont-size: 1.25rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--heading-color, #ffffff);\n\t}\n\n\t.metric-label {\n\t\tfont-size: 0.8rem;\n\t\tcolor: var(--secondary-text-color, #94a3b8);\n\t}\n\n\t.metric-change {\n\t\tfont-size: 0.8rem;\n\t\tfont-weight: 600;\n\t\tpadding: 0.2rem 0.5rem;\n\t\tborder-radius: 4px;\n\t}\n\n\t.metric-change.positive {\n\t\tbackground: rgba(34, 197, 94, 0.15);\n\t\tcolor: #22c55e;\n\t}\n\n\t.metric-change.negative {\n\t\tbackground: rgba(239, 68, 68, 0.15);\n\t\tcolor: #ef4444;\n\t}\n\n\t.two-col {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: 1fr 1fr;\n\t\tgap: 1.5rem;\n\t}\n\n\t.content-list {\n\t\tbackground: var(--card-background, #1e293b);\n\t\tborder: 1px solid var(--border-color, #334155);\n\t\tborder-radius: var(--card-radius, 12px);\n\t\toverflow: hidden;\n\t}\n\n\t.content-item {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 1rem;\n\t\tpadding: 1rem;\n\t\tborder-bottom: 1px solid var(--border-color, #334155);\n\t}\n\n\t.content-item:last-child {\n\t\tborder-bottom: none;\n\t}\n\n\t.content-rank {\n\t\tfont-size: 0.9rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--accent-color, #8b5cf6);\n\t\twidth: 32px;\n\t}\n\n\t.content-info {\n\t\tflex: 1;\n\t\tmin-width: 0;\n\t}\n\n\t.content-title {\n\t\tdisplay: block;\n\t\tfont-weight: 500;\n\t\tcolor: var(--heading-color, #ffffff);\n\t\twhite-space: nowrap;\n\t\toverflow: hidden;\n\t\ttext-overflow: ellipsis;\n\t}\n\n\t.content-meta {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.4rem;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--secondary-text-color, #94a3b8);\n\t\tmargin-top: 0.25rem;\n\t}\n\n\t.content-stats {\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t}\n\n\t.content-stats span {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.25rem;\n\t\tfont-size: 0.8rem;\n\t\tcolor: var(--secondary-text-color, #94a3b8);\n\t}\n\n\t.goals-list {\n\t\tbackground: var(--card-background, #1e293b);\n\t\tborder: 1px solid var(--border-color, #334155);\n\t\tborder-radius: var(--card-radius, 12px);\n\t\tpadding: 1rem;\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tgap: 1rem;\n\t}\n\n\t.goal-item {\n\t\tpadding-bottom: 1rem;\n\t\tborder-bottom: 1px solid var(--border-color, #334155);\n\t}\n\n\t.goal-item:last-child {\n\t\tpadding-bottom: 0;\n\t\tborder-bottom: none;\n\t}\n\n\t.goal-header {\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: center;\n\t\tmargin-bottom: 0.5rem;\n\t}\n\n\t.goal-title {\n\t\tfont-weight: 500;\n\t\tcolor: var(--heading-color, #ffffff);\n\t}\n\n\t.goal-values {\n\t\tfont-size: 0.85rem;\n\t\tcolor: var(--secondary-text-color, #94a3b8);\n\t}\n\n\t.goal-bar {\n\t\theight: 8px;\n\t\tbackground: var(--border-color, #334155);\n\t\tborder-radius: 4px;\n\t\toverflow: hidden;\n\t}\n\n\t.goal-fill {\n\t\theight: 100%;\n\t\tbackground: linear-gradient(90deg, var(--accent-color, #8b5cf6), #a78bfa);\n\t\tborder-radius: 4px;\n\t\ttransition: width 0.3s ease;\n\t}\n\n\t.goal-footer {\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: center;\n\t\tmargin-top: 0.5rem;\n\t}\n\n\t.goal-percent {\n\t\tfont-size: 0.8rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--accent-color, #8b5cf6);\n\t}\n\n\t.goal-deadline {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.25rem;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--secondary-text-color, #94a3b8);\n\t}\n\n\t.empty-state {\n\t\ttext-align: center;\n\t\tpadding: 2rem;\n\t\tcolor: var(--secondary-text-color, #94a3b8);\n\t}\n\n\t.empty-state p {\n\t\tmargin: 0.5rem 0 0;\n\t}\n\n\t.data-note {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tfont-size: 0.8rem;\n\t\tcolor: var(--secondary-text-color, #64748b);\n\t\tmargin-top: 2rem;\n\t\tpadding: 1rem;\n\t\tbackground: var(--card-background, #1e293b);\n\t\tborder-radius: 8px;\n\t}\n\n\t.footer {\n\t\ttext-align: center;\n\t\tpadding: 2rem;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--secondary-text-color, #64748b);\n\t}\n\n\t.footer a {\n\t\tcolor: inherit;\n\t\ttext-decoration: none;\n\t}\n\n\t.footer a:hover {\n\t\ttext-decoration: underline;\n\t}\n\n\t@media (max-width: 900px) {\n\t\t.two-col {\n\t\t\tgrid-template-columns: 1fr;\n\t\t}\n\t}\n\n\t@media (max-width: 600px) {\n\t\t.header {\n\t\t\tpadding: 1rem;\n\t\t}\n\n\t\t.container {\n\t\t\tpadding: 1rem;\n\t\t}\n\n\t\t.header-content {\n\t\t\tflex-direction: column;\n\t\t\talign-items: flex-start;\n\t\t}\n\n\t\t.platform-filter {\n\t\t\tflex-wrap: wrap;\n\t\t}\n\n\t\t.content-stats {\n\t\t\tflex-direction: column;\n\t\t\tgap: 0.25rem;\n\t\t}\n\t}\n</style>",
+	"design": [
+		{
+			"id": "body-font",
+			"name": "Font",
+			"css_var": "--body-font",
+			"value": "'Inter', system-ui, sans-serif",
+			"type": "font",
+			"description": "Main font for all text"
+		},
+		{
+			"id": "page-background",
+			"name": "Page Background",
+			"css_var": "--page-background",
+			"value": "#0f172a",
+			"type": "color",
+			"description": "Dark page background"
+		},
+		{
+			"id": "header-background",
+			"name": "Header Background",
+			"css_var": "--header-background",
+			"value": "#1e293b",
+			"type": "color",
+			"description": "Header background"
+		},
+		{
+			"id": "card-background",
+			"name": "Card Background",
+			"css_var": "--card-background",
+			"value": "#1e293b",
+			"type": "color",
+			"description": "Card background color"
+		},
+		{
+			"id": "heading-color",
+			"name": "Heading Color",
+			"css_var": "--heading-color",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Heading text color"
+		},
+		{
+			"id": "body-text-color",
+			"name": "Body Text",
+			"css_var": "--body-text-color",
+			"value": "#e2e8f0",
+			"type": "color",
+			"description": "Main text color"
+		},
+		{
+			"id": "secondary-text-color",
+			"name": "Secondary Text",
+			"css_var": "--secondary-text-color",
+			"value": "#94a3b8",
+			"type": "color",
+			"description": "Muted text color"
+		},
+		{
+			"id": "accent-color",
+			"name": "Accent Color",
+			"css_var": "--accent-color",
+			"value": "#8b5cf6",
+			"type": "color",
+			"description": "Primary accent color"
+		},
+		{
+			"id": "border-color",
+			"name": "Border Color",
+			"css_var": "--border-color",
+			"value": "#334155",
+			"type": "color",
+			"description": "Border color"
+		},
+		{
+			"id": "card-radius",
+			"name": "Card Radius",
+			"css_var": "--card-radius",
+			"value": "12px",
+			"type": "radius",
+			"description": "Roundness of cards"
+		}
+	],
+	"content": [
+		{
+			"id": "dashboard_title",
+			"name": "Dashboard Title",
+			"type": "text",
+			"value": "Analytics Dashboard",
+			"description": "Title shown in header"
+		},
+		{
+			"id": "subtitle",
+			"name": "Subtitle",
+			"type": "text",
+			"value": "Track your growth across all platforms",
+			"description": "Subtitle below title"
+		},
+		{
+			"id": "data_note",
+			"name": "Data Note",
+			"type": "text",
+			"value": "Data is manually entered. For real-time analytics, connect to platform APIs.",
+			"description": "Note about data source"
+		}
+	],
+	"data": {
+		"platforms": {
+			"schema": [
+				{
+					"name": "id",
+					"type": "text"
+				},
+				{
+					"name": "name",
+					"type": "text"
+				},
+				{
+					"name": "followers",
+					"type": "number"
+				},
+				{
+					"name": "growth",
+					"type": "text"
+				},
+				{
+					"name": "chart_data",
+					"type": "text"
+				},
+				{
+					"name": "order",
+					"type": "number"
+				}
+			],
+			"records": [
+				{
+					"id": "instagram",
+					"name": "Instagram",
+					"followers": 285000,
+					"growth": "+4.2",
+					"chart_data": "220,235,248,260,272,278,285",
+					"order": 1
+				},
+				{
+					"id": "tiktok",
+					"name": "TikTok",
+					"followers": 450000,
+					"growth": "+12.8",
+					"chart_data": "320,355,380,400,420,438,450",
+					"order": 2
+				},
+				{
+					"id": "youtube",
+					"name": "YouTube",
+					"followers": 125000,
+					"growth": "+2.1",
+					"chart_data": "118,119,120,122,123,124,125",
+					"order": 3
+				},
+				{
+					"id": "twitter",
+					"name": "X/Twitter",
+					"followers": 45000,
+					"growth": "-0.5",
+					"chart_data": "46,45.5,45.2,45,44.8,45.2,45",
+					"order": 4
+				}
+			],
+			"icon": "lucide:share-2"
+		},
+		"metrics": {
+			"schema": [
+				{
+					"name": "id",
+					"type": "text"
+				},
+				{
+					"name": "label",
+					"type": "text"
+				},
+				{
+					"name": "value",
+					"type": "text"
+				},
+				{
+					"name": "change",
+					"type": "text"
+				},
+				{
+					"name": "icon",
+					"type": "text"
+				}
+			],
+			"records": [
+				{
+					"id": "m1",
+					"label": "Avg Engagement Rate",
+					"value": "4.8%",
+					"change": "+0.3",
+					"icon": "lucide:heart"
+				},
+				{
+					"id": "m2",
+					"label": "Avg Views per Post",
+					"value": "85K",
+					"change": "+15.2",
+					"icon": "lucide:eye"
+				},
+				{
+					"id": "m3",
+					"label": "Total Reach (30d)",
+					"value": "2.4M",
+					"change": "+22.1",
+					"icon": "lucide:users"
+				},
+				{
+					"id": "m4",
+					"label": "Profile Visits",
+					"value": "156K",
+					"change": "+8.7",
+					"icon": "lucide:user-plus"
+				}
+			],
+			"icon": "lucide:bar-chart"
+		},
+		"top_content": {
+			"schema": [
+				{
+					"name": "id",
+					"type": "text"
+				},
+				{
+					"name": "title",
+					"type": "text"
+				},
+				{
+					"name": "platform",
+					"type": "text"
+				},
+				{
+					"name": "type",
+					"type": "text"
+				},
+				{
+					"name": "views",
+					"type": "number"
+				},
+				{
+					"name": "engagement_rate",
+					"type": "text"
+				}
+			],
+			"records": [
+				{
+					"id": "tc1",
+					"title": "Morning routine that changed my life",
+					"platform": "tiktok",
+					"type": "Video",
+					"views": 2400000,
+					"engagement_rate": "8.2"
+				},
+				{
+					"id": "tc2",
+					"title": "Desk setup tour 2024",
+					"platform": "youtube",
+					"type": "Video",
+					"views": 890000,
+					"engagement_rate": "5.4"
+				},
+				{
+					"id": "tc3",
+					"title": "Productivity tips carousel",
+					"platform": "instagram",
+					"type": "Carousel",
+					"views": 450000,
+					"engagement_rate": "6.8"
+				},
+				{
+					"id": "tc4",
+					"title": "Day in my life vlog",
+					"platform": "tiktok",
+					"type": "Video",
+					"views": 380000,
+					"engagement_rate": "7.1"
+				},
+				{
+					"id": "tc5",
+					"title": "Q&A stories session",
+					"platform": "instagram",
+					"type": "Story",
+					"views": 220000,
+					"engagement_rate": "12.3"
+				}
+			],
+			"icon": "lucide:star"
+		},
+		"goals": {
+			"schema": [
+				{
+					"name": "id",
+					"type": "text"
+				},
+				{
+					"name": "title",
+					"type": "text"
+				},
+				{
+					"name": "current",
+					"type": "number"
+				},
+				{
+					"name": "target",
+					"type": "number"
+				},
+				{
+					"name": "deadline",
+					"type": "text"
+				},
+				{
+					"name": "order",
+					"type": "number"
+				}
+			],
+			"records": [
+				{
+					"id": "g1",
+					"title": "TikTok 500K Followers",
+					"current": 450000,
+					"target": 500000,
+					"deadline": "Q1 2025",
+					"order": 1
+				},
+				{
+					"id": "g2",
+					"title": "YouTube 150K Subscribers",
+					"current": 125000,
+					"target": 150000,
+					"deadline": "Q2 2025",
+					"order": 2
+				},
+				{
+					"id": "g3",
+					"title": "Instagram 300K Followers",
+					"current": 285000,
+					"target": 300000,
+					"deadline": "Jan 2025",
+					"order": 3
+				},
+				{
+					"id": "g4",
+					"title": "Monthly Brand Deals",
+					"current": 3,
+					"target": 5,
+					"deadline": "Monthly",
+					"order": 4
+				}
+			],
+			"icon": "lucide:check-square"
+		}
+	}
+}

@@ -1,0 +1,361 @@
+{
+	"id": "status-page",
+	"name": "Status Page",
+	"description": "Service status dashboard with incidents and uptime tracking",
+	"preview": "lucide:activity",
+	"tags": [
+		"dashboard",
+		"monitoring",
+		"intermediate"
+	],
+	"kits": [
+		"dash",
+		"developer",
+		"launch"
+	],
+	"frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet services = $state([])\n\tlet incidents = $state([])\n\tlet loading = $state(true)\n\tlet show_subscribe = $state(false)\n\tlet email = $state('')\n\tlet subscribed = $state(false)\n\n\tdata.services.subscribe(items => {\n\t\tservices = items.sort((a, b) => (a.order || 0) - (b.order || 0))\n\t\tloading = false\n\t})\n\n\tdata.incidents.subscribe(items => {\n\t\tincidents = items.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))\n\t})\n\n\tconst status_config = {\n\t\toperational: { label: 'Operational', color: 'var(--success-color)', icon: 'lucide:check-circle' },\n\t\tdegraded: { label: 'Degraded', color: 'var(--warning-color)', icon: 'lucide:alert-triangle' },\n\t\tdown: { label: 'Down', color: 'var(--danger-color)', icon: 'lucide:x-circle' },\n\t\tmaintenance: { label: 'Maintenance', color: 'var(--info-color)', icon: 'lucide:wrench' }\n\t}\n\n\tlet overall_status = $derived(() => {\n\t\tif (services.some(s => s.status === 'down')) return 'down'\n\t\tif (services.some(s => s.status === 'degraded')) return 'degraded'\n\t\tif (services.some(s => s.status === 'maintenance')) return 'maintenance'\n\t\treturn 'operational'\n\t})\n\n\tlet active_incidents = $derived(incidents.filter(i => i.status !== 'resolved'))\n\tlet resolved_incidents = $derived(incidents.filter(i => i.status === 'resolved').slice(0, 5))\n\n\tfunction get_uptime(service) {\n\t\treturn service.uptime || 99.9\n\t}\n\n\tfunction format_date(date_str) {\n\t\treturn new Date(date_str).toLocaleDateString('en-US', {\n\t\t\tmonth: 'short',\n\t\t\tday: 'numeric',\n\t\t\thour: '2-digit',\n\t\t\tminute: '2-digit'\n\t\t})\n\t}\n\n\tfunction get_status_message() {\n\t\tconst status = overall_status()\n\t\tif (status === 'down') return content.status_down\n\t\tif (status === 'degraded') return content.status_degraded\n\t\tif (status === 'maintenance') return content.status_maintenance\n\t\treturn content.status_operational\n\t}\n\n\tasync function handle_subscribe(e) {\n\t\te.preventDefault()\n\t\tif (!email.trim()) return\n\t\t// In real app, this would call an API\n\t\tsubscribed = true\n\t\tsetTimeout(() => {\n\t\t\tshow_subscribe = false\n\t\t\tsubscribed = false\n\t\t\temail = ''\n\t\t}, 2000)\n\t}\n\n\t// Generate uptime bars for last 90 days\n\tfunction get_uptime_bars(service) {\n\t\tconst bars = []\n\t\tfor (let i = 89; i >= 0; i--) {\n\t\t\t// Simulate uptime data - in real app would come from data\n\t\t\tconst rand = Math.random()\n\t\t\tlet status = 'operational'\n\t\t\tif (rand < 0.02) status = 'down'\n\t\t\telse if (rand < 0.05) status = 'degraded'\n\t\t\tbars.push({ day: i, status })\n\t\t}\n\t\treturn bars\n\t}\n</script>\n\n<div class=\"page\">\n\t<header class=\"header\">\n\t\t<div class=\"logo\">\n\t\t\t<Icon icon=\"lucide:activity\" width={28} />\n\t\t\t<h1>{content.title}</h1>\n\t\t</div>\n\t\t<button class=\"subscribe-btn\" onclick={() => show_subscribe = !show_subscribe}>\n\t\t\t<Icon icon=\"lucide:bell\" width={16} />\n\t\t\t{content.subscribe_button}\n\t\t</button>\n\t</header>\n\n\t{#if show_subscribe}\n\t\t<div class=\"subscribe-form\">\n\t\t\t{#if subscribed}\n\t\t\t\t<div class=\"success-message\">\n\t\t\t\t\t<Icon icon=\"lucide:check\" width={20} />\n\t\t\t\t\t{content.subscribed_message}\n\t\t\t\t</div>\n\t\t\t{:else}\n\t\t\t\t<form onsubmit={handle_subscribe}>\n\t\t\t\t\t<input\n\t\t\t\t\t\ttype=\"email\"\n\t\t\t\t\t\tplaceholder={content.email_placeholder}\n\t\t\t\t\t\tbind:value={email}\n\t\t\t\t\t\trequired\n\t\t\t\t\t/>\n\t\t\t\t\t<button type=\"submit\">{content.subscribe_submit}</button>\n\t\t\t\t</form>\n\t\t\t{/if}\n\t\t</div>\n\t{/if}\n\n\t<div class=\"status-banner\" data-status={overall_status()}>\n\t\t<Icon icon={status_config[overall_status()].icon} width={24} />\n\t\t<span>{get_status_message()}</span>\n\t</div>\n\n\t{#if loading}\n\t\t<div class=\"loading\">\n\t\t\t<Icon icon=\"lucide:loader-2\" width={24} class=\"spin\" />\n\t\t</div>\n\t{:else}\n\t\t{#if active_incidents.length > 0}\n\t\t\t<section class=\"incidents-section\">\n\t\t\t\t<h2>\n\t\t\t\t\t<Icon icon=\"lucide:alert-circle\" width={18} />\n\t\t\t\t\t{content.active_incidents}\n\t\t\t\t</h2>\n\t\t\t\t<div class=\"incidents-list\">\n\t\t\t\t\t{#each active_incidents as incident (incident.id)}\n\t\t\t\t\t\t<div class=\"incident-card\" data-severity={incident.severity}>\n\t\t\t\t\t\t\t<div class=\"incident-header\">\n\t\t\t\t\t\t\t\t<span class=\"incident-title\">{incident.title}</span>\n\t\t\t\t\t\t\t\t<span class=\"incident-status\">{incident.status}</span>\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t<p class=\"incident-description\">{incident.description}</p>\n\t\t\t\t\t\t\t<div class=\"incident-meta\">\n\t\t\t\t\t\t\t\t<span class=\"affected\">\n\t\t\t\t\t\t\t\t\t<Icon icon=\"lucide:server\" width={14} />\n\t\t\t\t\t\t\t\t\t{incident.affected_services}\n\t\t\t\t\t\t\t\t</span>\n\t\t\t\t\t\t\t\t<span class=\"time\">\n\t\t\t\t\t\t\t\t\t<Icon icon=\"lucide:clock\" width={14} />\n\t\t\t\t\t\t\t\t\t{format_date(incident.created_at)}\n\t\t\t\t\t\t\t\t</span>\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t{#if incident.updates}\n\t\t\t\t\t\t\t\t<div class=\"incident-updates\">\n\t\t\t\t\t\t\t\t\t<h4>{content.updates_label}</h4>\n\t\t\t\t\t\t\t\t\t<div class=\"update-text\">{incident.updates}</div>\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t</div>\n\t\t\t\t\t{/each}\n\t\t\t\t</div>\n\t\t\t</section>\n\t\t{/if}\n\n\t\t<section class=\"services-section\">\n\t\t\t<h2>\n\t\t\t\t<Icon icon=\"lucide:server\" width={18} />\n\t\t\t\t{content.services_heading}\n\t\t\t</h2>\n\t\t\t<div class=\"services-list\">\n\t\t\t\t{#each services as service (service.id)}\n\t\t\t\t\t{@const config = status_config[service.status] || status_config.operational}\n\t\t\t\t\t<div class=\"service-card\">\n\t\t\t\t\t\t<div class=\"service-header\">\n\t\t\t\t\t\t\t<div class=\"service-info\">\n\t\t\t\t\t\t\t\t<span class=\"status-dot\" style=\"background: {config.color}\"></span>\n\t\t\t\t\t\t\t\t<span class=\"service-name\">{service.name}</span>\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t<div class=\"service-status\" style=\"color: {config.color}\">\n\t\t\t\t\t\t\t\t{config.label}\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t\t<div class=\"uptime-section\">\n\t\t\t\t\t\t\t<div class=\"uptime-bars\">\n\t\t\t\t\t\t\t\t{#each get_uptime_bars(service) as bar}\n\t\t\t\t\t\t\t\t\t<div \n\t\t\t\t\t\t\t\t\t\tclass=\"uptime-bar\" \n\t\t\t\t\t\t\t\t\t\tdata-status={bar.status}\n\t\t\t\t\t\t\t\t\t\ttitle=\"{bar.day} days ago: {bar.status}\"\n\t\t\t\t\t\t\t\t\t></div>\n\t\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t<div class=\"uptime-footer\">\n\t\t\t\t\t\t\t\t<span class=\"uptime-label\">{content.days_90}</span>\n\t\t\t\t\t\t\t\t<span class=\"uptime-value\">{get_uptime(service)}% {content.uptime_label}</span>\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t{/each}\n\t\t\t</div>\n\t\t</section>\n\n\t\t{#if resolved_incidents.length > 0}\n\t\t\t<section class=\"history-section\">\n\t\t\t\t<h2>\n\t\t\t\t\t<Icon icon=\"lucide:history\" width={18} />\n\t\t\t\t\t{content.incident_history}\n\t\t\t\t</h2>\n\t\t\t\t<div class=\"history-list\">\n\t\t\t\t\t{#each resolved_incidents as incident (incident.id)}\n\t\t\t\t\t\t<div class=\"history-item\">\n\t\t\t\t\t\t\t<div class=\"history-date\">{format_date(incident.created_at)}</div>\n\t\t\t\t\t\t\t<div class=\"history-content\">\n\t\t\t\t\t\t\t\t<span class=\"history-title\">{incident.title}</span>\n\t\t\t\t\t\t\t\t<span class=\"history-duration\">{incident.duration || '2h 15m'}</span>\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t{/each}\n\t\t\t\t</div>\n\t\t\t</section>\n\t\t{/if}\n\t{/if}\n\n\t<footer class=\"footer\">\n\t\t<span>{content.footer_text}</span>\n\t</footer>\n</div>\n\n<style>\n\t.page {\n\t\tmin-height: 100vh;\n\t\tbackground: var(--bg-color);\n\t\tfont-family: var(--font);\n\t\tcolor: var(--text-color);\n\t}\n\n\t.header {\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: center;\n\t\tpadding: 1.5rem 2rem;\n\t\tbackground: var(--card-bg);\n\t\tborder-bottom: 1px solid var(--border-color);\n\t}\n\n\t.logo {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.75rem;\n\t\tcolor: var(--heading-color);\n\t}\n\n\t.logo h1 {\n\t\tmargin: 0;\n\t\tfont-size: 1.25rem;\n\t\tfont-weight: 700;\n\t}\n\n\t.subscribe-btn {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tpadding: 0.5rem 1rem;\n\t\tbackground: transparent;\n\t\tborder: 1px solid var(--border-color);\n\t\tborder-radius: var(--radius);\n\t\tcolor: var(--text-color);\n\t\tfont-size: 0.875rem;\n\t\tcursor: pointer;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.subscribe-btn:hover {\n\t\tbackground: var(--bg-color);\n\t\tborder-color: var(--accent-color);\n\t\tcolor: var(--accent-color);\n\t}\n\n\t.subscribe-form {\n\t\tpadding: 1rem 2rem;\n\t\tbackground: var(--card-bg);\n\t\tborder-bottom: 1px solid var(--border-color);\n\t}\n\n\t.subscribe-form form {\n\t\tdisplay: flex;\n\t\tgap: 0.5rem;\n\t\tmax-width: 400px;\n\t}\n\n\t.subscribe-form input {\n\t\tflex: 1;\n\t\tpadding: 0.5rem 0.75rem;\n\t\tborder: 1px solid var(--border-color);\n\t\tborder-radius: var(--radius);\n\t\tbackground: var(--bg-color);\n\t\tcolor: var(--heading-color);\n\t\tfont-size: 0.875rem;\n\t}\n\n\t.subscribe-form button {\n\t\tpadding: 0.5rem 1rem;\n\t\tbackground: var(--accent-color);\n\t\tcolor: white;\n\t\tborder: none;\n\t\tborder-radius: var(--radius);\n\t\tfont-size: 0.875rem;\n\t\tfont-weight: 500;\n\t\tcursor: pointer;\n\t}\n\n\t.success-message {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tcolor: var(--success-color);\n\t\tfont-weight: 500;\n\t}\n\n\t.status-banner {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tgap: 0.75rem;\n\t\tpadding: 1.25rem;\n\t\tfont-size: 1rem;\n\t\tfont-weight: 600;\n\t}\n\n\t.status-banner[data-status=\"operational\"] {\n\t\tbackground: color-mix(in srgb, var(--success-color) 15%, transparent);\n\t\tcolor: var(--success-color);\n\t}\n\n\t.status-banner[data-status=\"degraded\"] {\n\t\tbackground: color-mix(in srgb, var(--warning-color) 15%, transparent);\n\t\tcolor: var(--warning-color);\n\t}\n\n\t.status-banner[data-status=\"down\"] {\n\t\tbackground: color-mix(in srgb, var(--danger-color) 15%, transparent);\n\t\tcolor: var(--danger-color);\n\t}\n\n\t.status-banner[data-status=\"maintenance\"] {\n\t\tbackground: color-mix(in srgb, var(--info-color) 15%, transparent);\n\t\tcolor: var(--info-color);\n\t}\n\n\t.loading {\n\t\tdisplay: flex;\n\t\tjustify-content: center;\n\t\tpadding: 4rem;\n\t}\n\n\tsection {\n\t\tpadding: 2rem;\n\t\tmax-width: 900px;\n\t\tmargin: 0 auto;\n\t}\n\n\tsection h2 {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tfont-size: 1rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color);\n\t\tmargin: 0 0 1rem;\n\t}\n\n\t.incidents-section {\n\t\tpadding-bottom: 0;\n\t}\n\n\t.incident-card {\n\t\tbackground: var(--card-bg);\n\t\tborder: 1px solid var(--border-color);\n\t\tborder-radius: var(--radius);\n\t\tpadding: 1.25rem;\n\t\tmargin-bottom: 1rem;\n\t\tborder-left: 4px solid var(--warning-color);\n\t}\n\n\t.incident-card[data-severity=\"critical\"] {\n\t\tborder-left-color: var(--danger-color);\n\t}\n\n\t.incident-header {\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: center;\n\t\tmargin-bottom: 0.5rem;\n\t}\n\n\t.incident-title {\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color);\n\t}\n\n\t.incident-status {\n\t\tfont-size: 0.75rem;\n\t\ttext-transform: uppercase;\n\t\tpadding: 0.25rem 0.5rem;\n\t\tbackground: var(--bg-color);\n\t\tborder-radius: 4px;\n\t\tfont-weight: 600;\n\t}\n\n\t.incident-description {\n\t\tmargin: 0 0 0.75rem;\n\t\tfont-size: 0.875rem;\n\t\tline-height: 1.5;\n\t}\n\n\t.incident-meta {\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t\tfont-size: 0.8125rem;\n\t\tcolor: var(--text-color);\n\t}\n\n\t.incident-meta span {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.375rem;\n\t}\n\n\t.incident-updates {\n\t\tmargin-top: 1rem;\n\t\tpadding-top: 1rem;\n\t\tborder-top: 1px solid var(--border-color);\n\t}\n\n\t.incident-updates h4 {\n\t\tmargin: 0 0 0.5rem;\n\t\tfont-size: 0.8125rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color);\n\t}\n\n\t.update-text {\n\t\tfont-size: 0.8125rem;\n\t\tline-height: 1.5;\n\t}\n\n\t.services-list {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tgap: 1rem;\n\t}\n\n\t.service-card {\n\t\tbackground: var(--card-bg);\n\t\tborder: 1px solid var(--border-color);\n\t\tborder-radius: var(--radius);\n\t\tpadding: 1rem 1.25rem;\n\t}\n\n\t.service-header {\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: center;\n\t\tmargin-bottom: 0.75rem;\n\t}\n\n\t.service-info {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.75rem;\n\t}\n\n\t.status-dot {\n\t\twidth: 10px;\n\t\theight: 10px;\n\t\tborder-radius: 50%;\n\t}\n\n\t.service-name {\n\t\tfont-weight: 500;\n\t\tcolor: var(--heading-color);\n\t}\n\n\t.service-status {\n\t\tfont-size: 0.8125rem;\n\t\tfont-weight: 600;\n\t}\n\n\t.uptime-section {\n\t\tmargin-top: 0.5rem;\n\t}\n\n\t.uptime-bars {\n\t\tdisplay: flex;\n\t\tgap: 2px;\n\t\theight: 24px;\n\t\talign-items: stretch;\n\t}\n\n\t.uptime-bar {\n\t\tflex: 1;\n\t\tborder-radius: 2px;\n\t\tbackground: var(--success-color);\n\t\ttransition: transform 0.1s;\n\t}\n\n\t.uptime-bar:hover {\n\t\ttransform: scaleY(1.2);\n\t}\n\n\t.uptime-bar[data-status=\"degraded\"] {\n\t\tbackground: var(--warning-color);\n\t}\n\n\t.uptime-bar[data-status=\"down\"] {\n\t\tbackground: var(--danger-color);\n\t}\n\n\t.uptime-footer {\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\tmargin-top: 0.5rem;\n\t\tfont-size: 0.75rem;\n\t}\n\n\t.uptime-label {\n\t\tcolor: var(--text-color);\n\t}\n\n\t.uptime-value {\n\t\tcolor: var(--heading-color);\n\t\tfont-weight: 600;\n\t}\n\n\t.history-section {\n\t\tborder-top: 1px solid var(--border-color);\n\t}\n\n\t.history-list {\n\t\tbackground: var(--card-bg);\n\t\tborder: 1px solid var(--border-color);\n\t\tborder-radius: var(--radius);\n\t\toverflow: hidden;\n\t}\n\n\t.history-item {\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t\tpadding: 1rem 1.25rem;\n\t\tborder-bottom: 1px solid var(--border-color);\n\t}\n\n\t.history-item:last-child {\n\t\tborder-bottom: none;\n\t}\n\n\t.history-date {\n\t\tflex-shrink: 0;\n\t\twidth: 140px;\n\t\tfont-size: 0.8125rem;\n\t\tcolor: var(--text-color);\n\t}\n\n\t.history-content {\n\t\tflex: 1;\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: center;\n\t}\n\n\t.history-title {\n\t\tfont-size: 0.875rem;\n\t\tcolor: var(--heading-color);\n\t}\n\n\t.history-duration {\n\t\tfont-size: 0.8125rem;\n\t\tcolor: var(--text-color);\n\t}\n\n\t.footer {\n\t\ttext-align: center;\n\t\tpadding: 2rem;\n\t\tfont-size: 0.8125rem;\n\t\tcolor: var(--text-color);\n\t\tborder-top: 1px solid var(--border-color);\n\t}\n\n\t:global(.spin) {\n\t\tanimation: spin 1s linear infinite;\n\t}\n\n\t@keyframes spin {\n\t\tfrom { transform: rotate(0deg); }\n\t\tto { transform: rotate(360deg); }\n\t}\n\n\t@media (max-width: 600px) {\n\t\t.header {\n\t\t\tpadding: 1rem;\n\t\t}\n\n\t\tsection {\n\t\t\tpadding: 1.5rem 1rem;\n\t\t}\n\n\t\t.history-item {\n\t\t\tflex-direction: column;\n\t\t\tgap: 0.25rem;\n\t\t}\n\n\t\t.history-date {\n\t\t\twidth: auto;\n\t\t}\n\t}\n</style>",
+	"design": [
+		{
+			"id": "bg-color",
+			"name": "Background",
+			"css_var": "--bg-color",
+			"value": "#0f172a",
+			"type": "color",
+			"description": "Page background"
+		},
+		{
+			"id": "card-bg",
+			"name": "Card Background",
+			"css_var": "--card-bg",
+			"value": "#1e293b",
+			"type": "color",
+			"description": "Card and header background"
+		},
+		{
+			"id": "heading-color",
+			"name": "Heading Color",
+			"css_var": "--heading-color",
+			"value": "#f1f5f9",
+			"type": "color",
+			"description": "Headings and primary text"
+		},
+		{
+			"id": "text-color",
+			"name": "Text Color",
+			"css_var": "--text-color",
+			"value": "#94a3b8",
+			"type": "color",
+			"description": "Secondary text"
+		},
+		{
+			"id": "border-color",
+			"name": "Border Color",
+			"css_var": "--border-color",
+			"value": "#334155",
+			"type": "color",
+			"description": "Borders and dividers"
+		},
+		{
+			"id": "accent-color",
+			"name": "Accent Color",
+			"css_var": "--accent-color",
+			"value": "#3b82f6",
+			"type": "color",
+			"description": "Primary accent"
+		},
+		{
+			"id": "success-color",
+			"name": "Success Color",
+			"css_var": "--success-color",
+			"value": "#22c55e",
+			"type": "color",
+			"description": "Operational status"
+		},
+		{
+			"id": "warning-color",
+			"name": "Warning Color",
+			"css_var": "--warning-color",
+			"value": "#f59e0b",
+			"type": "color",
+			"description": "Degraded status"
+		},
+		{
+			"id": "danger-color",
+			"name": "Danger Color",
+			"css_var": "--danger-color",
+			"value": "#ef4444",
+			"type": "color",
+			"description": "Down status"
+		},
+		{
+			"id": "info-color",
+			"name": "Info Color",
+			"css_var": "--info-color",
+			"value": "#06b6d4",
+			"type": "color",
+			"description": "Maintenance status"
+		},
+		{
+			"id": "font",
+			"name": "Font",
+			"css_var": "--font",
+			"value": "system-ui, -apple-system, sans-serif",
+			"type": "font",
+			"description": "Main font family"
+		},
+		{
+			"id": "radius",
+			"name": "Border Radius",
+			"css_var": "--radius",
+			"value": "8px",
+			"type": "radius",
+			"description": "Corner roundness"
+		}
+	],
+	"content": [
+		{
+			"id": "title",
+			"name": "Title",
+			"type": "text",
+			"value": "System Status",
+			"description": "Page title"
+		},
+		{
+			"id": "subscribe_button",
+			"name": "Subscribe Button",
+			"type": "text",
+			"value": "Subscribe",
+			"description": "Subscribe button text"
+		},
+		{
+			"id": "email_placeholder",
+			"name": "Email Placeholder",
+			"type": "text",
+			"value": "Enter your email",
+			"description": "Email input placeholder"
+		},
+		{
+			"id": "subscribe_submit",
+			"name": "Subscribe Submit",
+			"type": "text",
+			"value": "Get Updates",
+			"description": "Subscribe submit button"
+		},
+		{
+			"id": "subscribed_message",
+			"name": "Subscribed Message",
+			"type": "text",
+			"value": "You're subscribed!",
+			"description": "Success message after subscribing"
+		},
+		{
+			"id": "status_operational",
+			"name": "Status Operational",
+			"type": "text",
+			"value": "All Systems Operational",
+			"description": "Message when all systems are operational"
+		},
+		{
+			"id": "status_degraded",
+			"name": "Status Degraded",
+			"type": "text",
+			"value": "Some Systems Degraded",
+			"description": "Message when some systems are degraded"
+		},
+		{
+			"id": "status_down",
+			"name": "Status Down",
+			"type": "text",
+			"value": "System Outage Detected",
+			"description": "Message when systems are down"
+		},
+		{
+			"id": "status_maintenance",
+			"name": "Status Maintenance",
+			"type": "text",
+			"value": "Scheduled Maintenance",
+			"description": "Message during maintenance"
+		},
+		{
+			"id": "active_incidents",
+			"name": "Active Incidents",
+			"type": "text",
+			"value": "Active Incidents",
+			"description": "Active incidents section heading"
+		},
+		{
+			"id": "updates_label",
+			"name": "Updates Label",
+			"type": "text",
+			"value": "Latest Update",
+			"description": "Updates section label"
+		},
+		{
+			"id": "services_heading",
+			"name": "Services Heading",
+			"type": "text",
+			"value": "Services",
+			"description": "Services section heading"
+		},
+		{
+			"id": "days_90",
+			"name": "90 Days Label",
+			"type": "text",
+			"value": "90 days ago",
+			"description": "Label for uptime chart start"
+		},
+		{
+			"id": "uptime_label",
+			"name": "Uptime Label",
+			"type": "text",
+			"value": "uptime",
+			"description": "Uptime percentage label"
+		},
+		{
+			"id": "incident_history",
+			"name": "Incident History",
+			"type": "text",
+			"value": "Past Incidents",
+			"description": "Incident history section heading"
+		},
+		{
+			"id": "footer_text",
+			"name": "Footer Text",
+			"type": "text",
+			"value": "Powered by tinykit.studio",
+			"description": "Footer text"
+		}
+	],
+	"data": {
+		"services": {
+			"schema": [
+				{
+					"name": "name",
+					"type": "text"
+				},
+				{
+					"name": "status",
+					"type": "text"
+				},
+				{
+					"name": "uptime",
+					"type": "number"
+				},
+				{
+					"name": "order",
+					"type": "number"
+				}
+			],
+			"records": [
+				{
+					"id": "s1",
+					"name": "API",
+					"status": "operational",
+					"uptime": 99.98,
+					"order": 0
+				},
+				{
+					"id": "s2",
+					"name": "Web Application",
+					"status": "operational",
+					"uptime": 99.95,
+					"order": 1
+				},
+				{
+					"id": "s3",
+					"name": "Database",
+					"status": "operational",
+					"uptime": 99.99,
+					"order": 2
+				},
+				{
+					"id": "s4",
+					"name": "CDN",
+					"status": "degraded",
+					"uptime": 98.5,
+					"order": 3
+				},
+				{
+					"id": "s5",
+					"name": "Email Service",
+					"status": "operational",
+					"uptime": 99.9,
+					"order": 4
+				}
+			],
+			"icon": "lucide:server"
+		},
+		"incidents": {
+			"schema": [
+				{
+					"name": "title",
+					"type": "text"
+				},
+				{
+					"name": "description",
+					"type": "text"
+				},
+				{
+					"name": "status",
+					"type": "text"
+				},
+				{
+					"name": "severity",
+					"type": "text"
+				},
+				{
+					"name": "affected_services",
+					"type": "text"
+				},
+				{
+					"name": "updates",
+					"type": "text"
+				},
+				{
+					"name": "duration",
+					"type": "text"
+				},
+				{
+					"name": "created_at",
+					"type": "text"
+				}
+			],
+			"records": [
+				{
+					"id": "i1",
+					"title": "CDN Performance Issues",
+					"description": "We are experiencing slower than normal response times from our CDN provider.",
+					"status": "investigating",
+					"severity": "minor",
+					"affected_services": "CDN",
+					"updates": "Our team is working with the CDN provider to resolve this issue. No data loss expected.",
+					"duration": "",
+					"created_at": "2024-12-20T14:30:00Z"
+				},
+				{
+					"id": "i2",
+					"title": "API Latency Spike",
+					"description": "Brief period of increased API response times.",
+					"status": "resolved",
+					"severity": "minor",
+					"affected_services": "API",
+					"updates": "",
+					"duration": "45m",
+					"created_at": "2024-12-18T09:15:00Z"
+				},
+				{
+					"id": "i3",
+					"title": "Database Maintenance",
+					"description": "Scheduled database maintenance completed successfully.",
+					"status": "resolved",
+					"severity": "minor",
+					"affected_services": "Database",
+					"updates": "",
+					"duration": "2h",
+					"created_at": "2024-12-15T02:00:00Z"
+				}
+			],
+			"icon": "lucide:alert-circle"
+		}
+	}
+}

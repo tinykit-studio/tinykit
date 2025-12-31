@@ -1,0 +1,211 @@
+{
+	"id": "personal-wiki",
+	"name": "Personal Wiki",
+	"description": "Zettelkasten-style linked notes",
+	"preview": "lucide:brain",
+	"tags": [
+		"wiki",
+		"notes",
+		"advanced"
+	],
+	"kits": [
+		"wiki",
+		"daily"
+	],
+	"frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet notes = $state([])\n\tlet loading = $state(true)\n\tlet active_note = $state(null)\n\tlet search = $state('')\n\tlet view = $state('list') // 'list' or 'graph'\n\n\tfunction get_note_from_url() {\n\t\tconst path = window.location.pathname.split('/').filter(Boolean)\n\t\treturn path[0] || null\n\t}\n\n\tfunction navigate_to(note_id) {\n\t\tconst url = new URL(window.location.href)\n\t\turl.pathname = note_id ? '/' + note_id : '/'\n\t\twindow.history.pushState({}, '', url)\n\t}\n\n\tdata.notes.subscribe(items => {\n\t\tnotes = items.sort((a, b) => \n\t\t\tnew Date(b.updated_at || b.created_at).getTime() - \n\t\t\tnew Date(a.updated_at || a.created_at).getTime()\n\t\t)\n\t\tloading = false\n\t\tconst url_note = get_note_from_url()\n\t\tif (url_note && items.find(n => n.id === url_note)) {\n\t\t\tactive_note = url_note\n\t\t}\n\t})\n\n\tlet current_note = $derived(notes.find(n => n.id === active_note))\n\n\tlet filtered_notes = $derived(\n\t\t!search.trim() \n\t\t\t? notes \n\t\t\t: notes.filter(n => \n\t\t\t\tn.title.toLowerCase().includes(search.toLowerCase()) ||\n\t\t\t\tn.content.toLowerCase().includes(search.toLowerCase()) ||\n\t\t\t\t(n.tags || '').toLowerCase().includes(search.toLowerCase())\n\t\t\t)\n\t)\n\n\tfunction get_linked_notes(note) {\n\t\tif (!note || !note.links) return []\n\t\tconst link_ids = note.links.split(',').map(l => l.trim()).filter(Boolean)\n\t\treturn notes.filter(n => link_ids.includes(n.id))\n\t}\n\n\tfunction get_backlinks(note) {\n\t\tif (!note) return []\n\t\treturn notes.filter(n => {\n\t\t\tif (!n.links) return false\n\t\t\tconst link_ids = n.links.split(',').map(l => l.trim())\n\t\t\treturn link_ids.includes(note.id)\n\t\t})\n\t}\n\n\tfunction render_content(text) {\n\t\tif (!text) return ''\n\t\t// Handle wiki-style links [[note-id]]\n\t\ttext = text.replace(/\\[\\[([^\\]]+)\\]\\]/g, (_, id) => {\n\t\t\tconst linked = notes.find(n => n.id === id)\n\t\t\tif (linked) {\n\t\t\t\treturn `<a href=\"#\" class=\"wiki-link\" data-note-id=\"${id}\">${linked.title}</a>`\n\t\t\t}\n\t\t\treturn `<span class=\"broken-link\">${id}</span>`\n\t\t})\n\t\treturn text\n\t\t\t.replace(/^### (.+)$/gm, '<h3>$1</h3>')\n\t\t\t.replace(/^## (.+)$/gm, '<h2>$1</h2>')\n\t\t\t.replace(/^- (.+)$/gm, '<li>$1</li>')\n\t\t\t.replace(/(<li>.*<\\/li>\\n?)+/g, '<ul>$&</ul>')\n\t\t\t.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>')\n\t\t\t.replace(/\\*(.+?)\\*/g, '<em>$1</em>')\n\t\t\t.replace(/`(.+?)`/g, '<code>$1</code>')\n\t\t\t.replace(/\\n\\n/g, '</p><p>')\n\t\t\t.replace(/\\n/g, '<br>')\n\t\t\t.replace(/^(?!<)/, '<p>')\n\t\t\t.replace(/(?!>)$/, '</p>')\n\t}\n\n\tfunction handle_link_click(e) {\n\t\tconst link = e.target.closest('.wiki-link')\n\t\tif (link) {\n\t\t\te.preventDefault()\n\t\t\tconst note_id = link.dataset.noteId\n\t\t\tactive_note = note_id\n\t\t\tnavigate_to(note_id)\n\t\t}\n\t}\n\n\tfunction format_date(date_str) {\n\t\tif (!date_str) return ''\n\t\treturn new Date(date_str).toLocaleDateString('en-US', {\n\t\t\tmonth: 'short',\n\t\t\tday: 'numeric',\n\t\t\tyear: 'numeric'\n\t\t})\n\t}\n\n\tfunction get_tags(note) {\n\t\tif (!note.tags) return []\n\t\treturn note.tags.split(',').map(t => t.trim()).filter(Boolean)\n\t}\n</script>\n\n<div class=\"page\">\n\t{#if active_note && current_note}\n\t\t<div class=\"note-view\">\n\t\t\t<header class=\"note-header\">\n\t\t\t\t<button class=\"back-btn\" onclick={() => { active_note = null; navigate_to(null) }}>\n\t\t\t\t\t<Icon icon=\"lucide:arrow-left\" width={16} />\n\t\t\t\t\t{content.back_text}\n\t\t\t\t</button>\n\t\t\t</header>\n\n\t\t\t<article class=\"note-content\" onclick={handle_link_click}>\n\t\t\t\t<h1>{current_note.title}</h1>\n\t\t\t\t{#if get_tags(current_note).length > 0}\n\t\t\t\t\t<div class=\"tags\">\n\t\t\t\t\t\t{#each get_tags(current_note) as tag}\n\t\t\t\t\t\t\t<span class=\"tag\">#{tag}</span>\n\t\t\t\t\t\t{/each}\n\t\t\t\t\t</div>\n\t\t\t\t{/if}\n\t\t\t\t<div class=\"prose\">\n\t\t\t\t\t{@html render_content(current_note.content)}\n\t\t\t\t</div>\n\n\t\t\t\t{#if get_linked_notes(current_note).length > 0 || get_backlinks(current_note).length > 0}\n\t\t\t\t\t{@const linked = get_linked_notes(current_note)}\n\t\t\t\t\t{@const backlinks = get_backlinks(current_note)}\n\t\t\t\t\t<div class=\"connections\">\n\t\t\t\t\t\t{#if linked.length > 0}\n\t\t\t\t\t\t\t<div class=\"connection-group\">\n\t\t\t\t\t\t\t\t<h4>\n\t\t\t\t\t\t\t\t\t<Icon icon=\"lucide:arrow-right\" width={14} />\n\t\t\t\t\t\t\t\t\tLinks to\n\t\t\t\t\t\t\t\t</h4>\n\t\t\t\t\t\t\t\t<div class=\"connection-list\">\n\t\t\t\t\t\t\t\t\t{#each linked as note}\n\t\t\t\t\t\t\t\t\t\t<button onclick={() => { active_note = note.id; navigate_to(note.id) }}>\n\t\t\t\t\t\t\t\t\t\t\t{note.title}\n\t\t\t\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t{#if backlinks.length > 0}\n\t\t\t\t\t\t\t<div class=\"connection-group\">\n\t\t\t\t\t\t\t\t<h4>\n\t\t\t\t\t\t\t\t\t<Icon icon=\"lucide:arrow-left\" width={14} />\n\t\t\t\t\t\t\t\t\tLinked from\n\t\t\t\t\t\t\t\t</h4>\n\t\t\t\t\t\t\t\t<div class=\"connection-list\">\n\t\t\t\t\t\t\t\t\t{#each backlinks as note}\n\t\t\t\t\t\t\t\t\t\t<button onclick={() => { active_note = note.id; navigate_to(note.id) }}>\n\t\t\t\t\t\t\t\t\t\t\t{note.title}\n\t\t\t\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t</div>\n\t\t\t\t{/if}\n\n\t\t\t\t<footer class=\"note-footer\">\n\t\t\t\t\t<span>Created {format_date(current_note.created_at)}</span>\n\t\t\t\t\t{#if current_note.updated_at}\n\t\t\t\t\t\t<span>\u00b7 Updated {format_date(current_note.updated_at)}</span>\n\t\t\t\t\t{/if}\n\t\t\t\t</footer>\n\t\t\t</article>\n\t\t</div>\n\t{:else}\n\t\t<header class=\"header\">\n\t\t\t<div class=\"header-content\">\n\t\t\t\t<h1>{content.title}</h1>\n\t\t\t\t<p>{content.subtitle}</p>\n\t\t\t</div>\n\t\t</header>\n\n\t\t<div class=\"search-box\">\n\t\t\t<span class=\"search-icon\"><Icon icon=\"lucide:search\" width={18} /></span>\n\t\t\t<input \n\t\t\t\ttype=\"text\" \n\t\t\t\tplaceholder={content.search_placeholder}\n\t\t\t\tbind:value={search}\n\t\t\t/>\n\t\t\t{#if search}\n\t\t\t\t<button class=\"clear\" onclick={() => search = ''}>\n\t\t\t\t\t<Icon icon=\"lucide:x\" width={16} />\n\t\t\t\t</button>\n\t\t\t{/if}\n\t\t</div>\n\n\t\t{#if loading}\n\t\t\t<div class=\"loading\">\n\t\t\t\t<Icon icon=\"lucide:loader-2\" width={24} class=\"spin\" />\n\t\t\t</div>\n\t\t{:else if filtered_notes.length === 0}\n\t\t\t<div class=\"empty\">\n\t\t\t\t<Icon icon=\"lucide:file-text\" width={48} />\n\t\t\t\t<p>{search ? content.no_results : content.empty_text}</p>\n\t\t\t</div>\n\t\t{:else}\n\t\t\t<div class=\"note-grid\">\n\t\t\t\t{#each filtered_notes as note (note.id)}\n\t\t\t\t\t<button class=\"note-card\" onclick={() => { active_note = note.id; navigate_to(note.id) }}>\n\t\t\t\t\t\t<h3>{note.title}</h3>\n\t\t\t\t\t\t<p>{note.content.slice(0, 120).replace(/[#*`\\[\\]]/g, '')}...</p>\n\t\t\t\t\t\t{#if get_tags(note).length > 0}\n\t\t\t\t\t\t\t<div class=\"card-tags\">\n\t\t\t\t\t\t\t\t{#each get_tags(note).slice(0, 3) as tag}\n\t\t\t\t\t\t\t\t\t<span>#{tag}</span>\n\t\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t</button>\n\t\t\t\t{/each}\n\t\t\t</div>\n\t\t{/if}\n\t{/if}\n</div>\n\n<style>\n\t.page {\n\t\tmin-height: 100vh;\n\t\tbackground: var(--bg-color, #fffbeb);\n\t\tpadding: 3rem 1.5rem;\n\t\tfont-family: var(--font, 'Georgia', serif);\n\t}\n\n\t.header {\n\t\tmax-width: 800px;\n\t\tmargin: 0 auto 2rem;\n\t\ttext-align: center;\n\t}\n\n\t.header h1 {\n\t\tfont-size: 2.5rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--heading-color, #451a03);\n\t\tmargin: 0 0 0.5rem;\n\t}\n\n\t.header p {\n\t\tcolor: var(--text-color, #78716c);\n\t\tmargin: 0;\n\t\tfont-size: 1.125rem;\n\t\tfont-style: italic;\n\t}\n\n\t.search-box {\n\t\tmax-width: 480px;\n\t\tmargin: 0 auto 2.5rem;\n\t\tposition: relative;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t}\n\n\t.search-icon {\n\t\tposition: absolute;\n\t\tleft: 1rem;\n\t\tcolor: var(--text-color, #78716c);\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tpointer-events: none;\n\t}\n\n\t.search-box input {\n\t\twidth: 100%;\n\t\tpadding: 0.875rem 2.75rem;\n\t\tborder: 2px solid var(--border-color, #fde68a);\n\t\tborder-radius: var(--radius, 8px);\n\t\tfont-size: 1rem;\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tcolor: var(--heading-color, #451a03);\n\t\tfont-family: inherit;\n\t}\n\n\t.search-box input:focus {\n\t\toutline: none;\n\t\tborder-color: var(--accent-color, #f59e0b);\n\t}\n\n\t.search-box .clear {\n\t\tposition: absolute;\n\t\tright: 0.75rem;\n\t\tpadding: 0.25rem;\n\t\tbackground: none;\n\t\tborder: none;\n\t\tcolor: var(--text-color, #78716c);\n\t\tcursor: pointer;\n\t}\n\n\t.loading, .empty {\n\t\tmax-width: 800px;\n\t\tmargin: 4rem auto;\n\t\ttext-align: center;\n\t\tcolor: var(--text-color, #78716c);\n\t}\n\n\t.empty p { margin-top: 1rem; }\n\n\t.note-grid {\n\t\tmax-width: 800px;\n\t\tmargin: 0 auto;\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(auto-fill, minmax(250px, 1fr));\n\t\tgap: 1rem;\n\t}\n\n\t.note-card {\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tborder: 2px solid var(--border-color, #fde68a);\n\t\tborder-radius: var(--radius, 8px);\n\t\tpadding: 1.25rem;\n\t\ttext-align: left;\n\t\tcursor: pointer;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.note-card:hover {\n\t\tborder-color: var(--accent-color, #f59e0b);\n\t\ttransform: translateY(-2px);\n\t\tbox-shadow: 0 4px 12px rgba(0,0,0,0.08);\n\t}\n\n\t.note-card h3 {\n\t\tfont-size: 1rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #451a03);\n\t\tmargin: 0 0 0.5rem;\n\t}\n\n\t.note-card p {\n\t\tfont-size: 0.875rem;\n\t\tcolor: var(--text-color, #78716c);\n\t\tmargin: 0;\n\t\tline-height: 1.5;\n\t}\n\n\t.card-tags {\n\t\tdisplay: flex;\n\t\tgap: 0.5rem;\n\t\tmargin-top: 0.75rem;\n\t\tflex-wrap: wrap;\n\t}\n\n\t.card-tags span {\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--accent-color, #f59e0b);\n\t}\n\n\t/* Note View */\n\t.note-view {\n\t\tmax-width: 720px;\n\t\tmargin: 0 auto;\n\t}\n\n\t.note-header {\n\t\tmargin-bottom: 1.5rem;\n\t}\n\n\t.back-btn {\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tgap: 0.375rem;\n\t\tpadding: 0.5rem 0;\n\t\tbackground: none;\n\t\tborder: none;\n\t\tcolor: var(--accent-color, #f59e0b);\n\t\tfont-size: 0.875rem;\n\t\tfont-family: inherit;\n\t\tcursor: pointer;\n\t}\n\n\t.back-btn:hover { text-decoration: underline; }\n\n\t.note-content h1 {\n\t\tfont-size: 2rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--heading-color, #451a03);\n\t\tmargin: 0 0 1rem;\n\t\tline-height: 1.3;\n\t}\n\n\t.tags {\n\t\tdisplay: flex;\n\t\tgap: 0.75rem;\n\t\tmargin-bottom: 1.5rem;\n\t\tflex-wrap: wrap;\n\t}\n\n\t.tag {\n\t\tpadding: 0.25rem 0.625rem;\n\t\tbackground: color-mix(in srgb, var(--accent-color, #f59e0b) 15%, transparent);\n\t\tcolor: var(--accent-color, #b45309);\n\t\tborder-radius: 999px;\n\t\tfont-size: 0.8125rem;\n\t}\n\n\t.prose {\n\t\tcolor: var(--prose-color, #57534e);\n\t\tline-height: 1.9;\n\t\tfont-size: 1.0625rem;\n\t}\n\n\t.prose :global(h2) {\n\t\tfont-size: 1.5rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #451a03);\n\t\tmargin: 2rem 0 1rem;\n\t}\n\n\t.prose :global(h3) {\n\t\tfont-size: 1.25rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #451a03);\n\t\tmargin: 1.5rem 0 0.75rem;\n\t}\n\n\t.prose :global(p) { margin: 0 0 1.25rem; }\n\n\t.prose :global(ul) {\n\t\tmargin: 0 0 1.25rem;\n\t\tpadding-left: 1.5rem;\n\t}\n\n\t.prose :global(li) { margin-bottom: 0.5rem; }\n\n\t.prose :global(.wiki-link) {\n\t\tcolor: var(--accent-color, #f59e0b);\n\t\ttext-decoration: underline;\n\t\ttext-underline-offset: 2px;\n\t\tcursor: pointer;\n\t}\n\n\t.prose :global(.wiki-link:hover) {\n\t\tbackground: color-mix(in srgb, var(--accent-color, #f59e0b) 15%, transparent);\n\t}\n\n\t.prose :global(.broken-link) {\n\t\tcolor: var(--text-color, #78716c);\n\t\ttext-decoration: line-through;\n\t}\n\n\t.prose :global(code) {\n\t\tbackground: var(--code-bg, #fef3c7);\n\t\tpadding: 0.125rem 0.375rem;\n\t\tborder-radius: 4px;\n\t\tfont-size: 0.875em;\n\t\tfont-family: ui-monospace, monospace;\n\t}\n\n\t.connections {\n\t\tmargin-top: 3rem;\n\t\tpadding-top: 2rem;\n\t\tborder-top: 2px solid var(--border-color, #fde68a);\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(auto-fit, minmax(200px, 1fr));\n\t\tgap: 1.5rem;\n\t}\n\n\t.connection-group h4 {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.375rem;\n\t\tfont-size: 0.75rem;\n\t\tfont-weight: 600;\n\t\ttext-transform: uppercase;\n\t\tletter-spacing: 0.05em;\n\t\tcolor: var(--text-color, #78716c);\n\t\tmargin: 0 0 0.75rem;\n\t}\n\n\t.connection-list {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tgap: 0.375rem;\n\t}\n\n\t.connection-list button {\n\t\tpadding: 0.5rem 0.75rem;\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tborder: 1px solid var(--border-color, #fde68a);\n\t\tborder-radius: 6px;\n\t\ttext-align: left;\n\t\tfont-size: 0.875rem;\n\t\tcolor: var(--heading-color, #451a03);\n\t\tcursor: pointer;\n\t\tfont-family: inherit;\n\t}\n\n\t.connection-list button:hover {\n\t\tborder-color: var(--accent-color, #f59e0b);\n\t\tbackground: color-mix(in srgb, var(--accent-color, #f59e0b) 8%, transparent);\n\t}\n\n\t.note-footer {\n\t\tmargin-top: 3rem;\n\t\tpadding-top: 1rem;\n\t\tborder-top: 1px solid var(--border-color, #fde68a);\n\t\tfont-size: 0.8125rem;\n\t\tcolor: var(--text-color, #a8a29e);\n\t}\n\n\t:global(.spin) {\n\t\tanimation: spin 1s linear infinite;\n\t}\n\n\t@keyframes spin {\n\t\tfrom { transform: rotate(0deg); }\n\t\tto { transform: rotate(360deg); }\n\t}\n</style>",
+	"design": [
+		{
+			"id": "bg-color",
+			"name": "Background",
+			"css_var": "--bg-color",
+			"value": "#fffbeb",
+			"type": "color",
+			"description": "Page background color"
+		},
+		{
+			"id": "card-bg",
+			"name": "Card Background",
+			"css_var": "--card-bg",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Note card background"
+		},
+		{
+			"id": "accent-color",
+			"name": "Accent Color",
+			"css_var": "--accent-color",
+			"value": "#f59e0b",
+			"type": "color",
+			"description": "Primary accent color"
+		},
+		{
+			"id": "heading-color",
+			"name": "Heading Color",
+			"css_var": "--heading-color",
+			"value": "#451a03",
+			"type": "color",
+			"description": "Color for headings"
+		},
+		{
+			"id": "text-color",
+			"name": "Text Color",
+			"css_var": "--text-color",
+			"value": "#78716c",
+			"type": "color",
+			"description": "Color for body text"
+		},
+		{
+			"id": "prose-color",
+			"name": "Prose Color",
+			"css_var": "--prose-color",
+			"value": "#57534e",
+			"type": "color",
+			"description": "Color for note content"
+		},
+		{
+			"id": "border-color",
+			"name": "Border Color",
+			"css_var": "--border-color",
+			"value": "#fde68a",
+			"type": "color",
+			"description": "Color for borders"
+		},
+		{
+			"id": "code-bg",
+			"name": "Code Background",
+			"css_var": "--code-bg",
+			"value": "#fef3c7",
+			"type": "color",
+			"description": "Background for inline code"
+		},
+		{
+			"id": "font",
+			"name": "Font",
+			"css_var": "--font",
+			"value": "'Georgia', serif",
+			"type": "font",
+			"description": "Main font family"
+		},
+		{
+			"id": "radius",
+			"name": "Border Radius",
+			"css_var": "--radius",
+			"value": "8px",
+			"type": "radius",
+			"description": "Roundness of corners"
+		}
+	],
+	"content": [
+		{
+			"id": "title",
+			"name": "Title",
+			"type": "text",
+			"value": "Digital Garden",
+			"description": "Page title"
+		},
+		{
+			"id": "subtitle",
+			"name": "Subtitle",
+			"type": "text",
+			"value": "A collection of interconnected thoughts",
+			"description": "Page subtitle"
+		},
+		{
+			"id": "search_placeholder",
+			"name": "Search Placeholder",
+			"type": "text",
+			"value": "Search notes...",
+			"description": "Search input placeholder"
+		},
+		{
+			"id": "empty_text",
+			"name": "Empty State",
+			"type": "text",
+			"value": "No notes yet. Start planting seeds!",
+			"description": "Text when no notes exist"
+		},
+		{
+			"id": "no_results",
+			"name": "No Results",
+			"type": "text",
+			"value": "No matching notes found.",
+			"description": "Text when search has no results"
+		},
+		{
+			"id": "back_text",
+			"name": "Back Text",
+			"type": "text",
+			"value": "All notes",
+			"description": "Back button text"
+		}
+	],
+	"data": {
+		"notes": {
+			"schema": [
+				{
+					"name": "title",
+					"type": "text"
+				},
+				{
+					"name": "content",
+					"type": "text"
+				},
+				{
+					"name": "tags",
+					"type": "text"
+				},
+				{
+					"name": "links",
+					"type": "text"
+				},
+				{
+					"name": "created_at",
+					"type": "text"
+				},
+				{
+					"name": "updated_at",
+					"type": "text"
+				}
+			],
+			"records": [
+				{
+					"id": "zettelkasten",
+					"title": "What is a Zettelkasten?",
+					"content": "A **Zettelkasten** (German for \"slip box\") is a personal knowledge management system developed by sociologist Niklas Luhmann.\n\n## Core principles\n\n- Each note contains one atomic idea\n- Notes are linked to other related notes\n- Over time, connections reveal unexpected insights\n\n## Why it works\n\nUnlike hierarchical systems, a Zettelkasten grows organically. Ideas can belong to multiple contexts through [[bidirectional-links]].\n\nThe magic happens when you start finding connections between seemingly unrelated concepts. See [[emergence]] for more on this.",
+					"tags": "productivity,note-taking,learning",
+					"links": "bidirectional-links,emergence",
+					"created_at": "2024-11-15",
+					"updated_at": "2024-12-10"
+				},
+				{
+					"id": "bidirectional-links",
+					"title": "Bidirectional Links",
+					"content": "**Bidirectional links** are connections that work in both directions.\n\nWhen note A links to note B, note B automatically knows about note A. This creates a web of interconnected ideas.\n\n## Benefits\n\n- Discover unexpected connections\n- Navigate knowledge organically\n- Build context around ideas\n\nThis is a core feature of modern [[zettelkasten]] systems and tools like Obsidian and Roam Research.",
+					"tags": "note-taking,tools",
+					"links": "zettelkasten",
+					"created_at": "2024-11-16",
+					"updated_at": null
+				},
+				{
+					"id": "emergence",
+					"title": "Emergence",
+					"content": "**Emergence** is when complex patterns arise from simple rules.\n\nIn a [[zettelkasten]], emergence happens when:\n\n- You've accumulated enough notes\n- Links form between disparate ideas\n- New insights \"emerge\" from the network\n\n## Examples in nature\n\n- Ant colonies organizing without central control\n- Flocking behavior in birds\n- Market prices from individual trades\n\nThe whole becomes greater than the sum of its parts.",
+					"tags": "complexity,systems-thinking",
+					"links": "zettelkasten",
+					"created_at": "2024-11-20",
+					"updated_at": null
+				},
+				{
+					"id": "writing-process",
+					"title": "My Writing Process",
+					"content": "I've developed a writing process that leverages my [[zettelkasten]].\n\n## Step 1: Collect\n\nCapture ideas as atomic notes. Don't worry about where they fit yet.\n\n## Step 2: Connect\n\nRegularly review notes and add links. Ask: *what does this remind me of?*\n\n## Step 3: Create\n\nWhen writing something new, browse related notes. Often the outline writes itself through [[bidirectional-links]].\n\n## Step 4: Publish\n\nThe final piece is a \"compressed\" version of many interconnected notes.",
+					"tags": "writing,creativity,productivity",
+					"links": "zettelkasten,bidirectional-links",
+					"created_at": "2024-12-01",
+					"updated_at": "2024-12-15"
+				}
+			],
+			"icon": "lucide:file-text"
+		}
+	}
+}

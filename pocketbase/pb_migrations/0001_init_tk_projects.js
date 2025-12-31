@@ -37,9 +37,7 @@ migrate((app) => {
 				thumbs: []
 			}
 		],
-		indexes: [
-			"CREATE UNIQUE INDEX idx_domain ON _tk_projects (domain)"
-		],
+		indexes: [],
 		listRule: "@request.auth.id != ''",
 		viewRule: "@request.auth.id != ''",
 		createRule: "@request.auth.id != ''",

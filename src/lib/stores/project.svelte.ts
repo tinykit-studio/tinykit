@@ -18,7 +18,7 @@
  */
 
 import { project_service } from '$lib/services/project.svelte'
-import type { Project, Message, DesignField, ContentField } from '../../routes/tinykit/types'
+import type { Project, AgentMessage, DesignField, ContentField } from '../../routes/tinykit/types'
 
 class ProjectStore {
 	// Reactive state
@@ -141,14 +141,14 @@ class ProjectStore {
 	/**
 	 * Update chat messages
 	 */
-	async update_chat(agent_chat: Message[]): Promise<Project | null> {
+	async update_chat(agent_chat: AgentMessage[]): Promise<Project | null> {
 		return this.update({ agent_chat })
 	}
 
 	/**
 	 * Add a message to chat
 	 */
-	async add_message(message: Message): Promise<Project | null> {
+	async add_message(message: AgentMessage): Promise<Project | null> {
 		if (!this.data) return null
 		const agent_chat = [...(this.data.agent_chat || []), message]
 		return this.update({ agent_chat })

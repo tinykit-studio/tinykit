@@ -23,14 +23,17 @@ import type {
 	DesignField,
 	ContentField,
 	Snapshot,
-	CollectionSchema
+	CollectionSchema,
+	AgentMessage
 } from '../../routes/tinykit/types'
+import type { Template } from '$lib/templates'
 
 const COLLECTION = '_tk_projects'
 
 // Default values for new projects
 const DEFAULT_PROJECT: Partial<Project> = {
 	domain: '',
+	kit: 'custom',
 	frontend_code: '',
 	backend_code: '',
 	design: [],
@@ -72,7 +75,8 @@ export const project_service = {
 	 */
 	async create(params: {
 		name: string
-		domain: string
+		domain?: string
+		kit?: string
 		frontend_code?: string
 		design?: DesignField[]
 		content?: ContentField[]
@@ -82,7 +86,8 @@ export const project_service = {
 		const project_data: Partial<Project> = {
 			...DEFAULT_PROJECT,
 			name: params.name,
-			domain: params.domain.toLowerCase(),
+			domain: params.domain?.toLowerCase() || '',
+			kit: params.kit || 'custom',
 			frontend_code: params.frontend_code || '',
 			design: params.design || [],
 			content: params.content || [],
@@ -98,6 +103,57 @@ export const project_service = {
 		// The initial_prompt is passed to the project create endpoint to trigger the first message
 
 		return await pb.collection(COLLECTION).create<Project>(project_data)
+	},
+
+	/**
+	 * Batch create all projects for a kit
+	 */
+	async batch_create_kit(kit_id: string, templates: Template[]): Promise<Project[]> {
+		const projects = await Promise.all(
+			templates.map(t => this.create({
+				name: t.name,
+				kit: kit_id,
+				frontend_code: t.frontend_code || '',
+				design: t.design || [],
+				content: t.content || [],
+				data: t.data || {}
+			}))
+		)
+		return projects
+	},
+
+	/**
+	 * Delete all projects in a kit
+	 */
+	async delete_kit(kit_id: string): Promise<void> {
+		const projects = await this.list()
+		const kit_projects = projects.filter(p => p.kit === kit_id)
+		await Promise.all(kit_projects.map(p => this.delete(p.id)))
+	},
+
+	/**
+	 * Move a project to a different kit
+	 */
+	async move_to_kit(project_id: string, new_kit: string): Promise<Project> {
+		return this.update(project_id, { kit: new_kit })
+	},
+
+	/**
+	 * Rename a kit by updating all projects to use a new kit ID
+	 * Returns the new kit ID
+	 */
+	async rename_kit(old_kit_id: string, new_name: string): Promise<string> {
+		const projects = await this.list()
+		const kit_projects = projects.filter(p => p.kit === old_kit_id)
+
+		// Generate new kit ID with the new name
+		// Format: custom:{name} for easy parsing
+		const new_kit_id = `custom:${new_name}`
+
+		// Update all projects in the kit
+		await Promise.all(kit_projects.map(p => this.update(p.id, { kit: new_kit_id })))
+
+		return new_kit_id
 	},
 
 	/**
@@ -155,7 +211,7 @@ export const project_service = {
 	/**
 	 * Update agent chat history
 	 */
-	async update_chat(id: string, agent_chat: Message[]): Promise<Project> {
+	async update_chat(id: string, agent_chat: AgentMessage[]): Promise<Project> {
 		return this.update(id, { agent_chat })
 	},
 
@@ -251,8 +307,14 @@ export const project_service = {
 			throw new Error('Snapshot not found')
 		}
 
+		// Create a safety snapshot before restoring so user can undo
+		await this.create_snapshot(id, 'Before restore')
+
+		// Re-fetch project to get updated snapshots array
+		const updated_project = await this.get(id)
+
 		// Build updated data with restored collection schemas and records
-		const updated_data = { ...project.data }
+		const updated_data = { ...updated_project.data }
 		if (snapshot.collections && Array.isArray(snapshot.collections)) {
 			for (const col of snapshot.collections) {
 				// Restore both schema and records from snapshot

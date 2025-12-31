@@ -1,0 +1,382 @@
+{
+	"id": "ticket-tracker",
+	"name": "Ticket Tracker",
+	"description": "Support ticket system with status, priority, and threads",
+	"preview": "lucide:ticket",
+	"tags": [
+		"support",
+		"tracker",
+		"intermediate"
+	],
+	"kits": [
+		"support",
+		"business"
+	],
+	"frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet tickets = $state([])\n\tlet messages = $state([])\n\tlet team = $state([])\n\tlet loading = $state(true)\n\tlet search = $state('')\n\tlet filter_status = $state('all')\n\tlet filter_priority = $state('all')\n\tlet active_ticket = $state(null)\n\tlet new_message = $state('')\n\n\tconst statuses = [\n\t\t{ id: 'open', label: 'Open', color: '#f59e0b', icon: 'lucide:circle-dot' },\n\t\t{ id: 'in_progress', label: 'In Progress', color: '#3b82f6', icon: 'lucide:loader' },\n\t\t{ id: 'resolved', label: 'Resolved', color: '#22c55e', icon: 'lucide:check-circle' },\n\t\t{ id: 'closed', label: 'Closed', color: '#64748b', icon: 'lucide:circle-x' }\n\t]\n\n\tconst priorities = [\n\t\t{ id: 'low', label: 'Low', color: '#94a3b8' },\n\t\t{ id: 'medium', label: 'Medium', color: '#f59e0b' },\n\t\t{ id: 'high', label: 'High', color: '#f97316' },\n\t\t{ id: 'urgent', label: 'Urgent', color: '#ef4444' }\n\t]\n\n\tdata.tickets.subscribe(items => {\n\t\ttickets = items.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))\n\t\tloading = false\n\t})\n\n\tdata.messages.subscribe(items => {\n\t\tmessages = items\n\t})\n\n\tdata.team.subscribe(items => {\n\t\tteam = items\n\t})\n\n\tlet filtered_tickets = $derived(() => {\n\t\tlet result = tickets\n\t\tif (filter_status !== 'all') {\n\t\t\tresult = result.filter(t => t.status === filter_status)\n\t\t}\n\t\tif (filter_priority !== 'all') {\n\t\t\tresult = result.filter(t => t.priority === filter_priority)\n\t\t}\n\t\tif (search.trim()) {\n\t\t\tconst q = search.toLowerCase()\n\t\t\tresult = result.filter(t =>\n\t\t\t\tt.subject.toLowerCase().includes(q) ||\n\t\t\t\tt.description.toLowerCase().includes(q) ||\n\t\t\t\tt.requester_name?.toLowerCase().includes(q)\n\t\t\t)\n\t\t}\n\t\treturn result\n\t})\n\n\tlet current_ticket = $derived(\n\t\tactive_ticket ? tickets.find(t => t.id === active_ticket) : null\n\t)\n\n\tlet ticket_messages = $derived(\n\t\tactive_ticket\n\t\t\t? messages.filter(m => m.ticket_id === active_ticket).sort((a, b) => new Date(a.created_at) - new Date(b.created_at))\n\t\t\t: []\n\t)\n\n\tfunction get_status(id) {\n\t\treturn statuses.find(s => s.id === id) || statuses[0]\n\t}\n\n\tfunction get_priority(id) {\n\t\treturn priorities.find(p => p.id === id) || priorities[0]\n\t}\n\n\tfunction get_assignee(id) {\n\t\treturn team.find(t => t.id === id)\n\t}\n\n\tfunction format_date(date) {\n\t\tif (!date) return ''\n\t\treturn new Date(date).toLocaleDateString('en-US', {\n\t\t\tmonth: 'short',\n\t\t\tday: 'numeric',\n\t\t\thour: '2-digit',\n\t\t\tminute: '2-digit'\n\t\t})\n\t}\n\n\tfunction time_ago(date) {\n\t\tif (!date) return ''\n\t\tconst seconds = Math.floor((new Date() - new Date(date)) / 1000)\n\t\tif (seconds < 60) return 'just now'\n\t\tif (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`\n\t\tif (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`\n\t\treturn `${Math.floor(seconds / 86400)}d ago`\n\t}\n\n\tasync function update_status(ticket_id, new_status) {\n\t\tawait data.tickets.update(ticket_id, { status: new_status })\n\t}\n\n\tasync function update_priority(ticket_id, new_priority) {\n\t\tawait data.tickets.update(ticket_id, { priority: new_priority })\n\t}\n\n\tasync function update_assignee(ticket_id, assignee_id) {\n\t\tawait data.tickets.update(ticket_id, { assignee_id })\n\t}\n\n\tasync function send_message() {\n\t\tif (!new_message.trim() || !active_ticket) return\n\t\tawait data.messages.create({\n\t\t\tticket_id: active_ticket,\n\t\t\tcontent: new_message.trim(),\n\t\t\tauthor_name: 'Support Team',\n\t\t\tis_internal: false,\n\t\t\tcreated_at: new Date().toISOString()\n\t\t})\n\t\tnew_message = ''\n\t}\n\n\tfunction handle_key(e) {\n\t\tif (e.key === 'Enter' && !e.shiftKey) {\n\t\t\te.preventDefault()\n\t\t\tsend_message()\n\t\t}\n\t}\n</script>\n\n<div class=\"page\">\n\t{#if active_ticket && current_ticket}\n\t\t<div class=\"ticket-detail\">\n\t\t\t<header class=\"detail-header\">\n\t\t\t\t<button class=\"back-btn\" onclick={() => active_ticket = null}>\n\t\t\t\t\t<Icon icon=\"lucide:arrow-left\" width={18} />\n\t\t\t\t\t{content.back_text}\n\t\t\t\t</button>\n\t\t\t\t<div class=\"ticket-id\">#{current_ticket.id.slice(-6)}</div>\n\t\t\t</header>\n\n\t\t\t<div class=\"detail-content\">\n\t\t\t\t<div class=\"ticket-main\">\n\t\t\t\t\t<h1>{current_ticket.subject}</h1>\n\t\t\t\t\t<div class=\"ticket-meta\">\n\t\t\t\t\t\t<span class=\"meta-item\">\n\t\t\t\t\t\t\t<Icon icon=\"lucide:user\" width={14} />\n\t\t\t\t\t\t\t{current_ticket.requester_name}\n\t\t\t\t\t\t</span>\n\t\t\t\t\t\t<span class=\"meta-item\">\n\t\t\t\t\t\t\t<Icon icon=\"lucide:clock\" width={14} />\n\t\t\t\t\t\t\t{format_date(current_ticket.created_at)}\n\t\t\t\t\t\t</span>\n\t\t\t\t\t</div>\n\n\t\t\t\t\t<div class=\"description-box\">\n\t\t\t\t\t\t<p>{current_ticket.description}</p>\n\t\t\t\t\t</div>\n\n\t\t\t\t\t<div class=\"thread\">\n\t\t\t\t\t\t<h3>\n\t\t\t\t\t\t\t<Icon icon=\"lucide:message-square\" width={16} />\n\t\t\t\t\t\t\t{content.thread_title} ({ticket_messages.length})\n\t\t\t\t\t\t</h3>\n\n\t\t\t\t\t\t{#if ticket_messages.length === 0}\n\t\t\t\t\t\t\t<p class=\"no-messages\">{content.no_messages}</p>\n\t\t\t\t\t\t{:else}\n\t\t\t\t\t\t\t<div class=\"messages\">\n\t\t\t\t\t\t\t\t{#each ticket_messages as msg (msg.id)}\n\t\t\t\t\t\t\t\t\t<div class=\"message\" class:internal={msg.is_internal}>\n\t\t\t\t\t\t\t\t\t\t<div class=\"message-header\">\n\t\t\t\t\t\t\t\t\t\t\t<span class=\"author\">{msg.author_name}</span>\n\t\t\t\t\t\t\t\t\t\t\t{#if msg.is_internal}\n\t\t\t\t\t\t\t\t\t\t\t\t<span class=\"internal-badge\">{content.internal_note}</span>\n\t\t\t\t\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t\t\t\t\t\t<span class=\"time\">{time_ago(msg.created_at)}</span>\n\t\t\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t\t\t\t<p>{msg.content}</p>\n\t\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t{/if}\n\n\t\t\t\t\t\t<div class=\"reply-box\">\n\t\t\t\t\t\t\t<textarea\n\t\t\t\t\t\t\t\tplaceholder={content.reply_placeholder}\n\t\t\t\t\t\t\t\tbind:value={new_message}\n\t\t\t\t\t\t\t\tonkeydown={handle_key}\n\t\t\t\t\t\t\t\trows=\"3\"\n\t\t\t\t\t\t\t></textarea>\n\t\t\t\t\t\t\t<button class=\"send-btn\" onclick={send_message} disabled={!new_message.trim()}>\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:send\" width={16} />\n\t\t\t\t\t\t\t\t{content.send_reply}\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t</div>\n\n\t\t\t\t<aside class=\"ticket-sidebar\">\n\t\t\t\t\t<div class=\"sidebar-section\">\n\t\t\t\t\t\t<label>{content.status_label}</label>\n\t\t\t\t\t\t<select onchange={(e) => update_status(current_ticket.id, e.target.value)}>\n\t\t\t\t\t\t\t{#each statuses as status}\n\t\t\t\t\t\t\t\t<option value={status.id} selected={current_ticket.status === status.id}>\n\t\t\t\t\t\t\t\t\t{status.label}\n\t\t\t\t\t\t\t\t</option>\n\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t</select>\n\t\t\t\t\t</div>\n\n\t\t\t\t\t<div class=\"sidebar-section\">\n\t\t\t\t\t\t<label>{content.priority_label}</label>\n\t\t\t\t\t\t<select onchange={(e) => update_priority(current_ticket.id, e.target.value)}>\n\t\t\t\t\t\t\t{#each priorities as priority}\n\t\t\t\t\t\t\t\t<option value={priority.id} selected={current_ticket.priority === priority.id}>\n\t\t\t\t\t\t\t\t\t{priority.label}\n\t\t\t\t\t\t\t\t</option>\n\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t</select>\n\t\t\t\t\t</div>\n\n\t\t\t\t\t<div class=\"sidebar-section\">\n\t\t\t\t\t\t<label>{content.assignee_label}</label>\n\t\t\t\t\t\t<select onchange={(e) => update_assignee(current_ticket.id, e.target.value || null)}>\n\t\t\t\t\t\t\t<option value=\"\">{content.unassigned}</option>\n\t\t\t\t\t\t\t{#each team as member}\n\t\t\t\t\t\t\t\t<option value={member.id} selected={current_ticket.assignee_id === member.id}>\n\t\t\t\t\t\t\t\t\t{member.name}\n\t\t\t\t\t\t\t\t</option>\n\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t</select>\n\t\t\t\t\t</div>\n\n\t\t\t\t\t<div class=\"sidebar-section\">\n\t\t\t\t\t\t<label>{content.requester_label}</label>\n\t\t\t\t\t\t<div class=\"info-value\">\n\t\t\t\t\t\t\t<Icon icon=\"lucide:user\" width={14} />\n\t\t\t\t\t\t\t{current_ticket.requester_name}\n\t\t\t\t\t\t</div>\n\t\t\t\t\t\t{#if current_ticket.requester_email}\n\t\t\t\t\t\t\t<a href=\"mailto:{current_ticket.requester_email}\" class=\"info-link\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:mail\" width={14} />\n\t\t\t\t\t\t\t\t{current_ticket.requester_email}\n\t\t\t\t\t\t\t</a>\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t</div>\n\t\t\t\t</aside>\n\t\t\t</div>\n\t\t</div>\n\t{:else}\n\t\t<header class=\"page-header\">\n\t\t\t<div class=\"header-left\">\n\t\t\t\t<h1>\n\t\t\t\t\t<Icon icon=\"lucide:ticket\" width={24} />\n\t\t\t\t\t{content.title}\n\t\t\t\t</h1>\n\t\t\t\t<span class=\"ticket-count\">{filtered_tickets().length} {content.tickets_label}</span>\n\t\t\t</div>\n\t\t</header>\n\n\t\t<div class=\"filters\">\n\t\t\t<div class=\"search-box\">\n\t\t\t\t<span class=\"search-icon\"><Icon icon=\"lucide:search\" width={16} /></span>\n\t\t\t\t<input\n\t\t\t\t\ttype=\"text\"\n\t\t\t\t\tplaceholder={content.search_placeholder}\n\t\t\t\t\tbind:value={search}\n\t\t\t\t\taria-label=\"Search tickets\"\n\t\t\t\t/>\n\t\t\t</div>\n\n\t\t\t<div class=\"filter-group\">\n\t\t\t\t<select bind:value={filter_status} aria-label=\"Filter by status\">\n\t\t\t\t\t<option value=\"all\">{content.all_statuses}</option>\n\t\t\t\t\t{#each statuses as status}\n\t\t\t\t\t\t<option value={status.id}>{status.label}</option>\n\t\t\t\t\t{/each}\n\t\t\t\t</select>\n\n\t\t\t\t<select bind:value={filter_priority} aria-label=\"Filter by priority\">\n\t\t\t\t\t<option value=\"all\">{content.all_priorities}</option>\n\t\t\t\t\t{#each priorities as priority}\n\t\t\t\t\t\t<option value={priority.id}>{priority.label}</option>\n\t\t\t\t\t{/each}\n\t\t\t\t</select>\n\t\t\t</div>\n\t\t</div>\n\n\t\t{#if loading}\n\t\t\t<div class=\"loading\">\n\t\t\t\t<Icon icon=\"lucide:loader-2\" width={24} class=\"spin\" />\n\t\t\t</div>\n\t\t{:else if filtered_tickets().length === 0}\n\t\t\t<div class=\"empty\">\n\t\t\t\t<Icon icon=\"lucide:inbox\" width={48} />\n\t\t\t\t<p>{search || filter_status !== 'all' || filter_priority !== 'all' ? content.no_results : content.empty_text}</p>\n\t\t\t</div>\n\t\t{:else}\n\t\t\t<div class=\"ticket-list\">\n\t\t\t\t{#each filtered_tickets() as ticket (ticket.id)}\n\t\t\t\t\t{@const status = get_status(ticket.status)}\n\t\t\t\t\t{@const priority = get_priority(ticket.priority)}\n\t\t\t\t\t{@const assignee = get_assignee(ticket.assignee_id)}\n\t\t\t\t\t<button class=\"ticket-card\" onclick={() => active_ticket = ticket.id}>\n\t\t\t\t\t\t<div class=\"ticket-status\" style=\"--status-color: {status.color}\">\n\t\t\t\t\t\t\t<Icon icon={status.icon} width={16} />\n\t\t\t\t\t\t</div>\n\t\t\t\t\t\t<div class=\"ticket-info\">\n\t\t\t\t\t\t\t<h3>{ticket.subject}</h3>\n\t\t\t\t\t\t\t<div class=\"ticket-meta\">\n\t\t\t\t\t\t\t\t<span>#{ticket.id.slice(-6)}</span>\n\t\t\t\t\t\t\t\t<span>{ticket.requester_name}</span>\n\t\t\t\t\t\t\t\t<span>{time_ago(ticket.created_at)}</span>\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t\t<div class=\"ticket-badges\">\n\t\t\t\t\t\t\t<span class=\"priority-badge\" style=\"--priority-color: {priority.color}\">\n\t\t\t\t\t\t\t\t{priority.label}\n\t\t\t\t\t\t\t</span>\n\t\t\t\t\t\t\t{#if assignee}\n\t\t\t\t\t\t\t\t<span class=\"assignee-badge\" title=\"Assigned to {assignee.name}\">\n\t\t\t\t\t\t\t\t\t{assignee.name.split(' ').map(n => n[0]).join('')}\n\t\t\t\t\t\t\t\t</span>\n\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t</div>\n\t\t\t\t\t\t<Icon icon=\"lucide:chevron-right\" width={18} class=\"chevron\" />\n\t\t\t\t\t</button>\n\t\t\t\t{/each}\n\t\t\t</div>\n\t\t{/if}\n\t{/if}\n</div>\n\n<style>\n\t.page {\n\t\tmin-height: 100vh;\n\t\tbackground: var(--bg-color, #f0f4f8);\n\t\tpadding: 2rem 1.5rem;\n\t\tfont-family: var(--font, system-ui, sans-serif);\n\t}\n\n\t.page-header {\n\t\tmax-width: 900px;\n\t\tmargin: 0 auto 1.5rem;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: space-between;\n\t\tgap: 1rem;\n\t}\n\n\t.header-left {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 1rem;\n\t}\n\n\t.page-header h1 {\n\t\tfont-size: 1.5rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--heading-color, #1e293b);\n\t\tmargin: 0;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t}\n\n\t.ticket-count {\n\t\tpadding: 0.25rem 0.75rem;\n\t\tbackground: var(--accent-color, #2563eb);\n\t\tcolor: white;\n\t\tborder-radius: 999px;\n\t\tfont-size: 0.8125rem;\n\t\tfont-weight: 500;\n\t}\n\n\t.filters {\n\t\tmax-width: 900px;\n\t\tmargin: 0 auto 1.5rem;\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t\tflex-wrap: wrap;\n\t}\n\n\t.search-box {\n\t\tflex: 1;\n\t\tmin-width: 200px;\n\t\tposition: relative;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t}\n\n\t.search-icon {\n\t\tposition: absolute;\n\t\tleft: 0.875rem;\n\t\ttop: 50%;\n\t\ttransform: translateY(-50%);\n\t\tcolor: var(--text-color, #94a3b8);\n\t\tpointer-events: none;\n\t}\n\n\t.search-box input {\n\t\twidth: 100%;\n\t\tpadding: 0.75rem 1rem 0.75rem 2.5rem;\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: var(--radius, 8px);\n\t\tfont-size: 0.9375rem;\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tcolor: var(--heading-color, #1e293b);\n\t}\n\n\t.search-box input:focus {\n\t\toutline: none;\n\t\tborder-color: var(--accent-color, #2563eb);\n\t\tbox-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color, #2563eb) 12%, transparent);\n\t}\n\n\t.filter-group {\n\t\tdisplay: flex;\n\t\tgap: 0.5rem;\n\t}\n\n\t.filter-group select {\n\t\tpadding: 0.75rem 2rem 0.75rem 1rem;\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: var(--radius, 8px);\n\t\tfont-size: 0.9375rem;\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tcolor: var(--heading-color, #1e293b);\n\t\tcursor: pointer;\n\t\tappearance: none;\n\t\tbackground-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\");\n\t\tbackground-repeat: no-repeat;\n\t\tbackground-position: right 0.75rem center;\n\t}\n\n\t.loading, .empty {\n\t\tmax-width: 900px;\n\t\tmargin: 4rem auto;\n\t\ttext-align: center;\n\t\tcolor: var(--text-color, #64748b);\n\t}\n\n\t.empty p {\n\t\tmargin-top: 1rem;\n\t}\n\n\t.ticket-list {\n\t\tmax-width: 900px;\n\t\tmargin: 0 auto;\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tgap: 0.5rem;\n\t}\n\n\t.ticket-card {\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: var(--radius, 8px);\n\t\tpadding: 1rem 1.25rem;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 1rem;\n\t\ttext-align: left;\n\t\tcursor: pointer;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.ticket-card:hover {\n\t\tborder-color: var(--accent-color, #2563eb);\n\t\tbox-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);\n\t}\n\n\t.ticket-status {\n\t\tcolor: var(--status-color);\n\t\tflex-shrink: 0;\n\t}\n\n\t.ticket-info {\n\t\tflex: 1;\n\t\tmin-width: 0;\n\t}\n\n\t.ticket-info h3 {\n\t\tfont-size: 0.9375rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #1e293b);\n\t\tmargin: 0 0 0.375rem;\n\t\twhite-space: nowrap;\n\t\toverflow: hidden;\n\t\ttext-overflow: ellipsis;\n\t}\n\n\t.ticket-meta {\n\t\tdisplay: flex;\n\t\tgap: 0.75rem;\n\t\tfont-size: 0.8125rem;\n\t\tcolor: var(--text-color, #64748b);\n\t}\n\n\t.ticket-badges {\n\t\tdisplay: flex;\n\t\tgap: 0.5rem;\n\t\talign-items: center;\n\t}\n\n\t.priority-badge {\n\t\tpadding: 0.25rem 0.5rem;\n\t\tborder-radius: 4px;\n\t\tfont-size: 0.75rem;\n\t\tfont-weight: 500;\n\t\tbackground: color-mix(in srgb, var(--priority-color) 12%, transparent);\n\t\tcolor: var(--priority-color);\n\t}\n\n\t.assignee-badge {\n\t\twidth: 28px;\n\t\theight: 28px;\n\t\tborder-radius: 50%;\n\t\tbackground: var(--accent-color, #2563eb);\n\t\tcolor: white;\n\t\tfont-size: 0.6875rem;\n\t\tfont-weight: 600;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t}\n\n\t.ticket-card :global(.chevron) {\n\t\tcolor: var(--text-color, #94a3b8);\n\t\tflex-shrink: 0;\n\t}\n\n\t/* Detail View */\n\t.ticket-detail {\n\t\tmax-width: 1000px;\n\t\tmargin: 0 auto;\n\t}\n\n\t.detail-header {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 1rem;\n\t\tmargin-bottom: 1.5rem;\n\t}\n\n\t.back-btn {\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tgap: 0.375rem;\n\t\tpadding: 0.5rem 0.75rem;\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: var(--radius, 8px);\n\t\tcolor: var(--heading-color, #1e293b);\n\t\tfont-size: 0.875rem;\n\t\tcursor: pointer;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.back-btn:hover {\n\t\tbackground: var(--border-color, #e2e8f0);\n\t}\n\n\t.ticket-id {\n\t\tfont-size: 0.875rem;\n\t\tcolor: var(--text-color, #64748b);\n\t\tfont-family: ui-monospace, monospace;\n\t}\n\n\t.detail-content {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: 1fr 280px;\n\t\tgap: 1.5rem;\n\t}\n\n\t@media (max-width: 768px) {\n\t\t.detail-content {\n\t\t\tgrid-template-columns: 1fr;\n\t\t}\n\t}\n\n\t.ticket-main {\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: var(--radius, 8px);\n\t\tpadding: 1.5rem;\n\t}\n\n\t.ticket-main h1 {\n\t\tfont-size: 1.25rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--heading-color, #1e293b);\n\t\tmargin: 0 0 0.75rem;\n\t}\n\n\t.ticket-main .ticket-meta {\n\t\tmargin-bottom: 1.25rem;\n\t\tpadding-bottom: 1.25rem;\n\t\tborder-bottom: 1px solid var(--border-color, #e2e8f0);\n\t}\n\n\t.meta-item {\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tgap: 0.375rem;\n\t\tfont-size: 0.875rem;\n\t\tcolor: var(--text-color, #64748b);\n\t}\n\n\t.description-box {\n\t\tbackground: var(--input-bg, #f8fafc);\n\t\tborder-radius: var(--radius, 8px);\n\t\tpadding: 1rem;\n\t\tmargin-bottom: 1.5rem;\n\t}\n\n\t.description-box p {\n\t\tmargin: 0;\n\t\tcolor: var(--heading-color, #1e293b);\n\t\tline-height: 1.6;\n\t}\n\n\t.thread h3 {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tfont-size: 0.9375rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #1e293b);\n\t\tmargin: 0 0 1rem;\n\t}\n\n\t.no-messages {\n\t\ttext-align: center;\n\t\tcolor: var(--text-color, #64748b);\n\t\tpadding: 1.5rem;\n\t}\n\n\t.messages {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tgap: 0.75rem;\n\t\tmargin-bottom: 1rem;\n\t}\n\n\t.message {\n\t\tpadding: 1rem;\n\t\tbackground: var(--input-bg, #f8fafc);\n\t\tborder-radius: var(--radius, 8px);\n\t}\n\n\t.message.internal {\n\t\tbackground: color-mix(in srgb, var(--warning-color, #f59e0b) 10%, transparent);\n\t\tborder: 1px dashed color-mix(in srgb, var(--warning-color, #f59e0b) 30%, transparent);\n\t}\n\n\t.message-header {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tmargin-bottom: 0.5rem;\n\t}\n\n\t.message-header .author {\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #1e293b);\n\t\tfont-size: 0.875rem;\n\t}\n\n\t.message-header .time {\n\t\tmargin-left: auto;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--text-color, #94a3b8);\n\t}\n\n\t.internal-badge {\n\t\tpadding: 0.125rem 0.375rem;\n\t\tbackground: var(--warning-color, #f59e0b);\n\t\tcolor: white;\n\t\tborder-radius: 4px;\n\t\tfont-size: 0.6875rem;\n\t\tfont-weight: 500;\n\t}\n\n\t.message p {\n\t\tmargin: 0;\n\t\tfont-size: 0.875rem;\n\t\tcolor: var(--heading-color, #1e293b);\n\t\tline-height: 1.5;\n\t}\n\n\t.reply-box {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tgap: 0.75rem;\n\t}\n\n\t.reply-box textarea {\n\t\twidth: 100%;\n\t\tpadding: 0.75rem;\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: var(--radius, 8px);\n\t\tfont-size: 0.875rem;\n\t\tfont-family: inherit;\n\t\tresize: vertical;\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tcolor: var(--heading-color, #1e293b);\n\t}\n\n\t.reply-box textarea:focus {\n\t\toutline: none;\n\t\tborder-color: var(--accent-color, #2563eb);\n\t}\n\n\t.send-btn {\n\t\talign-self: flex-end;\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tpadding: 0.625rem 1rem;\n\t\tbackground: var(--accent-color, #2563eb);\n\t\tcolor: white;\n\t\tborder: none;\n\t\tborder-radius: var(--radius, 8px);\n\t\tfont-size: 0.875rem;\n\t\tfont-weight: 500;\n\t\tcursor: pointer;\n\t\ttransition: filter 0.2s;\n\t}\n\n\t.send-btn:hover:not(:disabled) {\n\t\tfilter: brightness(1.1);\n\t}\n\n\t.send-btn:disabled {\n\t\topacity: 0.5;\n\t\tcursor: not-allowed;\n\t}\n\n\t/* Sidebar */\n\t.ticket-sidebar {\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: var(--radius, 8px);\n\t\tpadding: 1.25rem;\n\t\theight: fit-content;\n\t}\n\n\t.sidebar-section {\n\t\tmargin-bottom: 1.25rem;\n\t}\n\n\t.sidebar-section:last-child {\n\t\tmargin-bottom: 0;\n\t}\n\n\t.sidebar-section label {\n\t\tdisplay: block;\n\t\tfont-size: 0.75rem;\n\t\tfont-weight: 600;\n\t\ttext-transform: uppercase;\n\t\tletter-spacing: 0.05em;\n\t\tcolor: var(--text-color, #64748b);\n\t\tmargin-bottom: 0.5rem;\n\t}\n\n\t.sidebar-section select {\n\t\twidth: 100%;\n\t\tpadding: 0.625rem 2rem 0.625rem 0.75rem;\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: 6px;\n\t\tfont-size: 0.875rem;\n\t\tbackground: var(--input-bg, #f8fafc);\n\t\tcolor: var(--heading-color, #1e293b);\n\t\tcursor: pointer;\n\t\tappearance: none;\n\t\tbackground-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\");\n\t\tbackground-repeat: no-repeat;\n\t\tbackground-position: right 0.5rem center;\n\t}\n\n\t.info-value {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.375rem;\n\t\tfont-size: 0.875rem;\n\t\tcolor: var(--heading-color, #1e293b);\n\t\tmargin-bottom: 0.375rem;\n\t}\n\n\t.info-link {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.375rem;\n\t\tfont-size: 0.8125rem;\n\t\tcolor: var(--accent-color, #2563eb);\n\t\ttext-decoration: none;\n\t}\n\n\t.info-link:hover {\n\t\ttext-decoration: underline;\n\t}\n\n\t:global(.spin) {\n\t\tanimation: spin 1s linear infinite;\n\t}\n\n\t@keyframes spin {\n\t\tfrom { transform: rotate(0deg); }\n\t\tto { transform: rotate(360deg); }\n\t}\n</style>",
+	"design": [
+		{
+			"id": "bg-color",
+			"name": "Background",
+			"css_var": "--bg-color",
+			"value": "#f0f4f8",
+			"type": "color",
+			"description": "Page background"
+		},
+		{
+			"id": "card-bg",
+			"name": "Card Background",
+			"css_var": "--card-bg",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Card background"
+		},
+		{
+			"id": "input-bg",
+			"name": "Input Background",
+			"css_var": "--input-bg",
+			"value": "#f8fafc",
+			"type": "color",
+			"description": "Input and message background"
+		},
+		{
+			"id": "accent-color",
+			"name": "Accent Color",
+			"css_var": "--accent-color",
+			"value": "#2563eb",
+			"type": "color",
+			"description": "Primary accent"
+		},
+		{
+			"id": "heading-color",
+			"name": "Heading Color",
+			"css_var": "--heading-color",
+			"value": "#1e293b",
+			"type": "color",
+			"description": "Heading text"
+		},
+		{
+			"id": "text-color",
+			"name": "Text Color",
+			"css_var": "--text-color",
+			"value": "#64748b",
+			"type": "color",
+			"description": "Body text"
+		},
+		{
+			"id": "border-color",
+			"name": "Border Color",
+			"css_var": "--border-color",
+			"value": "#e2e8f0",
+			"type": "color",
+			"description": "Borders"
+		},
+		{
+			"id": "warning-color",
+			"name": "Warning Color",
+			"css_var": "--warning-color",
+			"value": "#f59e0b",
+			"type": "color",
+			"description": "Internal notes color"
+		},
+		{
+			"id": "font",
+			"name": "Font",
+			"css_var": "--font",
+			"value": "system-ui, sans-serif",
+			"type": "font",
+			"description": "Main font"
+		},
+		{
+			"id": "radius",
+			"name": "Border Radius",
+			"css_var": "--radius",
+			"value": "8px",
+			"type": "radius",
+			"description": "Corner roundness"
+		}
+	],
+	"content": [
+		{
+			"id": "title",
+			"name": "Title",
+			"type": "text",
+			"value": "Support Tickets",
+			"description": "Page title"
+		},
+		{
+			"id": "tickets_label",
+			"name": "Tickets Label",
+			"type": "text",
+			"value": "tickets",
+			"description": "Label after count"
+		},
+		{
+			"id": "search_placeholder",
+			"name": "Search Placeholder",
+			"type": "text",
+			"value": "Search tickets...",
+			"description": "Search placeholder"
+		},
+		{
+			"id": "all_statuses",
+			"name": "All Statuses",
+			"type": "text",
+			"value": "All Statuses",
+			"description": "Status filter default"
+		},
+		{
+			"id": "all_priorities",
+			"name": "All Priorities",
+			"type": "text",
+			"value": "All Priorities",
+			"description": "Priority filter default"
+		},
+		{
+			"id": "empty_text",
+			"name": "Empty State",
+			"type": "text",
+			"value": "No tickets yet",
+			"description": "Empty state text"
+		},
+		{
+			"id": "no_results",
+			"name": "No Results",
+			"type": "text",
+			"value": "No matching tickets found",
+			"description": "Search no results"
+		},
+		{
+			"id": "back_text",
+			"name": "Back Text",
+			"type": "text",
+			"value": "Back",
+			"description": "Back button text"
+		},
+		{
+			"id": "thread_title",
+			"name": "Thread Title",
+			"type": "text",
+			"value": "Conversation",
+			"description": "Thread section title"
+		},
+		{
+			"id": "no_messages",
+			"name": "No Messages",
+			"type": "text",
+			"value": "No messages yet",
+			"description": "Empty thread text"
+		},
+		{
+			"id": "reply_placeholder",
+			"name": "Reply Placeholder",
+			"type": "text",
+			"value": "Type your reply...",
+			"description": "Reply input placeholder"
+		},
+		{
+			"id": "send_reply",
+			"name": "Send Reply",
+			"type": "text",
+			"value": "Send Reply",
+			"description": "Send button text"
+		},
+		{
+			"id": "internal_note",
+			"name": "Internal Note",
+			"type": "text",
+			"value": "Internal",
+			"description": "Internal note badge"
+		},
+		{
+			"id": "status_label",
+			"name": "Status Label",
+			"type": "text",
+			"value": "Status",
+			"description": "Status field label"
+		},
+		{
+			"id": "priority_label",
+			"name": "Priority Label",
+			"type": "text",
+			"value": "Priority",
+			"description": "Priority field label"
+		},
+		{
+			"id": "assignee_label",
+			"name": "Assignee Label",
+			"type": "text",
+			"value": "Assignee",
+			"description": "Assignee field label"
+		},
+		{
+			"id": "unassigned",
+			"name": "Unassigned",
+			"type": "text",
+			"value": "Unassigned",
+			"description": "Unassigned option"
+		},
+		{
+			"id": "requester_label",
+			"name": "Requester Label",
+			"type": "text",
+			"value": "Requester",
+			"description": "Requester section label"
+		}
+	],
+	"data": {
+		"tickets": {
+			"schema": [
+				{
+					"name": "subject",
+					"type": "text"
+				},
+				{
+					"name": "description",
+					"type": "text"
+				},
+				{
+					"name": "status",
+					"type": "text"
+				},
+				{
+					"name": "priority",
+					"type": "text"
+				},
+				{
+					"name": "requester_name",
+					"type": "text"
+				},
+				{
+					"name": "requester_email",
+					"type": "text"
+				},
+				{
+					"name": "assignee_id",
+					"type": "text"
+				},
+				{
+					"name": "created_at",
+					"type": "text"
+				}
+			],
+			"records": [
+				{
+					"id": "ticket1",
+					"subject": "Cannot access my account",
+					"description": "I've been trying to log in but keep getting an 'invalid credentials' error even though I'm sure my password is correct. I've tried resetting it but haven't received the email.",
+					"status": "open",
+					"priority": "high",
+					"requester_name": "Sarah Johnson",
+					"requester_email": "sarah@example.com",
+					"assignee_id": "team1",
+					"created_at": "2024-01-15T10:30:00Z"
+				},
+				{
+					"id": "ticket2",
+					"subject": "Feature request: Dark mode",
+					"description": "It would be great to have a dark mode option. Working late at night with the bright interface is straining my eyes.",
+					"status": "in_progress",
+					"priority": "low",
+					"requester_name": "Mike Chen",
+					"requester_email": "mike@example.com",
+					"assignee_id": "team2",
+					"created_at": "2024-01-14T15:20:00Z"
+				},
+				{
+					"id": "ticket3",
+					"subject": "Billing discrepancy",
+					"description": "I was charged twice for my subscription this month. Please refund the duplicate charge.",
+					"status": "resolved",
+					"priority": "urgent",
+					"requester_name": "Emily Brown",
+					"requester_email": "emily@example.com",
+					"assignee_id": "team1",
+					"created_at": "2024-01-13T09:00:00Z"
+				}
+			],
+			"icon": "lucide:ticket"
+		},
+		"messages": {
+			"schema": [
+				{
+					"name": "ticket_id",
+					"type": "text"
+				},
+				{
+					"name": "content",
+					"type": "text"
+				},
+				{
+					"name": "author_name",
+					"type": "text"
+				},
+				{
+					"name": "is_internal",
+					"type": "boolean"
+				},
+				{
+					"name": "created_at",
+					"type": "text"
+				}
+			],
+			"records": [
+				{
+					"id": "msg1",
+					"ticket_id": "ticket1",
+					"content": "Hi Sarah, I'm looking into this for you. Can you confirm the email address associated with your account?",
+					"author_name": "Support Team",
+					"is_internal": false,
+					"created_at": "2024-01-15T11:00:00Z"
+				},
+				{
+					"id": "msg2",
+					"ticket_id": "ticket3",
+					"content": "The duplicate charge has been refunded. You should see it reflected in your account within 3-5 business days.",
+					"author_name": "Support Team",
+					"is_internal": false,
+					"created_at": "2024-01-13T14:30:00Z"
+				},
+				{
+					"id": "msg3",
+					"ticket_id": "ticket3",
+					"content": "Thank you so much for the quick resolution!",
+					"author_name": "Emily Brown",
+					"is_internal": false,
+					"created_at": "2024-01-13T15:00:00Z"
+				}
+			],
+			"icon": "lucide:message-square"
+		},
+		"team": {
+			"schema": [
+				{
+					"name": "name",
+					"type": "text"
+				},
+				{
+					"name": "email",
+					"type": "text"
+				},
+				{
+					"name": "role",
+					"type": "text"
+				}
+			],
+			"records": [
+				{
+					"id": "team1",
+					"name": "Alex Rivera",
+					"email": "alex@support.com",
+					"role": "Support Lead"
+				},
+				{
+					"id": "team2",
+					"name": "Jordan Lee",
+					"email": "jordan@support.com",
+					"role": "Support Agent"
+				}
+			],
+			"icon": "lucide:users"
+		}
+	}
+}

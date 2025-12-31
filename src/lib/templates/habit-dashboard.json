@@ -1,0 +1,342 @@
+{
+	"id": "habit-dashboard",
+	"name": "Habit Dashboard",
+	"description": "Multi-habit dashboard with heatmaps, streaks, and completion rates",
+	"preview": "lucide:calendar-check",
+	"tags": [
+		"dashboard",
+		"habits",
+		"intermediate"
+	],
+	"kits": [
+		"dash",
+		"health",
+		"daily"
+	],
+	"frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet habits = $state([])\n\tlet completions = $state([])\n\tlet loading = $state(true)\n\tlet selected_habit = $state('all')\n\n\tdata.habits.subscribe(items => {\n\t\thabits = items.filter(h => !h.archived).sort((a, b) => (a.order || 0) - (b.order || 0))\n\t\tloading = false\n\t})\n\n\tdata.completions.subscribe(items => completions = items)\n\n\tconst today = new Date()\n\ttoday.setHours(0, 0, 0, 0)\n\n\tfunction date_key(date) {\n\t\treturn date.toISOString().split('T')[0]\n\t}\n\n\tfunction is_completed(habit_id, date) {\n\t\tconst key = date_key(date)\n\t\treturn completions.some(c => c.habit_id === habit_id && c.date === key)\n\t}\n\n\tfunction get_day_completion_count(date) {\n\t\tconst key = date_key(date)\n\t\tif (selected_habit === 'all') {\n\t\t\treturn habits.filter(h => completions.some(c => c.habit_id === h.id && c.date === key)).length\n\t\t}\n\t\treturn is_completed(selected_habit, date) ? 1 : 0\n\t}\n\n\tfunction get_streak(habit_id) {\n\t\tlet streak = 0\n\t\tconst d = new Date(today)\n\n\t\tif (!is_completed(habit_id, today)) {\n\t\t\td.setDate(d.getDate() - 1)\n\t\t}\n\n\t\twhile (is_completed(habit_id, d)) {\n\t\t\tstreak++\n\t\t\td.setDate(d.getDate() - 1)\n\t\t}\n\t\treturn streak\n\t}\n\n\tfunction get_best_streak(habit_id) {\n\t\tconst habit_completions = completions\n\t\t\t.filter(c => c.habit_id === habit_id)\n\t\t\t.map(c => c.date)\n\t\t\t.sort()\n\n\t\tlet best = 0\n\t\tlet current = 0\n\t\tlet prev_date = null\n\n\t\tfor (const date of habit_completions) {\n\t\t\tif (prev_date) {\n\t\t\t\tconst diff = (new Date(date) - new Date(prev_date)) / (1000 * 60 * 60 * 24)\n\t\t\t\tif (diff === 1) {\n\t\t\t\t\tcurrent++\n\t\t\t\t} else {\n\t\t\t\t\tcurrent = 1\n\t\t\t\t}\n\t\t\t} else {\n\t\t\t\tcurrent = 1\n\t\t\t}\n\t\t\tbest = Math.max(best, current)\n\t\t\tprev_date = date\n\t\t}\n\t\treturn best\n\t}\n\n\tfunction get_week_completion_rate(habit_id) {\n\t\tlet completed = 0\n\t\tfor (let i = 0; i < 7; i++) {\n\t\t\tconst d = new Date(today)\n\t\t\td.setDate(d.getDate() - i)\n\t\t\tif (is_completed(habit_id, d)) completed++\n\t\t}\n\t\treturn Math.round((completed / 7) * 100)\n\t}\n\n\tfunction get_month_completion_rate(habit_id) {\n\t\tlet completed = 0\n\t\tfor (let i = 0; i < 30; i++) {\n\t\t\tconst d = new Date(today)\n\t\t\td.setDate(d.getDate() - i)\n\t\t\tif (is_completed(habit_id, d)) completed++\n\t\t}\n\t\treturn Math.round((completed / 30) * 100)\n\t}\n\n\tfunction get_total_completions(habit_id) {\n\t\treturn completions.filter(c => c.habit_id === habit_id).length\n\t}\n\n\tfunction get_heatmap_data() {\n\t\tconst weeks = []\n\t\tconst start = new Date(today)\n\t\tstart.setDate(start.getDate() - 364)\n\t\tstart.setDate(start.getDate() - start.getDay())\n\n\t\tfor (let w = 0; w < 53; w++) {\n\t\t\tconst week = []\n\t\t\tfor (let d = 0; d < 7; d++) {\n\t\t\t\tconst date = new Date(start)\n\t\t\t\tdate.setDate(date.getDate() + (w * 7) + d)\n\t\t\t\tweek.push({\n\t\t\t\t\tdate,\n\t\t\t\t\tcount: get_day_completion_count(date),\n\t\t\t\t\tkey: date_key(date)\n\t\t\t\t})\n\t\t\t}\n\t\t\tweeks.push(week)\n\t\t}\n\t\treturn weeks\n\t}\n\n\tlet heatmap_data = $derived(get_heatmap_data())\n\tlet max_count = $derived(selected_habit === 'all' ? habits.length : 1)\n\n\tfunction get_intensity(count) {\n\t\tif (count === 0) return 0\n\t\tif (max_count <= 1) return count > 0 ? 4 : 0\n\t\treturn Math.ceil((count / max_count) * 4)\n\t}\n\n\tlet overall_streak = $derived(() => {\n\t\tif (habits.length === 0) return 0\n\t\tlet streak = 0\n\t\tconst d = new Date(today)\n\n\t\tconst all_complete_today = habits.every(h => is_completed(h.id, today))\n\t\tif (!all_complete_today) {\n\t\t\td.setDate(d.getDate() - 1)\n\t\t}\n\n\t\twhile (habits.every(h => is_completed(h.id, d))) {\n\t\t\tstreak++\n\t\t\td.setDate(d.getDate() - 1)\n\t\t}\n\t\treturn streak\n\t})\n\n\tlet today_completed = $derived(habits.filter(h => is_completed(h.id, today)).length)\n\n\tlet avg_week_rate = $derived(() => {\n\t\tif (habits.length === 0) return 0\n\t\tconst total = habits.reduce((sum, h) => sum + get_week_completion_rate(h.id), 0)\n\t\treturn Math.round(total / habits.length)\n\t})\n\n\tasync function toggle_completion(habit_id, date) {\n\t\tconst key = date_key(date)\n\t\tconst existing = completions.find(c => c.habit_id === habit_id && c.date === key)\n\n\t\tif (existing) {\n\t\t\tawait data.completions.delete(existing.id)\n\t\t} else {\n\t\t\tawait data.completions.create({\n\t\t\t\thabit_id,\n\t\t\t\tdate: key\n\t\t\t})\n\t\t}\n\t}\n\n\tfunction get_week_days() {\n\t\tconst days = []\n\t\tfor (let i = 6; i >= 0; i--) {\n\t\t\tconst d = new Date(today)\n\t\t\td.setDate(d.getDate() - i)\n\t\t\tdays.push(d)\n\t\t}\n\t\treturn days\n\t}\n\n\tlet week_days = $derived(get_week_days())\n\n\tfunction format_day(date) {\n\t\treturn date.toLocaleDateString('en-US', { weekday: 'short' }).charAt(0)\n\t}\n\n\tfunction is_today(date) {\n\t\treturn date_key(date) === date_key(today)\n\t}\n</script>\n\n<div class=\"page\">\n\t<header class=\"header\">\n\t\t<div class=\"header-content\">\n\t\t\t<h1>{content.title}</h1>\n\t\t\t<p class=\"subtitle\">{content.subtitle}</p>\n\t\t</div>\n\t</header>\n\n\t{#if loading}\n\t\t<div class=\"loading\">\n\t\t\t<Icon icon=\"lucide:loader-2\" width={32} class=\"spin\" />\n\t\t</div>\n\t{:else if habits.length === 0}\n\t\t<div class=\"empty\">\n\t\t\t<Icon icon=\"lucide:calendar-check\" width={56} />\n\t\t\t<p>{content.empty_text}</p>\n\t\t</div>\n\t{:else}\n\t\t<div class=\"dashboard\">\n\t\t\t<div class=\"summary-cards\">\n\t\t\t\t<div class=\"summary-card\">\n\t\t\t\t\t<div class=\"summary-value\">{today_completed} / {habits.length}</div>\n\t\t\t\t\t<div class=\"summary-label\">{content.today_progress}</div>\n\t\t\t\t</div>\n\t\t\t\t<div class=\"summary-card streak\">\n\t\t\t\t\t<div class=\"summary-value\">\n\t\t\t\t\t\t<Icon icon=\"lucide:flame\" width={24} />\n\t\t\t\t\t\t{overall_streak()}\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"summary-label\">{content.perfect_days}</div>\n\t\t\t\t</div>\n\t\t\t\t<div class=\"summary-card\">\n\t\t\t\t\t<div class=\"summary-value\">{avg_week_rate()}%</div>\n\t\t\t\t\t<div class=\"summary-label\">{content.week_avg}</div>\n\t\t\t\t</div>\n\t\t\t</div>\n\n\t\t\t<div class=\"habits-section\">\n\t\t\t\t<h2>{content.habits_heading}</h2>\n\t\t\t\t<div class=\"habits-grid\">\n\t\t\t\t\t{#each habits as habit (habit.id)}\n\t\t\t\t\t\t{@const streak = get_streak(habit.id)}\n\t\t\t\t\t\t{@const week_rate = get_week_completion_rate(habit.id)}\n\t\t\t\t\t\t{@const month_rate = get_month_completion_rate(habit.id)}\n\t\t\t\t\t\t{@const best = get_best_streak(habit.id)}\n\t\t\t\t\t\t<div class=\"habit-card\">\n\t\t\t\t\t\t\t<div class=\"habit-header\">\n\t\t\t\t\t\t\t\t<span class=\"habit-emoji\">{habit.emoji || ''}</span>\n\t\t\t\t\t\t\t\t<div class=\"habit-info\">\n\t\t\t\t\t\t\t\t\t<h3>{habit.name}</h3>\n\t\t\t\t\t\t\t\t\t<div class=\"habit-stats\">\n\t\t\t\t\t\t\t\t\t\t<span class=\"stat\" class:active={streak > 0}>\n\t\t\t\t\t\t\t\t\t\t\t<Icon icon=\"lucide:flame\" width={14} />\n\t\t\t\t\t\t\t\t\t\t\t{streak}\n\t\t\t\t\t\t\t\t\t\t</span>\n\t\t\t\t\t\t\t\t\t\t<span class=\"stat\">\n\t\t\t\t\t\t\t\t\t\t\t<Icon icon=\"lucide:trophy\" width={14} />\n\t\t\t\t\t\t\t\t\t\t\t{best}\n\t\t\t\t\t\t\t\t\t\t</span>\n\t\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t</div>\n\n\t\t\t\t\t\t\t<div class=\"week-grid\">\n\t\t\t\t\t\t\t\t{#each week_days as day (day.toISOString())}\n\t\t\t\t\t\t\t\t\t{@const completed = is_completed(habit.id, day)}\n\t\t\t\t\t\t\t\t\t<button \n\t\t\t\t\t\t\t\t\t\tclass=\"day-btn\"\n\t\t\t\t\t\t\t\t\t\tclass:completed\n\t\t\t\t\t\t\t\t\t\tclass:today={is_today(day)}\n\t\t\t\t\t\t\t\t\t\tonclick={() => toggle_completion(habit.id, day)}\n\t\t\t\t\t\t\t\t\t>\n\t\t\t\t\t\t\t\t\t\t<span class=\"day-letter\">{format_day(day)}</span>\n\t\t\t\t\t\t\t\t\t\t{#if completed}\n\t\t\t\t\t\t\t\t\t\t\t<Icon icon=\"lucide:check\" width={14} />\n\t\t\t\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t\t</div>\n\n\t\t\t\t\t\t\t<div class=\"completion-rates\">\n\t\t\t\t\t\t\t\t<div class=\"rate\">\n\t\t\t\t\t\t\t\t\t<div class=\"rate-bar\">\n\t\t\t\t\t\t\t\t\t\t<div class=\"rate-fill\" style=\"width: {week_rate}%\"></div>\n\t\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t\t\t<span class=\"rate-label\">{content.week} {week_rate}%</span>\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t\t<div class=\"rate\">\n\t\t\t\t\t\t\t\t\t<div class=\"rate-bar\">\n\t\t\t\t\t\t\t\t\t\t<div class=\"rate-fill month\" style=\"width: {month_rate}%\"></div>\n\t\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t\t\t<span class=\"rate-label\">{content.month} {month_rate}%</span>\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t{/each}\n\t\t\t\t</div>\n\t\t\t</div>\n\n\t\t\t<div class=\"heatmap-section\">\n\t\t\t\t<div class=\"heatmap-header\">\n\t\t\t\t\t<h2>{content.year_view}</h2>\n\t\t\t\t\t<select bind:value={selected_habit}>\n\t\t\t\t\t\t<option value=\"all\">{content.all_habits}</option>\n\t\t\t\t\t\t{#each habits as h}\n\t\t\t\t\t\t\t<option value={h.id}>{h.emoji} {h.name}</option>\n\t\t\t\t\t\t{/each}\n\t\t\t\t\t</select>\n\t\t\t\t</div>\n\t\t\t\t<div class=\"heatmap-container\">\n\t\t\t\t\t<div class=\"heatmap\">\n\t\t\t\t\t\t{#each heatmap_data as week}\n\t\t\t\t\t\t\t<div class=\"heatmap-week\">\n\t\t\t\t\t\t\t\t{#each week as day}\n\t\t\t\t\t\t\t\t\t<div \n\t\t\t\t\t\t\t\t\t\tclass=\"heatmap-day\"\n\t\t\t\t\t\t\t\t\t\tdata-intensity={get_intensity(day.count)}\n\t\t\t\t\t\t\t\t\t\ttitle=\"{day.key}: {day.count}/{max_count}\"\n\t\t\t\t\t\t\t\t\t></div>\n\t\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t{/each}\n\t\t\t\t\t</div>\n\t\t\t\t</div>\n\t\t\t\t<div class=\"heatmap-legend\">\n\t\t\t\t\t<span>{content.less}</span>\n\t\t\t\t\t<div class=\"legend-cells\">\n\t\t\t\t\t\t{#each [0, 1, 2, 3, 4] as i}\n\t\t\t\t\t\t\t<div class=\"heatmap-day\" data-intensity={i}></div>\n\t\t\t\t\t\t{/each}\n\t\t\t\t\t</div>\n\t\t\t\t\t<span>{content.more}</span>\n\t\t\t\t</div>\n\t\t\t</div>\n\t\t</div>\n\t{/if}\n</div>\n\n<style>\n\t.page {\n\t\tmin-height: 100vh;\n\t\tbackground: var(--bg-color);\n\t\tfont-family: var(--font);\n\t\tcolor: var(--text-color);\n\t}\n\n\t.header {\n\t\tpadding: 1.5rem 2rem;\n\t\tbackground: var(--card-bg);\n\t\tborder-bottom: 1px solid var(--border-color);\n\t}\n\n\t.header h1 {\n\t\tmargin: 0;\n\t\tfont-size: 1.5rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--heading-color);\n\t}\n\n\t.subtitle {\n\t\tmargin: 0.25rem 0 0;\n\t\tfont-size: 0.875rem;\n\t}\n\n\t.loading, .empty {\n\t\ttext-align: center;\n\t\tpadding: 4rem 2rem;\n\t}\n\n\t.dashboard {\n\t\tmax-width: 1100px;\n\t\tmargin: 0 auto;\n\t\tpadding: 2rem;\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tgap: 2rem;\n\t}\n\n\t.summary-cards {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(auto-fit, minmax(160px, 1fr));\n\t\tgap: 1rem;\n\t}\n\n\t.summary-card {\n\t\tbackground: var(--card-bg);\n\t\tborder: 1px solid var(--border-color);\n\t\tborder-radius: var(--radius);\n\t\tpadding: 1.5rem;\n\t\ttext-align: center;\n\t}\n\n\t.summary-value {\n\t\tfont-size: 2rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--heading-color);\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tgap: 0.5rem;\n\t}\n\n\t.summary-card.streak .summary-value {\n\t\tcolor: var(--streak-color);\n\t}\n\n\t.summary-label {\n\t\tfont-size: 0.8125rem;\n\t\tmargin-top: 0.375rem;\n\t}\n\n\t.habits-section h2, .heatmap-section h2 {\n\t\tmargin: 0 0 1rem;\n\t\tfont-size: 1rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color);\n\t}\n\n\t.habits-grid {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(auto-fit, minmax(300px, 1fr));\n\t\tgap: 1rem;\n\t}\n\n\t.habit-card {\n\t\tbackground: var(--card-bg);\n\t\tborder: 1px solid var(--border-color);\n\t\tborder-radius: var(--radius);\n\t\tpadding: 1.25rem;\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tgap: 1rem;\n\t}\n\n\t.habit-header {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.75rem;\n\t}\n\n\t.habit-emoji {\n\t\tfont-size: 1.5rem;\n\t}\n\n\t.habit-info {\n\t\tflex: 1;\n\t}\n\n\t.habit-info h3 {\n\t\tmargin: 0;\n\t\tfont-size: 1rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color);\n\t}\n\n\t.habit-stats {\n\t\tdisplay: flex;\n\t\tgap: 0.75rem;\n\t\tmargin-top: 0.25rem;\n\t}\n\n\t.stat {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.25rem;\n\t\tfont-size: 0.8125rem;\n\t\tcolor: var(--text-color);\n\t}\n\n\t.stat.active {\n\t\tcolor: var(--streak-color);\n\t}\n\n\t.week-grid {\n\t\tdisplay: flex;\n\t\tgap: 6px;\n\t\tjustify-content: space-between;\n\t}\n\n\t.day-btn {\n\t\twidth: 36px;\n\t\theight: 44px;\n\t\tborder: 1px solid var(--border-color);\n\t\tborder-radius: 6px;\n\t\tbackground: var(--bg-color);\n\t\tcursor: pointer;\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tgap: 2px;\n\t\tcolor: var(--text-color);\n\t\ttransition: all 0.15s;\n\t}\n\n\t.day-btn:hover {\n\t\tborder-color: var(--accent-color);\n\t}\n\n\t.day-btn.today {\n\t\tborder-color: var(--accent-color);\n\t\tbox-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color) 25%, transparent);\n\t}\n\n\t.day-btn.completed {\n\t\tbackground: var(--success-color);\n\t\tborder-color: var(--success-color);\n\t\tcolor: white;\n\t}\n\n\t.day-letter {\n\t\tfont-size: 0.625rem;\n\t\ttext-transform: uppercase;\n\t}\n\n\t.completion-rates {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tgap: 0.5rem;\n\t}\n\n\t.rate {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.75rem;\n\t}\n\n\t.rate-bar {\n\t\tflex: 1;\n\t\theight: 6px;\n\t\tbackground: var(--bg-color);\n\t\tborder-radius: 3px;\n\t\toverflow: hidden;\n\t}\n\n\t.rate-fill {\n\t\theight: 100%;\n\t\tbackground: var(--accent-color);\n\t\tborder-radius: 3px;\n\t\ttransition: width 0.3s ease;\n\t}\n\n\t.rate-fill.month {\n\t\tbackground: var(--success-color);\n\t}\n\n\t.rate-label {\n\t\tfont-size: 0.75rem;\n\t\twidth: 70px;\n\t\ttext-align: right;\n\t}\n\n\t.heatmap-header {\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: center;\n\t\tmargin-bottom: 1rem;\n\t\tgap: 1rem;\n\t\tflex-wrap: wrap;\n\t}\n\n\t.heatmap-header select {\n\t\tpadding: 0.5rem 0.75rem;\n\t\tbackground: var(--card-bg);\n\t\tborder: 1px solid var(--border-color);\n\t\tborder-radius: 6px;\n\t\tcolor: var(--heading-color);\n\t\tfont-size: 0.875rem;\n\t}\n\n\t.heatmap-section {\n\t\tbackground: var(--card-bg);\n\t\tborder: 1px solid var(--border-color);\n\t\tborder-radius: var(--radius);\n\t\tpadding: 1.5rem;\n\t}\n\n\t.heatmap-container {\n\t\toverflow-x: auto;\n\t\tpadding-bottom: 0.5rem;\n\t}\n\n\t.heatmap {\n\t\tdisplay: flex;\n\t\tgap: 3px;\n\t}\n\n\t.heatmap-week {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tgap: 3px;\n\t}\n\n\t.heatmap-day {\n\t\twidth: 12px;\n\t\theight: 12px;\n\t\tborder-radius: 2px;\n\t\tbackground: var(--bg-color);\n\t}\n\n\t.heatmap-day[data-intensity=\"1\"] { background: color-mix(in srgb, var(--accent-color) 25%, var(--bg-color)); }\n\t.heatmap-day[data-intensity=\"2\"] { background: color-mix(in srgb, var(--accent-color) 50%, var(--bg-color)); }\n\t.heatmap-day[data-intensity=\"3\"] { background: color-mix(in srgb, var(--accent-color) 75%, var(--bg-color)); }\n\t.heatmap-day[data-intensity=\"4\"] { background: var(--accent-color); }\n\n\t.heatmap-legend {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tmargin-top: 0.75rem;\n\t\tfont-size: 0.75rem;\n\t}\n\n\t.legend-cells {\n\t\tdisplay: flex;\n\t\tgap: 3px;\n\t}\n\n\t:global(.spin) {\n\t\tanimation: spin 1s linear infinite;\n\t}\n\n\t@keyframes spin {\n\t\tfrom { transform: rotate(0deg); }\n\t\tto { transform: rotate(360deg); }\n\t}\n\n\t@media (max-width: 600px) {\n\t\t.header {\n\t\t\tpadding: 1rem;\n\t\t}\n\n\t\t.dashboard {\n\t\t\tpadding: 1rem;\n\t\t}\n\n\t\t.habits-grid {\n\t\t\tgrid-template-columns: 1fr;\n\t\t}\n\t}\n</style>",
+	"design": [
+		{
+			"id": "bg-color",
+			"name": "Background",
+			"css_var": "--bg-color",
+			"value": "#0f172a",
+			"type": "color",
+			"description": "Page background"
+		},
+		{
+			"id": "card-bg",
+			"name": "Card Background",
+			"css_var": "--card-bg",
+			"value": "#1e293b",
+			"type": "color",
+			"description": "Card background"
+		},
+		{
+			"id": "heading-color",
+			"name": "Heading Color",
+			"css_var": "--heading-color",
+			"value": "#f1f5f9",
+			"type": "color",
+			"description": "Headings"
+		},
+		{
+			"id": "text-color",
+			"name": "Text Color",
+			"css_var": "--text-color",
+			"value": "#94a3b8",
+			"type": "color",
+			"description": "Secondary text"
+		},
+		{
+			"id": "border-color",
+			"name": "Border Color",
+			"css_var": "--border-color",
+			"value": "#334155",
+			"type": "color",
+			"description": "Borders"
+		},
+		{
+			"id": "accent-color",
+			"name": "Accent Color",
+			"css_var": "--accent-color",
+			"value": "#8b5cf6",
+			"type": "color",
+			"description": "Primary accent"
+		},
+		{
+			"id": "success-color",
+			"name": "Success Color",
+			"css_var": "--success-color",
+			"value": "#22c55e",
+			"type": "color",
+			"description": "Completed status"
+		},
+		{
+			"id": "streak-color",
+			"name": "Streak Color",
+			"css_var": "--streak-color",
+			"value": "#f97316",
+			"type": "color",
+			"description": "Streak indicator"
+		},
+		{
+			"id": "font",
+			"name": "Font",
+			"css_var": "--font",
+			"value": "system-ui, -apple-system, sans-serif",
+			"type": "font",
+			"description": "Main font"
+		},
+		{
+			"id": "radius",
+			"name": "Border Radius",
+			"css_var": "--radius",
+			"value": "12px",
+			"type": "radius",
+			"description": "Corner roundness"
+		}
+	],
+	"content": [
+		{
+			"id": "title",
+			"name": "Title",
+			"type": "text",
+			"value": "Habit Dashboard",
+			"description": "Page title"
+		},
+		{
+			"id": "subtitle",
+			"name": "Subtitle",
+			"type": "text",
+			"value": "Build better habits, one day at a time",
+			"description": "Page subtitle"
+		},
+		{
+			"id": "today_progress",
+			"name": "Today Progress",
+			"type": "text",
+			"value": "Today",
+			"description": "Today progress label"
+		},
+		{
+			"id": "perfect_days",
+			"name": "Perfect Days",
+			"type": "text",
+			"value": "Perfect Days",
+			"description": "Perfect days streak label"
+		},
+		{
+			"id": "week_avg",
+			"name": "Week Average",
+			"type": "text",
+			"value": "This Week",
+			"description": "Weekly average label"
+		},
+		{
+			"id": "habits_heading",
+			"name": "Habits Heading",
+			"type": "text",
+			"value": "Your Habits",
+			"description": "Habits section heading"
+		},
+		{
+			"id": "week",
+			"name": "Week",
+			"type": "text",
+			"value": "7d",
+			"description": "Week label"
+		},
+		{
+			"id": "month",
+			"name": "Month",
+			"type": "text",
+			"value": "30d",
+			"description": "Month label"
+		},
+		{
+			"id": "year_view",
+			"name": "Year View",
+			"type": "text",
+			"value": "Year at a Glance",
+			"description": "Heatmap section title"
+		},
+		{
+			"id": "all_habits",
+			"name": "All Habits",
+			"type": "text",
+			"value": "All Habits",
+			"description": "All habits option"
+		},
+		{
+			"id": "less",
+			"name": "Less",
+			"type": "text",
+			"value": "Less",
+			"description": "Heatmap legend less"
+		},
+		{
+			"id": "more",
+			"name": "More",
+			"type": "text",
+			"value": "More",
+			"description": "Heatmap legend more"
+		},
+		{
+			"id": "empty_text",
+			"name": "Empty Text",
+			"type": "text",
+			"value": "Add habits to start tracking your daily progress.",
+			"description": "Empty state message"
+		}
+	],
+	"data": {
+		"habits": {
+			"schema": [
+				{
+					"name": "name",
+					"type": "text"
+				},
+				{
+					"name": "emoji",
+					"type": "text"
+				},
+				{
+					"name": "order",
+					"type": "number"
+				},
+				{
+					"name": "archived",
+					"type": "bool"
+				}
+			],
+			"records": [
+				{
+					"id": "h1",
+					"name": "Morning Exercise",
+					"emoji": "\ud83c\udfc3",
+					"order": 0,
+					"archived": false
+				},
+				{
+					"id": "h2",
+					"name": "Read 30 mins",
+					"emoji": "\ud83d\udcda",
+					"order": 1,
+					"archived": false
+				},
+				{
+					"id": "h3",
+					"name": "Meditate",
+					"emoji": "\ud83e\uddd8",
+					"order": 2,
+					"archived": false
+				},
+				{
+					"id": "h4",
+					"name": "Journal",
+					"emoji": "\u270d\ufe0f",
+					"order": 3,
+					"archived": false
+				},
+				{
+					"id": "h5",
+					"name": "Drink 8 glasses water",
+					"emoji": "\ud83d\udca7",
+					"order": 4,
+					"archived": false
+				}
+			],
+			"icon": "lucide:check-square"
+		},
+		"completions": {
+			"schema": [
+				{
+					"name": "habit_id",
+					"type": "text"
+				},
+				{
+					"name": "date",
+					"type": "text"
+				}
+			],
+			"records": [
+				{
+					"id": "c1",
+					"habit_id": "h1",
+					"date": "2024-12-20"
+				},
+				{
+					"id": "c2",
+					"habit_id": "h2",
+					"date": "2024-12-20"
+				},
+				{
+					"id": "c3",
+					"habit_id": "h3",
+					"date": "2024-12-20"
+				},
+				{
+					"id": "c4",
+					"habit_id": "h4",
+					"date": "2024-12-20"
+				},
+				{
+					"id": "c5",
+					"habit_id": "h5",
+					"date": "2024-12-20"
+				},
+				{
+					"id": "c6",
+					"habit_id": "h1",
+					"date": "2024-12-19"
+				},
+				{
+					"id": "c7",
+					"habit_id": "h2",
+					"date": "2024-12-19"
+				},
+				{
+					"id": "c8",
+					"habit_id": "h3",
+					"date": "2024-12-19"
+				},
+				{
+					"id": "c9",
+					"habit_id": "h1",
+					"date": "2024-12-18"
+				},
+				{
+					"id": "c10",
+					"habit_id": "h2",
+					"date": "2024-12-18"
+				},
+				{
+					"id": "c11",
+					"habit_id": "h5",
+					"date": "2024-12-18"
+				},
+				{
+					"id": "c12",
+					"habit_id": "h1",
+					"date": "2024-12-17"
+				},
+				{
+					"id": "c13",
+					"habit_id": "h3",
+					"date": "2024-12-17"
+				},
+				{
+					"id": "c14",
+					"habit_id": "h1",
+					"date": "2024-12-16"
+				},
+				{
+					"id": "c15",
+					"habit_id": "h2",
+					"date": "2024-12-16"
+				}
+			],
+			"icon": "lucide:check-circle-2"
+		}
+	}
+}

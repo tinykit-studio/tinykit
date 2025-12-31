@@ -23,7 +23,6 @@
 {:else if auth.is_authenticated}
 	{@render children()}
 {:else}
-	<!-- Redirecting to login... -->
 	<div class="min-h-screen bg-[var(--builder-bg-primary)] flex items-center justify-center">
 		<Loader2 class="w-8 h-8 text-[var(--builder-accent)] animate-spin" />
 	</div>

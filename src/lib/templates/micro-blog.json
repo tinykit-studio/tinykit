@@ -1,0 +1,167 @@
+{
+	"id": "micro-blog",
+	"name": "Micro-blog",
+	"description": "Simple microblogging with timestamps and RSS",
+	"preview": "lucide:message-square",
+	"tags": [
+		"personal-site",
+		"personal",
+		"beginner"
+	],
+	"kits": [
+		"personal-site",
+		"community"
+	],
+	"frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet posts = $state([])\n\tlet loading = $state(true)\n\n\tdata.posts.subscribe(items => {\n\t\tposts = items.sort((a, b) => \n\t\t\tnew Date(b.created_at).getTime() - new Date(a.created_at).getTime()\n\t\t)\n\t\tloading = false\n\t})\n\n\tfunction format_date(date_str) {\n\t\tconst date = new Date(date_str)\n\t\tconst now = new Date()\n\t\tconst diff = now.getTime() - date.getTime()\n\t\tconst hours = Math.floor(diff / (1000 * 60 * 60))\n\t\tconst days = Math.floor(hours / 24)\n\n\t\tif (hours < 1) return 'Just now'\n\t\tif (hours < 24) return `${hours}h ago`\n\t\tif (days < 7) return `${days}d ago`\n\t\t\n\t\treturn date.toLocaleDateString('en-US', {\n\t\t\tmonth: 'short',\n\t\t\tday: 'numeric',\n\t\t\tyear: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined\n\t\t})\n\t}\n\n\tfunction format_full_date(date_str) {\n\t\treturn new Date(date_str).toLocaleString('en-US', {\n\t\t\tmonth: 'long',\n\t\t\tday: 'numeric',\n\t\t\tyear: 'numeric',\n\t\t\thour: 'numeric',\n\t\t\tminute: '2-digit'\n\t\t})\n\t}\n\n\t// Simple text formatting\n\tfunction render_text(text) {\n\t\tif (!text) return ''\n\t\treturn text\n\t\t\t.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>')\n\t\t\t.replace(/\\*(.+?)\\*/g, '<em>$1</em>')\n\t\t\t.replace(/(https?:\\/\\/[^\\s]+)/g, '<a href=\"$1\" target=\"_blank\" rel=\"noopener\">$1</a>')\n\t\t\t.replace(/\\n/g, '<br>')\n\t}\n</script>\n\n<div class=\"page\">\n\t<header class=\"header\">\n\t\t<div class=\"profile\">\n\t\t\t{#if content.avatar_url}\n\t\t\t\t<img class=\"avatar\" src={content.avatar_url} alt={content.author_name} />\n\t\t\t{/if}\n\t\t\t<div>\n\t\t\t\t<h1>{content.author_name}</h1>\n\t\t\t\t<p>{content.tagline}</p>\n\t\t\t</div>\n\t\t</div>\n\t\t<a href=\"/rss\" class=\"rss-link\" title=\"RSS Feed\">\n\t\t\t<Icon icon=\"lucide:rss\" width={18} />\n\t\t</a>\n\t</header>\n\n\t{#if loading}\n\t\t<div class=\"loading\">\n\t\t\t<Icon icon=\"lucide:loader-2\" width={24} class=\"spin\" />\n\t\t</div>\n\t{:else if posts.length === 0}\n\t\t<div class=\"empty\">\n\t\t\t<Icon icon=\"lucide:pen-line\" width={48} />\n\t\t\t<p>{content.empty_text}</p>\n\t\t</div>\n\t{:else}\n\t\t<div class=\"feed\">\n\t\t\t{#each posts as post (post.id)}\n\t\t\t\t<article class=\"post\" id=\"post-{post.id}\">\n\t\t\t\t\t<div class=\"post-content\">\n\t\t\t\t\t\t<p>{@html render_text(post.text)}</p>\n\t\t\t\t\t\t{#if post.image_url}\n\t\t\t\t\t\t\t<img class=\"post-image\" src={post.image_url} alt=\"\" />\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t</div>\n\t\t\t\t\t<footer class=\"post-meta\">\n\t\t\t\t\t\t<a href=\"#post-{post.id}\" class=\"permalink\" title={format_full_date(post.created_at)}>\n\t\t\t\t\t\t\t<Icon icon=\"lucide:clock\" width={12} />\n\t\t\t\t\t\t\t{format_date(post.created_at)}\n\t\t\t\t\t\t</a>\n\t\t\t\t\t</footer>\n\t\t\t\t</article>\n\t\t\t{/each}\n\t\t</div>\n\t{/if}\n</div>\n\n<style>\n\t.page {\n\t\tmin-height: 100vh;\n\t\tbackground: var(--bg-color, #ffffff);\n\t\tpadding: 2rem 1.5rem;\n\t\tfont-family: var(--font, system-ui, sans-serif);\n\t}\n\n\t.header {\n\t\tmax-width: 560px;\n\t\tmargin: 0 auto 2rem;\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: center;\n\t}\n\n\t.profile {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.875rem;\n\t}\n\n\t.avatar {\n\t\twidth: 48px;\n\t\theight: 48px;\n\t\tborder-radius: 50%;\n\t\tobject-fit: cover;\n\t}\n\n\t.profile h1 {\n\t\tfont-size: 1.125rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #0f172a);\n\t\tmargin: 0;\n\t}\n\n\t.profile p {\n\t\tfont-size: 0.875rem;\n\t\tcolor: var(--text-muted, #64748b);\n\t\tmargin: 0;\n\t}\n\n\t.rss-link {\n\t\tcolor: var(--text-muted, #64748b);\n\t\tpadding: 0.5rem;\n\t\tborder-radius: 6px;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.rss-link:hover {\n\t\tcolor: var(--accent-color, #f97316);\n\t\tbackground: var(--hover-bg, #f8fafc);\n\t}\n\n\t.loading, .empty {\n\t\tmax-width: 560px;\n\t\tmargin: 4rem auto;\n\t\ttext-align: center;\n\t\tcolor: var(--text-muted, #64748b);\n\t}\n\n\t.empty p {\n\t\tmargin-top: 1rem;\n\t}\n\n\t.feed {\n\t\tmax-width: 560px;\n\t\tmargin: 0 auto;\n\t}\n\n\t.post {\n\t\tpadding: 1.25rem 0;\n\t\tborder-bottom: 1px solid var(--border-color, #e2e8f0);\n\t}\n\n\t.post:first-child {\n\t\tpadding-top: 0;\n\t}\n\n\t.post:last-child {\n\t\tborder-bottom: none;\n\t}\n\n\t.post-content p {\n\t\tcolor: var(--text-color, #334155);\n\t\tline-height: 1.65;\n\t\tmargin: 0;\n\t\tfont-size: 1rem;\n\t\tword-wrap: break-word;\n\t}\n\n\t.post-content :global(a) {\n\t\tcolor: var(--link-color, #3b82f6);\n\t\ttext-decoration: underline;\n\t\ttext-decoration-color: rgba(59, 130, 246, 0.3);\n\t\ttext-underline-offset: 2px;\n\t}\n\n\t.post-content :global(a:hover) {\n\t\ttext-decoration-color: var(--link-color, #3b82f6);\n\t}\n\n\t.post-content :global(strong) {\n\t\tcolor: var(--heading-color, #0f172a);\n\t\tfont-weight: 600;\n\t}\n\n\t.post-image {\n\t\tmargin-top: 0.75rem;\n\t\tmax-width: 100%;\n\t\tborder-radius: var(--radius, 8px);\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t}\n\n\t.post-meta {\n\t\tmargin-top: 0.625rem;\n\t}\n\n\t.permalink {\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tgap: 0.25rem;\n\t\tcolor: var(--text-muted, #64748b);\n\t\tfont-size: 0.8125rem;\n\t\ttext-decoration: none;\n\t\ttransition: color 0.2s;\n\t}\n\n\t.permalink:hover {\n\t\tcolor: var(--link-color, #3b82f6);\n\t}\n\n\t:global(.spin) {\n\t\tanimation: spin 1s linear infinite;\n\t}\n\n\t@keyframes spin {\n\t\tfrom { transform: rotate(0deg); }\n\t\tto { transform: rotate(360deg); }\n\t}\n</style>",
+	"design": [
+		{
+			"id": "bg-color",
+			"name": "Background",
+			"css_var": "--bg-color",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Page background color"
+		},
+		{
+			"id": "hover-bg",
+			"name": "Hover Background",
+			"css_var": "--hover-bg",
+			"value": "#f8fafc",
+			"type": "color",
+			"description": "Background on hover"
+		},
+		{
+			"id": "heading-color",
+			"name": "Heading Color",
+			"css_var": "--heading-color",
+			"value": "#0f172a",
+			"type": "color",
+			"description": "Color for headings"
+		},
+		{
+			"id": "text-color",
+			"name": "Text Color",
+			"css_var": "--text-color",
+			"value": "#334155",
+			"type": "color",
+			"description": "Color for body text"
+		},
+		{
+			"id": "text-muted",
+			"name": "Muted Text",
+			"css_var": "--text-muted",
+			"value": "#64748b",
+			"type": "color",
+			"description": "Color for subtle text"
+		},
+		{
+			"id": "link-color",
+			"name": "Link Color",
+			"css_var": "--link-color",
+			"value": "#3b82f6",
+			"type": "color",
+			"description": "Color for links"
+		},
+		{
+			"id": "accent-color",
+			"name": "Accent Color",
+			"css_var": "--accent-color",
+			"value": "#f97316",
+			"type": "color",
+			"description": "Accent color for RSS icon"
+		},
+		{
+			"id": "border-color",
+			"name": "Border Color",
+			"css_var": "--border-color",
+			"value": "#e2e8f0",
+			"type": "color",
+			"description": "Color for borders"
+		},
+		{
+			"id": "font",
+			"name": "Font",
+			"css_var": "--font",
+			"value": "system-ui, sans-serif",
+			"type": "font",
+			"description": "Main font family"
+		},
+		{
+			"id": "radius",
+			"name": "Border Radius",
+			"css_var": "--radius",
+			"value": "8px",
+			"type": "radius",
+			"description": "Roundness of images"
+		}
+	],
+	"content": [
+		{
+			"id": "avatar_url",
+			"name": "Avatar URL",
+			"type": "image",
+			"value": "https://placehold.co/100x100/6366f1/ffffff?text=A",
+			"description": "Your avatar image"
+		},
+		{
+			"id": "author_name",
+			"name": "Author Name",
+			"type": "text",
+			"value": "Alex",
+			"description": "Your name"
+		},
+		{
+			"id": "tagline",
+			"name": "Tagline",
+			"type": "text",
+			"value": "Thoughts and updates",
+			"description": "Short tagline"
+		},
+		{
+			"id": "empty_text",
+			"name": "Empty State",
+			"type": "text",
+			"value": "No posts yet.",
+			"description": "Text when no posts exist"
+		}
+	],
+	"data": {
+		"posts": {
+			"schema": [
+				{
+					"name": "text",
+					"type": "text"
+				},
+				{
+					"name": "image_url",
+					"type": "text"
+				},
+				{
+					"name": "created_at",
+					"type": "text"
+				}
+			],
+			"records": [
+				{
+					"id": "p1",
+					"text": "Just shipped a big update to the project I've been working on for the past few months. Feels good to finally get it out there. https://example.com",
+					"image_url": "",
+					"created_at": "2024-12-15T14:30:00Z"
+				},
+				{
+					"id": "p2",
+					"text": "Reading **Thinking in Systems** by Donella Meadows. Really changing how I think about complex problems.",
+					"image_url": "",
+					"created_at": "2024-12-14T09:15:00Z"
+				},
+				{
+					"id": "p3",
+					"text": "Morning coffee and code. There's something special about the quiet hours before everyone else wakes up.",
+					"image_url": "https://placehold.co/400x300/a16207/ffffff?text=Coffee",
+					"created_at": "2024-12-12T06:45:00Z"
+				}
+			],
+			"icon": "lucide:file-text"
+		}
+	}
+}

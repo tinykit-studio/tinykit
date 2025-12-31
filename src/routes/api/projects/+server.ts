@@ -17,7 +17,7 @@ export const GET: RequestHandler = async () => {
 // POST /api/projects - Create a new project
 export const POST: RequestHandler = async ({ request, locals }) => {
 	try {
-		const { name, domain, template_id, initial_prompt } = await request.json()
+		const { name, domain, kit, template_id, initial_prompt } = await request.json()
 
 		if (!name) {
 			return json({ error: 'Name is required' }, { status: 400 })
@@ -43,6 +43,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const project = await createProject({
 			name,
 			domain: project_domain,
+			kit,
 			frontend_code,
 			design,
 			content,
