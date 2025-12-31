@@ -151,6 +151,10 @@ blog.myserver.com/tinykit/studio        → Edit blog app
 
 [MIT](./LICENSE)
 
----
+--
 
 <p><i>Build your digital homestead.</i></p>
+
+--
+
+> ## Building a website? check out [Pala CMS](https://github.com/palacms/palacms)
