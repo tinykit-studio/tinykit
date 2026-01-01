@@ -177,11 +177,21 @@
       const created_projects = await project_service.batch_create_kit(kit.id, templates_to_create);
 
       // Build all projects in parallel for preview thumbnails
-      await Promise.all(
-        created_projects.map(p => build_app(p.id).catch(err => {
-          console.warn(`Failed to build ${p.name}:`, err);
-        }))
+      console.log(`Building ${created_projects.length} projects...`);
+      const build_results = await Promise.all(
+        created_projects.map(p =>
+          build_app(p.id)
+            .then(res => {
+              console.log(`Built ${p.name}:`, res);
+              return { success: true, project: p.name };
+            })
+            .catch(err => {
+              console.error(`Failed to build ${p.name}:`, err);
+              return { success: false, project: p.name, error: err };
+            })
+        )
       );
+      console.log('Build results:', build_results);
 
       // Redirect to dashboard with this kit selected
       goto(`/tinykit?kit=${kit.id}`);
