@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte"
+	import Icon from "@iconify/svelte"
 	import { processCode, dynamic_iframe_srcdoc } from "$lib/compiler/init"
 	import type { Template } from "$lib/templates"
 
@@ -104,11 +105,9 @@
 </script>
 
 {#if compile_error}
-	<div class="error-container">
-		<div class="error-message">
-			<h3>Error</h3>
-			<pre>{compile_error}</pre>
-		</div>
+	<div class="fallback-container">
+		<Icon icon={template.preview || "lucide:file"} class="fallback-icon" />
+		<span class="template-name">{template.name}</span>
 	</div>
 {:else if is_compiling}
 	<div class="loading-container">
@@ -132,32 +131,28 @@
 		background: white;
 	}
 
-	.error-container,
+	.fallback-container,
 	.loading-container {
 		width: 100%;
 		height: 100%;
 		display: flex;
+		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		background: #0d0d0d;
-		color: #888;
+		background: var(--builder-bg-tertiary, #1a1a1a);
+		color: var(--builder-text-muted, #888);
+		gap: 1rem;
 	}
 
-	.error-message {
-		max-width: 80%;
-		text-align: center;
+	:global(.fallback-icon) {
+		width: 64px;
+		height: 64px;
+		opacity: 0.5;
 	}
 
-	.error-message h3 {
-		color: #ef4444;
-		margin-bottom: 1rem;
-	}
-
-	.error-message pre {
-		font-size: 0.75rem;
-		white-space: pre-wrap;
-		word-break: break-word;
-		color: #666;
+	.template-name {
+		font-size: 0.875rem;
+		opacity: 0.7;
 	}
 
 	.loading-spinner {
