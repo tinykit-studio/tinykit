@@ -47,10 +47,14 @@
 
   // Derived state
   let selected_kit = $derived(kits.find((k) => k.id === selected_kit_id));
+  let uncategorized_projects = $derived(projects.filter((p) => !p.kit));
+  let has_uncategorized = $derived(uncategorized_projects.length > 0);
   let filtered_projects = $derived(
-    selected_kit_id
-      ? projects.filter((p) => p.kit === selected_kit_id)
-      : projects
+    selected_kit_id === "_uncategorized"
+      ? uncategorized_projects
+      : selected_kit_id
+        ? projects.filter((p) => p.kit === selected_kit_id)
+        : projects
   );
 
   // Sync kit filter to URL query param using SvelteKit's shallow routing
@@ -99,8 +103,13 @@
     is_loading_kits = true;
     try {
       kits = await kit_service.list();
-      if (!selected_kit_id && kits.length > 0) {
-        selected_kit_id = kits[0].id;
+      // Auto-select first kit, or uncategorized if no kits but has orphan projects
+      if (!selected_kit_id) {
+        if (kits.length > 0) {
+          selected_kit_id = kits[0].id;
+        } else if (uncategorized_projects.length > 0) {
+          selected_kit_id = "_uncategorized";
+        }
       }
     } catch (err) {
       console.error("Failed to load kits:", err);
@@ -236,6 +245,16 @@
                 {kit.name}
               </button>
             {/each}
+            {#if has_uncategorized}
+              <button
+                onclick={() => (selected_kit_id = "_uncategorized")}
+                class="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap select-none {selected_kit_id === '_uncategorized'
+                  ? 'bg-[var(--builder-accent)] text-[var(--builder-accent-text)]'
+                  : 'bg-[var(--builder-bg-secondary)] text-[var(--builder-text-secondary)] hover:text-[var(--builder-text-primary)] hover:bg-[var(--builder-bg-tertiary)]'}"
+              >
+                Uncategorized
+              </button>
+            {/if}
           </div>
 
           <div class="w-px h-6 bg-[var(--builder-border)] mx-1"></div>
@@ -302,6 +321,12 @@
               New App
             </a>
           </div>
+        </div>
+      {:else if selected_kit_id === "_uncategorized"}
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-2xl font-semibold text-[var(--builder-text-primary)]">
+            Uncategorized
+          </h2>
         </div>
       {/if}
 
