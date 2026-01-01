@@ -39,7 +39,15 @@ vite.config.ts.timestamp-*
 # PocketBase binary and data (downloaded/generated at runtime)
 /pocketbase/pocketbase
 /pocketbase/pb_data/
+/pocketbase/pb_data_*/
 /pocketbase/CHANGELOG.md
 /pocketbase/LICENSE.md
 # Keep migrations in git
 !/pocketbase/pb_migrations/
+
+# Playwright MCP screenshots
+/.playwright-mcp/
+
+# Local dev files
+palette-*.html
+tinykit-land*.html
