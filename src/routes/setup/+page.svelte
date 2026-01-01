@@ -253,9 +253,12 @@
 
 				<!-- LLM Configuration -->
 				<div class="pt-4 mt-4 border-t border-[var(--builder-border)]">
-					<h3 class="text-sm font-medium text-[var(--builder-text-primary)] mb-3">
-						AI Model
+					<h3 class="text-sm font-medium text-[var(--builder-text-primary)] mb-1">
+						AI Model <span class="font-normal text-[var(--builder-text-muted)]">(optional)</span>
 					</h3>
+					<p class="text-xs text-[var(--builder-text-muted)] mb-3">
+						Skip this to use templates only. AI lets you build apps from a prompt.
+					</p>
 
 					<div class="space-y-3">
 						<div>
@@ -364,7 +367,7 @@
 					</div>
 
 					<p class="text-xs text-[var(--builder-text-muted)] mt-2">
-						You can change this later in Settings.
+						You can configure this anytime in Settings.
 					</p>
 				</div>
 
