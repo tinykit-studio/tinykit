@@ -347,7 +347,14 @@
       if (my_version !== compilation_version) {
         return;
       }
-      compile_error = err instanceof Error ? err.message : String(err);
+      console.error("[Preview] Compilation error:", err);
+      // Check if this is a worker initialization error
+      const err_msg = err instanceof Error ? err.message : String(err);
+      if (err_msg.includes("worker") || err_msg.includes("Worker")) {
+        compile_error = "Failed to initialize compiler. Try refreshing the page.";
+      } else {
+        compile_error = err_msg;
+      }
       error_type = "compile";
       compiled_app = null;
     } finally {

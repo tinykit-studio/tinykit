@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clay & Sage v4 - Muted Sage</title>
+  <style>
+    :root {
+      --primary: #C2703E;
+      --secondary: #7A9A72;
+      --bg: #FAF7F2;
+      --bg-dark: #1F1E1D;
+      --text: #2D2A26;
+      --text-light: #FAF7F2;
+      --accent: #BF9B30;
+      --muted: #E8E4DE;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .light-section { padding: 4rem 2rem; background: var(--bg); }
+    .dark-section { padding: 4rem 2rem; background: var(--bg-dark); color: var(--text-light); }
+    .container { max-width: 900px; margin: 0 auto; }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.5rem 2rem;
+      background: var(--bg);
+      border-bottom: 1px solid var(--muted);
+    }
+
+    .logo { font-size: 1.5rem; font-weight: 600; color: var(--text); font-family: ui-monospace, monospace; }
+    .logo span { color: var(--primary); }
+
+    nav { display: flex; gap: 2rem; }
+    nav a { color: var(--text); text-decoration: none; opacity: 0.8; }
+    nav a:hover { opacity: 1; color: var(--primary); }
+
+    .hero { text-align: center; padding: 5rem 2rem; }
+    .hero h1 { font-size: 3rem; margin-bottom: 1rem; color: var(--text); }
+    .hero p { font-size: 1.25rem; opacity: 0.8; max-width: 500px; margin: 0 auto 2rem; }
+
+    .btn {
+      display: inline-block;
+      padding: 0.875rem 1.75rem;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { filter: brightness(1.1); }
+    .btn-secondary { background: var(--secondary); color: white; }
+    .btn-outline { border: 2px solid var(--primary); color: var(--primary); background: transparent; }
+    .btn-accent { background: var(--accent); color: white; }
+    .btn-group { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+
+    .dark-section .card { background: #2A2928; }
+
+    .card-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+    }
+
+    .card h3 { margin-bottom: 0.5rem; }
+    .card p { opacity: 0.8; font-size: 0.95rem; }
+
+    .pricing {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+
+    .price-card {
+      background: white;
+      border-radius: 12px;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    .dark-section .price-card { background: #2A2928; }
+    .price-card.featured { border: 2px solid var(--primary); }
+    .price { font-size: 2.5rem; font-weight: 700; color: var(--primary); }
+    .price span { font-size: 1rem; opacity: 0.6; }
+
+    .swatches { display: flex; gap: 1rem; margin-top: 2rem; flex-wrap: wrap; }
+    .swatch {
+      width: 80px;
+      height: 80px;
+      border-radius: 12px;
+      display: flex;
+      align-items: flex-end;
+      padding: 0.5rem;
+      font-size: 0.7rem;
+      font-family: monospace;
+      color: white;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    }
+
+    h2 { margin-bottom: 0.5rem; }
+    .subtitle { opacity: 0.7; margin-bottom: 2rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo"><span>/</span>tinykit</div>
+    <nav>
+      <a href="#">Kits</a>
+      <a href="#">Pricing</a>
+      <a href="#">Docs</a>
+      <a href="#">GitHub</a>
+    </nav>
+  </header>
+
+  <section class="light-section hero">
+    <h1>v4: Muted Sage + Deeper Gold</h1>
+    <p>Slightly desaturated sage, richer amber gold. More cohesive, less contrast between secondary colors.</p>
+    <div class="btn-group">
+      <a href="#" class="btn btn-primary">Get Started</a>
+      <a href="#" class="btn btn-outline">View on GitHub</a>
+    </div>
+    <div class="swatches" style="justify-content: center; margin-top: 3rem;">
+      <div class="swatch" style="background: #C2703E;">#C2703E</div>
+      <div class="swatch" style="background: #7A9A72;">#7A9A72</div>
+      <div class="swatch" style="background: #BF9B30;">#BF9B30</div>
+      <div class="swatch" style="background: #2D2A26;">#2D2A26</div>
+      <div class="swatch" style="background: #FAF7F2; color: #2D2A26; text-shadow: none; border: 1px solid #E8E4DE;">#FAF7F2</div>
+    </div>
+  </section>
+
+  <section class="light-section">
+    <div class="container">
+      <h2>Pick a kit, claim your land</h2>
+      <p class="subtitle">Everything you need to run your business, your way.</p>
+      <div class="cards">
+        <div class="card">
+          <div class="card-icon" style="background: #C2703E22; color: var(--primary);">💼</div>
+          <h3>FreelanceKit</h3>
+          <p>Invoices, contracts, time tracking, client CRM. Ship your freelance setup in 60 seconds.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon" style="background: #7A9A7222; color: var(--secondary);">🛠</div>
+          <h3>DevKit</h3>
+          <p>Docs, changelogs, status page, analytics. Everything a solo dev needs to ship.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon" style="background: #BF9B3022; color: var(--accent);">🚀</div>
+          <h3>LaunchKit</h3>
+          <p>Landing page, waitlist, testimonials, analytics. Launch your next thing today.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="dark-section">
+    <div class="container">
+      <h2>Simple pricing</h2>
+      <p class="subtitle">Self-host for free, or let us handle it.</p>
+      <div class="pricing">
+        <div class="price-card">
+          <h3>Self-Hosted</h3>
+          <div class="price">Free</div>
+          <p style="margin: 1rem 0; opacity: 0.8;">Your server, your data, your rules.</p>
+          <a href="#" class="btn btn-outline" style="width: 100%;">Download</a>
+        </div>
+        <div class="price-card featured">
+          <h3>Managed</h3>
+          <div class="price">$9<span>/mo</span></div>
+          <p style="margin: 1rem 0; opacity: 0.8;">We host it. You build. No servers to manage.</p>
+          <a href="#" class="btn btn-primary" style="width: 100%;">Get Started</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="light-section" style="text-align: center;">
+    <div class="container">
+      <h2>All button styles</h2>
+      <div class="btn-group" style="margin-top: 1.5rem;">
+        <a href="#" class="btn btn-primary">Primary</a>
+        <a href="#" class="btn btn-secondary">Secondary</a>
+        <a href="#" class="btn btn-accent">Accent</a>
+        <a href="#" class="btn btn-outline">Outline</a>
+      </div>
+    </div>
+  </section>
+</body>
+</html>

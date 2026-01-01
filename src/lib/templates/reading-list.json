@@ -1,0 +1,306 @@
+{
+	"id": "reading-list",
+	"name": "Reading List",
+	"description": "Track books with status, ratings, and notes",
+	"preview": "lucide:book-open",
+	"tags": [
+		"daily",
+		"personal",
+		"beginner"
+	],
+	"kits": [
+		"collections",
+		"feeds"
+	],
+	"frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet books = $state([])\n\tlet loading = $state(true)\n\tlet filter_status = $state('all')\n\tlet search = $state('')\n\tlet sort_by = $state('added')\n\n\tdata.books.subscribe(items => {\n\t\tbooks = items\n\t\tloading = false\n\t})\n\n\tconst status_options = [\n\t\t{ value: 'want', label: 'Want to read', icon: 'lucide:bookmark' },\n\t\t{ value: 'reading', label: 'Reading', icon: 'lucide:book-open' },\n\t\t{ value: 'finished', label: 'Finished', icon: 'lucide:check-circle' }\n\t]\n\n\tlet filtered_books = $derived.by(() => {\n\t\tlet result = books\n\n\t\tif (filter_status !== 'all') {\n\t\t\tresult = result.filter(b => b.status === filter_status)\n\t\t}\n\n\t\tif (search.trim()) {\n\t\t\tconst q = search.toLowerCase()\n\t\t\tresult = result.filter(b => \n\t\t\t\tb.title.toLowerCase().includes(q) || \n\t\t\t\tb.author.toLowerCase().includes(q)\n\t\t\t)\n\t\t}\n\n\t\treturn [...result].sort((a, b) => {\n\t\t\tif (sort_by === 'title') return a.title.localeCompare(b.title)\n\t\t\tif (sort_by === 'author') return a.author.localeCompare(b.author)\n\t\t\tif (sort_by === 'rating') return (b.rating || 0) - (a.rating || 0)\n\t\t\treturn new Date(b.added_at).getTime() - new Date(a.added_at).getTime()\n\t\t})\n\t})\n\n\tlet stats = $derived({\n\t\twant: books.filter(b => b.status === 'want').length,\n\t\treading: books.filter(b => b.status === 'reading').length,\n\t\tfinished: books.filter(b => b.status === 'finished').length\n\t})\n\n\t// Add book form\n\tlet show_form = $state(false)\n\tlet new_title = $state('')\n\tlet new_author = $state('')\n\tlet new_cover = $state('')\n\tlet adding = $state(false)\n\n\tasync function add_book(e) {\n\t\te.preventDefault()\n\t\tif (!new_title.trim()) return\n\n\t\tadding = true\n\t\ttry {\n\t\t\tawait data.books.create({\n\t\t\t\ttitle: new_title.trim(),\n\t\t\t\tauthor: new_author.trim(),\n\t\t\t\tcover_url: new_cover.trim(),\n\t\t\t\tstatus: 'want',\n\t\t\t\trating: 0,\n\t\t\t\tnotes: '',\n\t\t\t\tadded_at: new Date().toISOString()\n\t\t\t})\n\t\t\tnew_title = ''\n\t\t\tnew_author = ''\n\t\t\tnew_cover = ''\n\t\t\tshow_form = false\n\t\t} finally {\n\t\t\tadding = false\n\t\t}\n\t}\n\n\tasync function update_status(book, new_status) {\n\t\tawait data.books.update(book.id, { status: new_status })\n\t}\n\n\tasync function set_rating(book, rating) {\n\t\tawait data.books.update(book.id, { rating })\n\t}\n\n\t// Inline notes editing\n\tlet editing_notes = $state(null)\n\tlet notes_text = $state('')\n\n\tfunction start_editing_notes(book) {\n\t\tediting_notes = book.id\n\t\tnotes_text = book.notes || ''\n\t}\n\n\tasync function save_notes(book) {\n\t\tawait data.books.update(book.id, { notes: notes_text })\n\t\tediting_notes = null\n\t}\n</script>\n\n<div class=\"page\">\n\t<header class=\"header\">\n\t\t<div class=\"header-top\">\n\t\t\t<h1>{content.title}</h1>\n\t\t\t<button class=\"btn-primary\" onclick={() => show_form = !show_form}>\n\t\t\t\t<Icon icon={show_form ? 'lucide:x' : 'lucide:plus'} width={16} />\n\t\t\t\t{show_form ? content.cancel : content.add_book}\n\t\t\t</button>\n\t\t</div>\n\t\t<div class=\"stats-bar\">\n\t\t\t<span>{stats.want} {content.want_label}</span>\n\t\t\t<span class=\"separator\">\u00b7</span>\n\t\t\t<span>{stats.reading} {content.reading_label}</span>\n\t\t\t<span class=\"separator\">\u00b7</span>\n\t\t\t<span>{stats.finished} {content.finished_label}</span>\n\t\t</div>\n\t</header>\n\n\t{#if show_form}\n\t\t<form class=\"add-form\" onsubmit={add_book}>\n\t\t\t<input type=\"text\" placeholder={content.title_placeholder} bind:value={new_title} required />\n\t\t\t<input type=\"text\" placeholder={content.author_placeholder} bind:value={new_author} />\n\t\t\t<input type=\"url\" placeholder={content.cover_placeholder} bind:value={new_cover} />\n\t\t\t<button type=\"submit\" class=\"btn-primary\" disabled={adding}>\n\t\t\t\t{content.add_button}\n\t\t\t</button>\n\t\t</form>\n\t{/if}\n\n\t<div class=\"controls\">\n\t\t<div class=\"search\">\n\t\t\t<Icon icon=\"lucide:search\" width={16} />\n\t\t\t<input type=\"text\" placeholder={content.search_placeholder} bind:value={search} />\n\t\t</div>\n\t\t<div class=\"filters\">\n\t\t\t<button class:active={filter_status === 'all'} onclick={() => filter_status = 'all'}>\n\t\t\t\tAll\n\t\t\t</button>\n\t\t\t{#each status_options as status (status.value)}\n\t\t\t\t<button class:active={filter_status === status.value} onclick={() => filter_status = status.value}>\n\t\t\t\t\t<Icon icon={status.icon} width={14} />\n\t\t\t\t\t{status.label}\n\t\t\t\t</button>\n\t\t\t{/each}\n\t\t</div>\n\t\t<select class=\"sort-select\" bind:value={sort_by}>\n\t\t\t<option value=\"added\">{content.sort_added}</option>\n\t\t\t<option value=\"title\">{content.sort_title}</option>\n\t\t\t<option value=\"author\">{content.sort_author}</option>\n\t\t\t<option value=\"rating\">{content.sort_rating}</option>\n\t\t</select>\n\t</div>\n\n\t{#if loading}\n\t\t<div class=\"loading\">\n\t\t\t<Icon icon=\"lucide:loader-2\" width={24} class=\"spin\" />\n\t\t</div>\n\t{:else if filtered_books.length === 0}\n\t\t<div class=\"empty\">\n\t\t\t<Icon icon=\"lucide:book-open\" width={48} />\n\t\t\t<p>{search ? content.no_results : content.empty_text}</p>\n\t\t</div>\n\t{:else}\n\t\t<div class=\"book-grid\">\n\t\t\t{#each filtered_books as book (book.id)}\n\t\t\t\t<div class=\"book-card\">\n\t\t\t\t\t<div class=\"cover\">\n\t\t\t\t\t\t{#if book.cover_url}\n\t\t\t\t\t\t\t<img src={book.cover_url} alt={book.title} />\n\t\t\t\t\t\t{:else}\n\t\t\t\t\t\t\t<div class=\"no-cover\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:book\" width={32} />\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"book-info\">\n\t\t\t\t\t\t<h3>{book.title}</h3>\n\t\t\t\t\t\t{#if book.author}\n\t\t\t\t\t\t\t<p class=\"author\">{book.author}</p>\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t<select \n\t\t\t\t\t\t\tclass=\"status-select\"\n\t\t\t\t\t\t\tvalue={book.status}\n\t\t\t\t\t\t\tonchange={(e) => update_status(book, e.target.value)}\n\t\t\t\t\t\t>\n\t\t\t\t\t\t\t{#each status_options as status (status.value)}\n\t\t\t\t\t\t\t\t<option value={status.value}>{status.label}</option>\n\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t</select>\n\t\t\t\t\t\t<div class=\"rating\">\n\t\t\t\t\t\t\t{#each [1, 2, 3, 4, 5] as star (star)}\n\t\t\t\t\t\t\t\t<button \n\t\t\t\t\t\t\t\t\tclass=\"star\"\n\t\t\t\t\t\t\t\t\tclass:filled={star <= (book.rating || 0)}\n\t\t\t\t\t\t\t\t\tonclick={() => set_rating(book, star === book.rating ? 0 : star)}\n\t\t\t\t\t\t\t\t>\n\t\t\t\t\t\t\t\t\t<Icon icon={star <= (book.rating || 0) ? 'lucide:star' : 'lucide:star'} width={14} />\n\t\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t{/each}\n\t\t\t\t\t\t</div>\n\t\t\t\t\t\t{#if editing_notes === book.id}\n\t\t\t\t\t\t\t<div class=\"notes-editor\">\n\t\t\t\t\t\t\t\t<textarea bind:value={notes_text} rows=\"3\" placeholder={content.notes_placeholder}></textarea>\n\t\t\t\t\t\t\t\t<button class=\"save-btn\" onclick={() => save_notes(book)}>{content.save_notes}</button>\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t{:else}\n\t\t\t\t\t\t\t<button class=\"notes-btn\" onclick={() => start_editing_notes(book)}>\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:file-text\" width={12} />\n\t\t\t\t\t\t\t\t{book.notes ? content.edit_notes : content.add_notes}\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t{/if}\n\t\t\t\t\t</div>\n\t\t\t\t</div>\n\t\t\t{/each}\n\t\t</div>\n\t{/if}\n</div>\n\n<style>\n\t.page {\n\t\tmin-height: 100vh;\n\t\tbackground: var(--bg-color, #faf5f0);\n\t\tpadding: 2rem 1.5rem;\n\t\tfont-family: var(--font, system-ui, sans-serif);\n\t}\n\n\t.header {\n\t\tmax-width: 900px;\n\t\tmargin: 0 auto 1.5rem;\n\t}\n\n\t.header-top {\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: center;\n\t\tgap: 1rem;\n\t\tmargin-bottom: 0.5rem;\n\t}\n\n\t.header h1 {\n\t\tfont-size: 1.5rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--heading-color, #1c1917);\n\t\tmargin: 0;\n\t}\n\n\t.stats-bar {\n\t\tfont-size: 0.875rem;\n\t\tcolor: var(--text-color, #78716c);\n\t}\n\n\t.separator {\n\t\tmargin: 0 0.5rem;\n\t}\n\n\t.btn-primary {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.375rem;\n\t\tpadding: 0.5rem 0.875rem;\n\t\tbackground: var(--accent-color, #92400e);\n\t\tcolor: white;\n\t\tborder: none;\n\t\tborder-radius: var(--radius, 6px);\n\t\tfont-size: 0.8125rem;\n\t\tfont-weight: 600;\n\t\tcursor: pointer;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.btn-primary:hover {\n\t\tfilter: brightness(1.1);\n\t}\n\n\t.btn-primary:disabled {\n\t\topacity: 0.7;\n\t}\n\n\t.add-form {\n\t\tmax-width: 900px;\n\t\tmargin: 0 auto 1.5rem;\n\t\tdisplay: flex;\n\t\tgap: 0.5rem;\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tborder: 1px solid var(--border-color, #e7e5e4);\n\t\tborder-radius: var(--radius, 6px);\n\t\tpadding: 0.75rem;\n\t\tflex-wrap: wrap;\n\t}\n\n\t.add-form input {\n\t\tflex: 1;\n\t\tmin-width: 150px;\n\t\tpadding: 0.5rem 0.75rem;\n\t\tborder: 1px solid var(--border-color, #e7e5e4);\n\t\tborder-radius: 4px;\n\t\tfont-size: 0.875rem;\n\t\tbackground: var(--bg-color, #faf5f0);\n\t\tcolor: var(--heading-color, #1c1917);\n\t}\n\n\t.add-form input:focus {\n\t\toutline: none;\n\t\tborder-color: var(--accent-color, #92400e);\n\t}\n\n\t.controls {\n\t\tmax-width: 900px;\n\t\tmargin: 0 auto 1.5rem;\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t\tflex-wrap: wrap;\n\t\talign-items: center;\n\t}\n\n\t.search {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tpadding: 0.5rem 0.75rem;\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tborder: 1px solid var(--border-color, #e7e5e4);\n\t\tborder-radius: var(--radius, 6px);\n\t\tcolor: var(--text-color, #78716c);\n\t}\n\n\t.search input {\n\t\tborder: none;\n\t\tbackground: transparent;\n\t\tfont-size: 0.875rem;\n\t\tcolor: var(--heading-color, #1c1917);\n\t\toutline: none;\n\t\twidth: 150px;\n\t}\n\n\t.filters {\n\t\tdisplay: flex;\n\t\tgap: 0.375rem;\n\t\tflex-wrap: wrap;\n\t\tflex: 1;\n\t}\n\n\t.filters button {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.25rem;\n\t\tpadding: 0.375rem 0.625rem;\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tborder: 1px solid var(--border-color, #e7e5e4);\n\t\tborder-radius: var(--radius, 6px);\n\t\tcolor: var(--text-color, #78716c);\n\t\tfont-size: 0.8125rem;\n\t\tcursor: pointer;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.filters button:hover {\n\t\tborder-color: var(--accent-color, #92400e);\n\t}\n\n\t.filters button.active {\n\t\tbackground: var(--accent-color, #92400e);\n\t\tborder-color: var(--accent-color, #92400e);\n\t\tcolor: white;\n\t}\n\n\t.sort-select {\n\t\tpadding: 0.375rem 0.625rem;\n\t\tborder: 1px solid var(--border-color, #e7e5e4);\n\t\tborder-radius: var(--radius, 6px);\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tcolor: var(--heading-color, #1c1917);\n\t\tfont-size: 0.8125rem;\n\t\tcursor: pointer;\n\t}\n\n\t.loading, .empty {\n\t\tmax-width: 900px;\n\t\tmargin: 4rem auto;\n\t\ttext-align: center;\n\t\tcolor: var(--text-color, #78716c);\n\t}\n\n\t.empty p {\n\t\tmargin-top: 1rem;\n\t}\n\n\t.book-grid {\n\t\tmax-width: 900px;\n\t\tmargin: 0 auto;\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(auto-fill, minmax(280px, 1fr));\n\t\tgap: 1rem;\n\t}\n\n\t.book-card {\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tborder: 1px solid var(--border-color, #e7e5e4);\n\t\tborder-radius: var(--radius, 6px);\n\t\tpadding: 1rem;\n\t}\n\n\t.cover {\n\t\twidth: 80px;\n\t\theight: 120px;\n\t\tflex-shrink: 0;\n\t\tborder-radius: 4px;\n\t\toverflow: hidden;\n\t\tbackground: var(--bg-color, #faf5f0);\n\t}\n\n\t.cover img {\n\t\twidth: 100%;\n\t\theight: 100%;\n\t\tobject-fit: cover;\n\t}\n\n\t.no-cover {\n\t\twidth: 100%;\n\t\theight: 100%;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tcolor: var(--text-color, #78716c);\n\t}\n\n\t.book-info {\n\t\tflex: 1;\n\t\tmin-width: 0;\n\t}\n\n\t.book-info h3 {\n\t\tfont-size: 1rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #1c1917);\n\t\tmargin: 0 0 0.25rem;\n\t\tline-height: 1.3;\n\t}\n\n\t.author {\n\t\tfont-size: 0.8125rem;\n\t\tcolor: var(--text-color, #78716c);\n\t\tmargin: 0 0 0.5rem;\n\t}\n\n\t.status-select {\n\t\tpadding: 0.25rem 0.5rem;\n\t\tborder: 1px solid var(--border-color, #e7e5e4);\n\t\tborder-radius: 4px;\n\t\tbackground: var(--bg-color, #faf5f0);\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--heading-color, #1c1917);\n\t\tcursor: pointer;\n\t\tmargin-bottom: 0.5rem;\n\t}\n\n\t.rating {\n\t\tdisplay: flex;\n\t\tgap: 2px;\n\t\tmargin-bottom: 0.5rem;\n\t}\n\n\t.star {\n\t\tbackground: none;\n\t\tborder: none;\n\t\tpadding: 0;\n\t\tcursor: pointer;\n\t\tcolor: var(--border-color, #e7e5e4);\n\t\ttransition: color 0.2s;\n\t}\n\n\t.star.filled {\n\t\tcolor: var(--star-color, #fbbf24);\n\t}\n\n\t.star:hover {\n\t\tcolor: var(--star-color, #fbbf24);\n\t}\n\n\t.notes-btn {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.25rem;\n\t\tbackground: none;\n\t\tborder: none;\n\t\tcolor: var(--text-color, #78716c);\n\t\tfont-size: 0.75rem;\n\t\tcursor: pointer;\n\t\tpadding: 0;\n\t}\n\n\t.notes-btn:hover {\n\t\tcolor: var(--accent-color, #92400e);\n\t}\n\n\t.notes-editor {\n\t\tmargin-top: 0.5rem;\n\t}\n\n\t.notes-editor textarea {\n\t\twidth: 100%;\n\t\tpadding: 0.5rem;\n\t\tborder: 1px solid var(--border-color, #e7e5e4);\n\t\tborder-radius: 4px;\n\t\tfont-size: 0.8125rem;\n\t\tbackground: var(--bg-color, #faf5f0);\n\t\tcolor: var(--heading-color, #1c1917);\n\t\tresize: vertical;\n\t}\n\n\t.save-btn {\n\t\tmargin-top: 0.375rem;\n\t\tpadding: 0.25rem 0.5rem;\n\t\tbackground: var(--accent-color, #92400e);\n\t\tcolor: white;\n\t\tborder: none;\n\t\tborder-radius: 4px;\n\t\tfont-size: 0.75rem;\n\t\tcursor: pointer;\n\t}\n\n\t:global(.spin) {\n\t\tanimation: spin 1s linear infinite;\n\t}\n\n\t@keyframes spin {\n\t\tfrom { transform: rotate(0deg); }\n\t\tto { transform: rotate(360deg); }\n\t}\n</style>",
+	"design": [
+		{
+			"id": "bg-color",
+			"name": "Background",
+			"css_var": "--bg-color",
+			"value": "#faf5f0",
+			"type": "color",
+			"description": "Page background color"
+		},
+		{
+			"id": "card-bg",
+			"name": "Card Background",
+			"css_var": "--card-bg",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Background for cards"
+		},
+		{
+			"id": "accent-color",
+			"name": "Accent Color",
+			"css_var": "--accent-color",
+			"value": "#92400e",
+			"type": "color",
+			"description": "Primary accent color"
+		},
+		{
+			"id": "star-color",
+			"name": "Star Color",
+			"css_var": "--star-color",
+			"value": "#fbbf24",
+			"type": "color",
+			"description": "Color for filled stars"
+		},
+		{
+			"id": "heading-color",
+			"name": "Heading Color",
+			"css_var": "--heading-color",
+			"value": "#1c1917",
+			"type": "color",
+			"description": "Color for headings"
+		},
+		{
+			"id": "text-color",
+			"name": "Text Color",
+			"css_var": "--text-color",
+			"value": "#78716c",
+			"type": "color",
+			"description": "Color for body text"
+		},
+		{
+			"id": "border-color",
+			"name": "Border Color",
+			"css_var": "--border-color",
+			"value": "#e7e5e4",
+			"type": "color",
+			"description": "Color for borders"
+		},
+		{
+			"id": "font",
+			"name": "Font",
+			"css_var": "--font",
+			"value": "system-ui, sans-serif",
+			"type": "font",
+			"description": "Main font family"
+		},
+		{
+			"id": "radius",
+			"name": "Border Radius",
+			"css_var": "--radius",
+			"value": "6px",
+			"type": "radius",
+			"description": "Roundness of corners"
+		}
+	],
+	"content": [
+		{
+			"id": "title",
+			"name": "Title",
+			"type": "text",
+			"value": "Reading List",
+			"description": "Page title"
+		},
+		{
+			"id": "add_book",
+			"name": "Add Book",
+			"type": "text",
+			"value": "Add book",
+			"description": "Add book button text"
+		},
+		{
+			"id": "cancel",
+			"name": "Cancel",
+			"type": "text",
+			"value": "Cancel",
+			"description": "Cancel button text"
+		},
+		{
+			"id": "want_label",
+			"name": "Want Label",
+			"type": "text",
+			"value": "to read",
+			"description": "Label for want to read count"
+		},
+		{
+			"id": "reading_label",
+			"name": "Reading Label",
+			"type": "text",
+			"value": "reading",
+			"description": "Label for reading count"
+		},
+		{
+			"id": "finished_label",
+			"name": "Finished Label",
+			"type": "text",
+			"value": "finished",
+			"description": "Label for finished count"
+		},
+		{
+			"id": "title_placeholder",
+			"name": "Title Placeholder",
+			"type": "text",
+			"value": "Book title",
+			"description": "Placeholder for title input"
+		},
+		{
+			"id": "author_placeholder",
+			"name": "Author Placeholder",
+			"type": "text",
+			"value": "Author",
+			"description": "Placeholder for author input"
+		},
+		{
+			"id": "cover_placeholder",
+			"name": "Cover Placeholder",
+			"type": "text",
+			"value": "Cover image URL (optional)",
+			"description": "Placeholder for cover input"
+		},
+		{
+			"id": "add_button",
+			"name": "Add Button",
+			"type": "text",
+			"value": "Add",
+			"description": "Add button text"
+		},
+		{
+			"id": "search_placeholder",
+			"name": "Search Placeholder",
+			"type": "text",
+			"value": "Search books...",
+			"description": "Placeholder for search"
+		},
+		{
+			"id": "sort_added",
+			"name": "Sort: Added",
+			"type": "text",
+			"value": "Recently added",
+			"description": "Sort option"
+		},
+		{
+			"id": "sort_title",
+			"name": "Sort: Title",
+			"type": "text",
+			"value": "Title",
+			"description": "Sort option"
+		},
+		{
+			"id": "sort_author",
+			"name": "Sort: Author",
+			"type": "text",
+			"value": "Author",
+			"description": "Sort option"
+		},
+		{
+			"id": "sort_rating",
+			"name": "Sort: Rating",
+			"type": "text",
+			"value": "Rating",
+			"description": "Sort option"
+		},
+		{
+			"id": "add_notes",
+			"name": "Add Notes",
+			"type": "text",
+			"value": "Add notes",
+			"description": "Add notes button text"
+		},
+		{
+			"id": "edit_notes",
+			"name": "Edit Notes",
+			"type": "text",
+			"value": "Edit notes",
+			"description": "Edit notes button text"
+		},
+		{
+			"id": "notes_placeholder",
+			"name": "Notes Placeholder",
+			"type": "text",
+			"value": "Your thoughts...",
+			"description": "Placeholder for notes"
+		},
+		{
+			"id": "save_notes",
+			"name": "Save Notes",
+			"type": "text",
+			"value": "Save",
+			"description": "Save notes button text"
+		},
+		{
+			"id": "empty_text",
+			"name": "Empty State",
+			"type": "text",
+			"value": "No books yet. Add one to start your reading list!",
+			"description": "Text when no books exist"
+		},
+		{
+			"id": "no_results",
+			"name": "No Results",
+			"type": "text",
+			"value": "No books match your search.",
+			"description": "Text when search has no results"
+		}
+	],
+	"data": {
+		"books": {
+			"schema": [
+				{
+					"name": "title",
+					"type": "text"
+				},
+				{
+					"name": "author",
+					"type": "text"
+				},
+				{
+					"name": "cover_url",
+					"type": "text"
+				},
+				{
+					"name": "status",
+					"type": "text"
+				},
+				{
+					"name": "rating",
+					"type": "number"
+				},
+				{
+					"name": "notes",
+					"type": "text"
+				},
+				{
+					"name": "added_at",
+					"type": "text"
+				}
+			],
+			"records": [
+				{
+					"id": "b1",
+					"title": "Thinking, Fast and Slow",
+					"author": "Daniel Kahneman",
+					"cover_url": "https://placehold.co/128x192/374151/ffffff?text=Book",
+					"status": "finished",
+					"rating": 5,
+					"notes": "Fascinating exploration of cognitive biases. Changed how I think about decision making.",
+					"added_at": "2024-11-01T10:00:00Z"
+				},
+				{
+					"id": "b2",
+					"title": "The Design of Everyday Things",
+					"author": "Don Norman",
+					"cover_url": "https://placehold.co/128x192/1e3a5f/ffffff?text=Book",
+					"status": "reading",
+					"rating": 0,
+					"notes": "",
+					"added_at": "2024-12-10T14:30:00Z"
+				},
+				{
+					"id": "b3",
+					"title": "Atomic Habits",
+					"author": "James Clear",
+					"cover_url": "https://placehold.co/128x192/7c3aed/ffffff?text=Book",
+					"status": "want",
+					"rating": 0,
+					"notes": "",
+					"added_at": "2024-12-15T09:00:00Z"
+				}
+			],
+			"icon": "lucide:book"
+		}
+	}
+}
