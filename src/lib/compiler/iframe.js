@@ -555,8 +555,13 @@ export default window.__tk_content;
             // Update existing component
             update(payload.data)
           }
-        }
+        })
         window.parent.postMessage({ event: 'INITIALIZED' }, '*');
+
+        // Send periodic heartbeat to parent so it knows we're not frozen
+        setInterval(() => {
+          try { window.parent.postMessage({ event: 'HEARTBEAT' }, '*'); } catch (_) {}
+        }, 500);
 
         // Capture runtime errors (not just mount errors)
         window.addEventListener('error', (e) => {
