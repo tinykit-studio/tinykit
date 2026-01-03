@@ -76,6 +76,13 @@ import personal_wiki from './personal-wiki.json'
 
 // Social
 import poll from './poll.json'
+import event_rsvp from './event-rsvp.json'
+
+// Collections & Reading
+import bookmarks from './bookmarks.json'
+import collections from './collections.json'
+import reading_list from './reading-list.json'
+import rss_reader from './rss-reader.json'
 
 // Template type
 export type Template = {
@@ -219,7 +226,13 @@ export const TEMPLATES: Template[] = [
 	{ ...product_docs, archetype: 'site' } as Template,
 	{ ...personal_wiki, archetype: 'app' } as Template,
 	// social
-	{ ...poll, archetype: 'form' } as Template
+	{ ...poll, archetype: 'form' } as Template,
+	{ ...event_rsvp, archetype: 'form' } as Template,
+	// collections & reading
+	{ ...bookmarks, archetype: 'app' } as Template,
+	{ ...collections, archetype: 'app' } as Template,
+	{ ...reading_list, archetype: 'app' } as Template,
+	{ ...rss_reader, archetype: 'app' } as Template
 ]
 
 // Get templates for a specific kit
