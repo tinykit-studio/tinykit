@@ -109,7 +109,7 @@
     store.dispose();
   });
 
-  // Valid tab IDs for validation
+  // Valid tab IDs for validation (order matches UI)
   const valid_tabs: TabId[] = [
     "agent",
     "data",
@@ -281,30 +281,30 @@
 
   // Tabs configuration
   const tabs = [
-    { id: "data" as TabId, label: "Data", icon: Database, shortcut: "1" },
+    {
+      id: "agent" as TabId,
+      label: "Agent",
+      icon: Sparkles,
+      shortcut: "1",
+    },
+    { id: "data" as TabId, label: "Data", icon: Database, shortcut: "2" },
     {
       id: "content" as TabId,
       label: "Content",
       icon: FileText,
-      shortcut: "2",
+      shortcut: "3",
     },
     {
       id: "design" as TabId,
       label: "Design",
       icon: Palette,
-      shortcut: "3",
+      shortcut: "4",
     },
-    { id: "code" as TabId, label: "Code", icon: Code, shortcut: "4" },
+    { id: "code" as TabId, label: "Code", icon: Code, shortcut: "5" },
     {
       id: "history" as TabId,
       label: "History",
       icon: Clock,
-      shortcut: "5",
-    },
-    {
-      id: "agent" as TabId,
-      label: "Agent",
-      icon: Sparkles,
       shortcut: "6",
     },
   ];
