@@ -2,10 +2,10 @@ import { json } from "@sveltejs/kit"
 import type { RequestHandler } from "./$types"
 import PocketBase from "pocketbase"
 import { env } from "$env/dynamic/private"
-import { exec } from "child_process"
+import { execFile } from "child_process"
 import { promisify } from "util"
 
-const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
 const PB_URL = env.POCKETBASE_URL || "http://127.0.0.1:8091"
 
 // GET: Check if setup is needed
@@ -58,16 +58,16 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// 1. Create PocketBase superuser using CLI
 		// This requires the pocketbase binary to be available
+		// Using execFile with array args to prevent command injection
 		try {
 			const pb_path = "./pocketbase/pocketbase"
-			const cmd = `${pb_path} superuser upsert "${email}" "${password}"`
-			console.log("[Setup] Running:", cmd)
-			const { stdout, stderr } = await execAsync(cmd)
+			console.log("[Setup] Creating superuser for:", email)
+			const { stdout, stderr } = await execFileAsync(pb_path, ["superuser", "upsert", email, password])
 			console.log("[Setup] Superuser stdout:", stdout)
 			if (stderr) console.log("[Setup] Superuser stderr:", stderr)
 		} catch (err: any) {
-			console.error("[Setup] Failed to create superuser:", err.message, err.stdout, err.stderr)
-			return json({ error: "Failed to create superuser: " + (err.message || err.stderr) }, { status: 500 })
+			console.error("[Setup] Failed to create superuser:", err.message)
+			return json({ error: "Failed to create superuser" }, { status: 500 })
 		}
 
 		// 2. Authenticate as the new superuser
@@ -156,18 +156,19 @@ export const POST: RequestHandler = async ({ request }) => {
 			}
 		}
 
-		// 7. Create setup marker file with credentials for server-side auth
+		// 7. Save auth token for server-side operations
+		// We save the token (not password) - it can be refreshed by the server
 		try {
 			const fs = await import("fs/promises")
 			const setup_data = JSON.stringify({
 				timestamp: new Date().toISOString(),
 				admin_email: email,
-				admin_password: password
+				auth_token: pb.authStore.token
 			})
-			await fs.writeFile("./pocketbase/pb_data/.setup_complete", setup_data)
-			console.log("[Setup] Marker file created with credentials")
+			await fs.writeFile("./pocketbase/pb_data/.setup_complete", setup_data, { mode: 0o600 })
+			console.log("[Setup] Auth token saved")
 		} catch (err: any) {
-			console.error("[Setup] Failed to create marker file:", err.message)
+			console.error("[Setup] Failed to save auth token:", err.message)
 			// Non-fatal
 		}
 

@@ -1,10 +1,15 @@
 import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import { createProject, listProjects } from '$lib/server/pb'
+import { createProject, listProjects, validateUserToken, unauthorizedResponse } from '$lib/server/pb'
 import { get_template } from '$lib/templates'
 
 // GET /api/projects - List all projects
-export const GET: RequestHandler = async () => {
+export const GET: RequestHandler = async ({ request }) => {
+	const user = await validateUserToken(request)
+	if (!user) {
+		return unauthorizedResponse('Authentication required')
+	}
+
 	try {
 		const projects = await listProjects()
 		return json(projects)
@@ -16,6 +21,11 @@ export const GET: RequestHandler = async () => {
 
 // POST /api/projects - Create a new project
 export const POST: RequestHandler = async ({ request, locals }) => {
+	const user = await validateUserToken(request)
+	if (!user) {
+		return unauthorizedResponse('Authentication required')
+	}
+
 	try {
 		const { name, domain, kit, template_id, initial_prompt } = await request.json()
 

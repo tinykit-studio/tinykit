@@ -1,18 +1,20 @@
 <script lang="ts">
-  export let value = "";
-  export let language = "javascript";
-  export let onChange: (value: string) => void = () => {};
+  let {
+    value = $bindable(""),
+    language = "javascript",
+    onchange = (value: string) => {}
+  } = $props()
 
-  function handleInput(e: Event) {
-    const target = e.target as HTMLTextAreaElement;
-    onChange(target.value);
+  function handle_input(e: Event) {
+    const target = e.target as HTMLTextAreaElement
+    onchange(target.value)
   }
 </script>
 
 <textarea
   class="w-full h-full bg-[var(--builder-bg-primary)] text-[var(--builder-text-primary)] p-4 font-sans text-sm resize-none focus:outline-none"
   bind:value
-  on:input={handleInput}
+  oninput={handle_input}
   spellcheck="false"
 ></textarea>
 

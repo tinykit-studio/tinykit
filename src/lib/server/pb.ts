@@ -21,13 +21,20 @@ pb.autoCancellation(false)
 let isAuthenticated = false
 let lastCredentialsCheck = 0
 
-// Get credentials from setup file or env vars
-function getCredentials(): { email: string; password: string } | null {
-	// First try to read from setup file
+// Get auth token from setup file or credentials from env vars
+function getAuthConfig(): { token: string } | { email: string; password: string } | null {
+	// First try to load from setup file
 	try {
 		if (fs.existsSync(SETUP_FILE)) {
 			const data = fs.readFileSync(SETUP_FILE, 'utf-8')
 			const setup = JSON.parse(data)
+
+			// Prefer auth token (new format)
+			if (setup.auth_token) {
+				return { token: setup.auth_token }
+			}
+
+			// Fall back to password (legacy format) - will migrate to token on success
 			if (setup.admin_email && setup.admin_password) {
 				return { email: setup.admin_email, password: setup.admin_password }
 			}
@@ -36,7 +43,7 @@ function getCredentials(): { email: string; password: string } | null {
 		// Fall through to env vars
 	}
 
-	// Fall back to env vars
+	// Fall back to env vars (for manual configuration)
 	const email = env.POCKETBASE_ADMIN_EMAIL
 	const password = env.POCKETBASE_ADMIN_PASSWORD
 	if (email && password) {
@@ -58,31 +65,76 @@ async function ensureAuth(): Promise<boolean> {
 		isAuthenticated = false
 	}
 
-	// Check for new credentials every 5 seconds if not authenticated
+	// Check for new config every 5 seconds if not authenticated
 	const now = Date.now()
 	if (!isAuthenticated && now - lastCredentialsCheck < 5000) {
 		return false
 	}
 	lastCredentialsCheck = now
 
-	const creds = getCredentials()
-	if (!creds) {
-		console.warn('[PB] No credentials available (server needs setup)')
+	const config = getAuthConfig()
+	if (!config) {
+		console.warn('[PB] No auth config available (server needs setup)')
 		return false
 	}
 
 	try {
-		// PocketBase 0.23+ uses _superusers collection for admin auth
-		await pb.collection('_superusers').authWithPassword(creds.email, creds.password)
-		isAuthenticated = true
-		console.log('[PB] Server authenticated successfully')
-		return true
+		if ('token' in config) {
+			// Use saved token - restore it to authStore
+			pb.authStore.save(config.token, null)
+
+			// Validate and refresh the token
+			try {
+				await pb.collection('_superusers').authRefresh()
+				isAuthenticated = true
+				console.log('[PB] Server authenticated via saved token')
+
+				// Save refreshed token back to file
+				saveRefreshedToken(pb.authStore.token)
+				return true
+			} catch {
+				// Token invalid/expired, can't refresh without password
+				console.warn('[PB] Saved token invalid, need fresh setup or env vars')
+				pb.authStore.clear()
+				return false
+			}
+		} else {
+			// Use email/password (from env vars or legacy setup file)
+			await pb.collection('_superusers').authWithPassword(config.email, config.password)
+			isAuthenticated = true
+			console.log('[PB] Server authenticated via credentials')
+
+			// Migrate to token-based auth (save token, remove password from file)
+			saveRefreshedToken(pb.authStore.token)
+			return true
+		}
 	} catch (error: any) {
-		// Don't throw - just log and return false
-		// This allows the app to work before setup is complete
 		console.error('[PB] Auth failed:', error.message || error)
 		isAuthenticated = false
 		return false
+	}
+}
+
+// Save refreshed token back to setup file (and remove password if present)
+function saveRefreshedToken(token: string): void {
+	try {
+		if (!fs.existsSync(SETUP_FILE)) return
+
+		const data = fs.readFileSync(SETUP_FILE, 'utf-8')
+		const setup = JSON.parse(data)
+
+		// Update token
+		setup.auth_token = token
+
+		// Remove password if present (migration from legacy format)
+		if (setup.admin_password) {
+			delete setup.admin_password
+			console.log('[PB] Migrated from password to token-based auth')
+		}
+
+		fs.writeFileSync(SETUP_FILE, JSON.stringify(setup), { mode: 0o600 })
+	} catch {
+		// Silently fail - not critical
 	}
 }
 

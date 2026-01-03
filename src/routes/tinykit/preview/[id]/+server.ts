@@ -2,6 +2,16 @@ import { error, redirect } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
 import { getProject, pb } from '$lib/server/pb'
 
+// Escape HTML to prevent XSS
+function escape_html(str: string): string {
+	return str
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;')
+}
+
 /**
  * Preview route - serves production HTML by project ID
  * Useful for projects without a domain assigned
@@ -31,13 +41,14 @@ export const GET: RequestHandler = async ({ params }) => {
 	}
 
 	// If no compiled HTML yet, show a placeholder with the preview URL
-	const previewUrl = project.domain ? `https://${project.domain}` : `/tinykit/preview/${id}`
+	const safe_name = escape_html(project.name || 'Project')
+	const safe_url = escape_html(project.domain ? `https://${project.domain}` : `/tinykit/preview/${id}`)
 	const placeholder = `<!DOCTYPE html>
 <html>
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>${project.name || 'Project'}</title>
+	<title>${safe_name}</title>
 	<style>
 		* { margin: 0; padding: 0; box-sizing: border-box; }
 		body {
@@ -59,9 +70,9 @@ export const GET: RequestHandler = async ({ params }) => {
 </head>
 <body>
 	<div class="message">
-		<h1>${project.name || 'Project'}</h1>
+		<h1>${safe_name}</h1>
 		<p>Not deployed yet</p>
-		<div class="url">${previewUrl}</div>
+		<div class="url">${safe_url}</div>
 	</div>
 </body>
 </html>`
