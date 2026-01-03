@@ -13,7 +13,7 @@
   // We need the value to access state.
   // Using relative path to access route-level store
   import { getProjectStore } from "$tinykit/studio/project.svelte";
-  import { debounce, isEqual, cloneDeep } from "lodash-es";
+  import { debounce, cloneDeep } from "lodash-es";
   let {
     project_id,
   }: {
@@ -89,15 +89,16 @@
   }
 
   // Watch for app data changes (debounced to prevent rapid-fire updates)
-  let last_sent_data: any;
+  // Using JSON comparison to avoid Svelte 5 proxy issues
+  let last_data_hash = "";
   const send_data_update = debounce((data: any) => {
-    if (isEqual(data, last_sent_data)) return;
-    const cloned_data = cloneDeep(data);
+    const data_hash = JSON.stringify(data);
+    if (data_hash === last_data_hash) return;
+    last_data_hash = data_hash;
     post_to_iframe({
       event: "DATA_UPDATED",
-      payload: { data: cloned_data },
+      payload: { data: JSON.parse(data_hash) },
     });
-    last_sent_data = cloned_data;
   }, 50);
 
   watch(
@@ -108,6 +109,11 @@
   let content_fields = $state<any[]>([]);
   let design_fields = $state<any[]>([]);
   let data_collections = $state<string[]>([]);
+
+  // Store hashes for comparison to avoid Svelte proxy issues
+  let content_hash = "";
+  let design_hash = "";
+  let data_collections_hash = "";
 
   let srcdoc = $state("");
   let pending_config_update = $state(false);
@@ -125,11 +131,15 @@
       content_fields = [];
       design_fields = [];
       data_collections = [];
+      content_hash = "";
+      design_hash = "";
+      data_collections_hash = "";
       compilation_version = 0;
+      last_data_hash = "";
     },
   );
 
-  // Watch for content/design/data changes only (not agent_chat)
+  // Watch for content/design/data_files changes only (not agent_chat or record data)
   // Using JSON.stringify ensures we only react to actual value changes, not reference changes
   watch(
     () => store?.project
@@ -276,10 +286,14 @@
     new_design: any[],
     new_data_collections: string[],
   ) {
-    // Check if fields actually changed
-    const content_changed = !isEqual(new_content, content_fields);
-    const design_changed = !isEqual(new_design, design_fields);
-    const data_changed = !isEqual(new_data_collections, data_collections);
+    // Check if fields actually changed using hash comparison (avoids Svelte proxy issues)
+    const new_content_hash = JSON.stringify(new_content);
+    const new_design_hash = JSON.stringify(new_design);
+    const new_data_hash = JSON.stringify(new_data_collections);
+
+    const content_changed = new_content_hash !== content_hash;
+    const design_changed = new_design_hash !== design_hash;
+    const data_changed = new_data_hash !== data_collections_hash;
 
     // No srcdoc yet or data collections changed - need full reload
     if (!srcdoc || data_changed) {
@@ -289,6 +303,9 @@
         content_fields = new_content;
         design_fields = new_design;
         data_collections = new_data_collections;
+        content_hash = new_content_hash;
+        design_hash = new_design_hash;
+        data_collections_hash = new_data_hash;
 
         srcdoc = dynamic_iframe_srcdoc("", {
           content: content_fields,
@@ -306,6 +323,7 @@
     // Content changes: update global and remount (no full reload)
     if (content_changed) {
       content_fields = new_content;
+      content_hash = new_content_hash;
       post_to_iframe({
         event: "UPDATE_CONTENT",
         payload: { content: transform_content_fields(new_content, project_id) },
@@ -315,6 +333,7 @@
     // Design changes: inject CSS (no reload needed)
     if (design_changed) {
       design_fields = new_design;
+      design_hash = new_design_hash;
       post_to_iframe({
         event: "UPDATE_CSS_VARS",
         payload: { css: generate_design_css(new_design) },

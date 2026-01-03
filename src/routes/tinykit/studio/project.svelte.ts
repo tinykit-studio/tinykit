@@ -102,11 +102,25 @@ export class ProjectStore {
                     if (e.action === 'update') {
                         const incoming = e.record as unknown as Project;
 
-                        // Only sync when agent_chat changes (indicates agent activity)
+                        // Check what changed
                         const incoming_chat = JSON.stringify(incoming.agent_chat || []);
                         const current_chat = JSON.stringify(this.project?.agent_chat || []);
+                        const chat_changed = incoming_chat !== current_chat;
 
-                        if (incoming_chat !== current_chat) {
+                        const incoming_data = JSON.stringify(incoming.data || {});
+                        const current_data = JSON.stringify(this.project?.data || {});
+                        const data_changed = incoming_data !== current_data;
+
+                        // Sync data changes immediately (for manual CRUD operations)
+                        if (data_changed && !chat_changed) {
+                            this.project = {
+                                ...this.project!,
+                                data: incoming.data
+                            };
+                        }
+
+                        // Sync when agent_chat changes (indicates agent activity)
+                        if (chat_changed) {
                             // Check if agent just finished (status changed to complete)
                             const incoming_msgs = incoming.agent_chat || [];
                             const last_msg = incoming_msgs[incoming_msgs.length - 1];
