@@ -92,7 +92,7 @@ export type Template = {
 	preview: string
 	tags?: string[]
 	kits?: string[]
-	archetype?: 'site' | 'app' | 'form'
+	archetype?: 'site' | 'app' | 'form' | 'dashboard'
 	frontend_code: string
 	design: DesignField[]
 	content: ContentField[]
@@ -189,7 +189,7 @@ export const TEMPLATES: Template[] = [
 	{ ...guestbook, archetype: 'app' } as Template,
 	// daily
 	{ ...habits, archetype: 'app' } as Template,
-	{ ...habit_dashboard, archetype: 'app' } as Template,
+	{ ...habit_dashboard, archetype: 'dashboard' } as Template,
 	{ ...recipes, archetype: 'app' } as Template,
 	{ ...meal_planner, archetype: 'app' } as Template,
 	{ ...goal_tracker, archetype: 'app' } as Template,
@@ -219,7 +219,7 @@ export const TEMPLATES: Template[] = [
 	{ ...media_kit, archetype: 'site' } as Template,
 	{ ...sponsor_deck, archetype: 'site' } as Template,
 	{ ...merch_store, archetype: 'app' } as Template,
-	{ ...analytics_dashboard, archetype: 'app' } as Template,
+	{ ...analytics_dashboard, archetype: 'dashboard' } as Template,
 	// developer
 	{ ...hn_reader, archetype: 'app' } as Template,
 	{ ...status_page, archetype: 'site' } as Template,
