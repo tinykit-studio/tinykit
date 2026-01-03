@@ -129,26 +129,27 @@
     },
   );
 
-  $effect(() => {
-    if (store && store.project) {
-      // Sync basic data
-      // Note: diffing happens in the update_config function usually,
-      // but here we are reacting to fine-grained store updates.
-      // We can call a unified update function.
-      handle_store_update();
-    }
-  });
+  // Watch for content/design/data changes only (not agent_chat)
+  // Using JSON.stringify ensures we only react to actual value changes, not reference changes
+  watch(
+    () => store?.project
+      ? JSON.stringify({
+          content: store.content,
+          design: store.design,
+          data_files: store.data_files
+        })
+      : null,
+    () => {
+      if (store?.project) {
+        apply_config_update(
+          store.content || [],
+          store.design || [],
+          store.data_files || []
+        );
+      }
+    },
+  );
 
-  async function handle_store_update() {
-    if (!store) return;
-
-    const new_content = store.content || [];
-    const new_design = store.design || [];
-    const new_data = store.data_files || [];
-
-    // We reuse the existing diffing logic
-    await apply_config_update(new_content, new_design, new_data);
-  }
 
   function handle_iframe_message(e: MessageEvent) {
     // Only handle messages from our iframe
