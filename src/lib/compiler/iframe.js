@@ -225,10 +225,19 @@ function create_collection(name) {
       subscribers.push(callback)
       last_params = params
 
-      // Initial fetch - explicitly notify this subscriber
-      collection.list(params)
-        .then(items => callback(items))
-        .catch(e => console.error('[db] initial fetch error:', e))
+      // In iframe mode, data comes from parent via DATA_UPDATED - use cache if available
+      // In standalone mode, fetch from API
+      const is_standalone = window.parent === window
+      if (is_standalone) {
+        // Initial fetch - explicitly notify this subscriber
+        collection.list(params)
+          .then(items => callback(items))
+          .catch(e => console.error('[db] initial fetch error:', e))
+      } else if (cache !== null) {
+        // In iframe with cached data - notify immediately
+        setTimeout(() => callback(cache), 0)
+      }
+      // If in iframe with no cache yet, DATA_UPDATED will trigger _notify
 
       // Return unsubscribe function
       return () => {
@@ -547,13 +556,17 @@ export default window.__tk_content;
 
           if (payload.componentApp) {
             await init(payload.componentApp)
-            // After init, automatically mount the component with provided data
-            if (payload.data !== undefined) {
-              update(payload.data)
+            // Pre-populate data collections before mounting
+            if (payload.data && typeof window.__tk_update_data === 'function') {
+              window.__tk_update_data(payload.data)
             }
+            // Mount the component
+            update()
           } else if (payload.data) {
-            // Update existing component
-            update(payload.data)
+            // Update data for existing component
+            if (typeof window.__tk_update_data === 'function') {
+              window.__tk_update_data(payload.data)
+            }
           }
         })
         window.parent.postMessage({ event: 'INITIALIZED' }, '*');

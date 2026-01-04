@@ -37,6 +37,7 @@
 		if (msg_event === "INITIALIZED" && pending_code) {
 			// Clone data to avoid DataCloneError from Svelte 5 reactive proxies
 			const cloned_data = JSON.parse(JSON.stringify(data || {}))
+			// Send component code with data - iframe will populate collections before mounting
 			iframe_el?.contentWindow?.postMessage({
 				event: "SET_APP",
 				payload: { componentApp: pending_code, data: cloned_data }
