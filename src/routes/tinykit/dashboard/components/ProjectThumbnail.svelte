@@ -1,23 +1,17 @@
 <script lang="ts">
 	import { onMount } from "svelte"
 	import Icon from "@iconify/svelte"
-	import { processCode, dynamic_iframe_srcdoc } from "$lib/compiler/init"
 	import { pb } from "$lib/pocketbase.svelte"
-	import type { DesignField, ContentField } from "../../types"
 
 	let {
-		code = "",
-		design = [],
-		content = [],
-		data = {},
 		compiled_html = "",
 		project_id = "",
 		collection_id = "_tk_projects",
 		fallback_icon = ""
 	}: {
-		code: string
-		design: DesignField[]
-		content?: ContentField[]
+		code?: string
+		design?: any[]
+		content?: any[]
 		data?: Record<string, any>
 		compiled_html?: string
 		project_id?: string
@@ -27,36 +21,14 @@
 
 	let srcdoc = $state("")
 	let is_loading = $state(true)
-	let has_error = $state(false)
-	let iframe_el = $state<HTMLIFrameElement | null>(null)
-	let pending_code: string | null = null
-
-	function handle_message(e: MessageEvent) {
-		if (e.source !== iframe_el?.contentWindow) return
-		const { event: msg_event } = e.data || {}
-		if (msg_event === "INITIALIZED" && pending_code) {
-			// Clone data to avoid DataCloneError from Svelte 5 reactive proxies
-			const cloned_data = JSON.parse(JSON.stringify(data || {}))
-			// Send component code with data - iframe will populate collections before mounting
-			iframe_el?.contentWindow?.postMessage({
-				event: "SET_APP",
-				payload: { componentApp: pending_code, data: cloned_data }
-			}, "*")
-			pending_code = null
-		}
-	}
 
 	onMount(() => {
-		window.addEventListener("message", handle_message)
 		load_preview()
-
-		return () => {
-			window.removeEventListener("message", handle_message)
-		}
 	})
 
 	async function load_preview() {
 		// If we have a published_html file, fetch its contents
+		// This is the ONLY safe way to show thumbnails - published HTML is pre-compiled
 		if (compiled_html && project_id) {
 			try {
 				const file_url = pb.files.getURL(
@@ -74,44 +46,10 @@
 			}
 		}
 
-		// Otherwise compile on-the-fly with full data support
-		if (!code) {
-			is_loading = false
-			return
-		}
-
-		try {
-			const result = await processCode({
-				component: code,
-				buildStatic: false,
-				runtime: ["mount", "unmount"]
-			})
-
-			if (result.error || !result.js) {
-				has_error = true
-				is_loading = false
-				return
-			}
-
-			// Extract collection names from data object
-			const data_collections = Object.keys(data || {})
-
-			// Store compiled code to send when iframe is ready
-			pending_code = result.js
-
-			// Build srcdoc with full data module support
-			srcdoc = dynamic_iframe_srcdoc("", {
-				content: content || [],
-				design: design || [],
-				project_id: project_id || "",
-				data_collections
-			})
-		} catch (err) {
-			console.error("[ProjectThumbnail] Compile error:", err)
-			has_error = true
-		} finally {
-			is_loading = false
-		}
+		// Don't compile on-the-fly for thumbnails - it's too risky
+		// Complex apps can freeze the entire dashboard with infinite loops
+		// Just show a placeholder if no published HTML exists
+		is_loading = false
 	}
 </script>
 
@@ -120,7 +58,7 @@
 		<div class="placeholder loading">
 			<div class="spinner"></div>
 		</div>
-	{:else if has_error || !srcdoc}
+	{:else if !srcdoc}
 		<div class="placeholder ghost">
 			{#if fallback_icon}
 				<Icon icon={fallback_icon} class="fallback-icon" />
@@ -130,7 +68,6 @@
 		</div>
 	{:else}
 		<iframe
-			bind:this={iframe_el}
 			title="Project preview"
 			{srcdoc}
 			sandbox="allow-scripts allow-same-origin"

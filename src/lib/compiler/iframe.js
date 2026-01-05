@@ -85,6 +85,7 @@ function create_collection(name) {
   let cache = null
   let last_params = null
   let mutation_cooldown = 0 // Timestamp until which we ignore external updates
+  let notifying = false // Reentrancy guard to prevent infinite loops
 
   // Compare two record arrays for equality (by JSON serialization)
   function records_equal(a, b) {
@@ -100,6 +101,10 @@ function create_collection(name) {
   const collection = {
     // Notify all subscribers with new data (skip if unchanged or in cooldown)
     _notify(records, force = false) {
+      // Prevent reentrant calls - if a subscriber triggers another mutation,
+      // don't recursively notify (the mutation will schedule its own notification)
+      if (notifying) return
+
       // During cooldown period, ignore external updates (SSE/realtime)
       // This prevents re-renders when our own mutations echo back
       if (!force && Date.now() < mutation_cooldown) {
@@ -109,8 +114,13 @@ function create_collection(name) {
         return // Skip notification if data hasn't changed
       }
       cache = records
-      for (const cb of subscribers) {
-        try { cb(records) } catch (e) { console.error('[db] subscriber error:', e) }
+      notifying = true
+      try {
+        for (const cb of subscribers) {
+          try { cb(records) } catch (e) { console.error('[db] subscriber error:', e) }
+        }
+      } finally {
+        notifying = false
       }
     },
 

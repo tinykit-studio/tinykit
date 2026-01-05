@@ -1011,6 +1011,7 @@
         <Header
           project_title={project_title ?? ""}
           project_id={store?.project?.id ?? ""}
+          kit_id={store?.project?.kit}
           {vibe_zone_enabled}
           bind:preview_position
           {project_domain}

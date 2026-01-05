@@ -126,14 +126,23 @@ export class ProjectStore {
                             const last_msg = incoming_msgs[incoming_msgs.length - 1];
                             const agent_just_finished = last_msg?.role === 'assistant' && last_msg?.status === 'complete';
 
-                            // Only sync frontend_code when agent finishes to avoid lockups
-                            // During streaming, we skip code sync - CodeMirror can't handle rapid large updates
+                            // Only sync fields that actually changed to avoid triggering
+                            // unnecessary reactive updates (which can cause false freeze detection)
+                            const incoming_content = JSON.stringify(incoming.content || []);
+                            const current_content = JSON.stringify(this.project?.content || []);
+                            const content_changed = incoming_content !== current_content;
+
+                            const incoming_design = JSON.stringify(incoming.design || []);
+                            const current_design = JSON.stringify(this.project?.design || []);
+                            const design_changed = incoming_design !== current_design;
+
                             this.project = {
                                 ...this.project!,
                                 agent_chat: incoming.agent_chat,
-                                content: incoming.content,
-                                design: incoming.design,
-                                data: incoming.data,
+                                // Only sync fields that actually changed
+                                ...(content_changed ? { content: incoming.content } : {}),
+                                ...(design_changed ? { design: incoming.design } : {}),
+                                ...(data_changed ? { data: incoming.data } : {}),
                                 // Sync code only when agent finishes (prevents lockup during streaming)
                                 ...(agent_just_finished ? { frontend_code: incoming.frontend_code } : {})
                             };

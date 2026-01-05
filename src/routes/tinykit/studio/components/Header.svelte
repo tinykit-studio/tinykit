@@ -29,6 +29,7 @@
   type HeaderProps = {
     project_title: string;
     project_domain: string;
+    kit_id?: string;
     is_deploying: boolean;
     vibe_zone_enabled: boolean;
     preview_position: PreviewPosition;
@@ -53,6 +54,7 @@
   let {
     project_title = "",
     project_domain = "",
+    kit_id,
     is_deploying,
     vibe_zone_enabled,
     preview_position = $bindable(),
@@ -69,6 +71,8 @@
     on_title_change,
     is_mobile = false,
   }: HeaderProps = $props();
+
+  let dashboard_href = $derived(kit_id ? `/tinykit?kit=${kit_id}` : "/tinykit");
 
   const position_options: {
     id: PreviewPosition;
@@ -231,7 +235,7 @@
     class="h-14 border-t border-[var(--builder-border)] bg-[var(--builder-bg-primary)] flex items-center justify-between px-4 flex-shrink-0 relative z-30"
   >
     <!-- Left: Logo -->
-    <a href="/tinykit" class="logo">
+    <a href={dashboard_href} class="logo">
       <Logo />
     </a>
 
@@ -327,7 +331,7 @@
   >
     <!-- Left: Logo -->
     <div class="flex items-center space-x-3 flex-shrink-0">
-      <a href="/tinykit" class="logo">
+      <a href={dashboard_href} class="logo">
         <Logo />
       </a>
       <!-- Project name and save status -->
