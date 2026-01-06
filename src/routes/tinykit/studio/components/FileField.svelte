@@ -57,7 +57,7 @@
 
 			// Upload files
 			const updated = await pb.collection("_tk_projects").update(project_id, form)
-			const new_assets = (updated.assets as string[]).slice(before_count)
+			const new_assets = (updated.assets as string[] || []).slice(before_count)
 
 			if (multiple) {
 				const current = Array.isArray(value) ? value : value ? [value] : []
