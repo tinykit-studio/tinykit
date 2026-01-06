@@ -226,7 +226,7 @@ async function upload_files_to_assets(
 	const before_count = (project.assets as string[] || []).length
 
 	const updated = await pb.collection('_tk_projects').update(project_id, upload_form)
-	const new_assets = (updated.assets as string[]).slice(before_count)
+	const new_assets = (updated.assets as string[] || []).slice(before_count)
 
 	let new_index = 0
 	for (const [field_name, indices] of field_indices) {

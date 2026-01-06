@@ -263,7 +263,7 @@ async function upload_files_to_assets(
 
 	// Upload all files at once
 	const updated = await pb.collection('_tk_projects').update(project_id, upload_form)
-	const new_assets = (updated.assets as string[]).slice(before_count)
+	const new_assets = (updated.assets as string[] || []).slice(before_count)
 
 	// Map uploaded filenames back to fields
 	let new_index = 0
