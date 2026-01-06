@@ -88,6 +88,7 @@ export async function ensureAuth(): Promise<boolean> {
 	if (isAuthenticated && !pb.authStore.isValid) {
 		console.log('[PB] Auth token expired, re-authenticating...')
 		isAuthenticated = false
+		lastCredentialsCheck = 0 // Reset throttle so we can re-auth immediately
 	}
 
 	// Check for new config every 5 seconds if not authenticated
@@ -228,6 +229,8 @@ export async function listProjects(): Promise<Project[]> {
  * Get a project by ID
  */
 export async function getProject(id: string): Promise<Project | null> {
+	if (!id) return null
+
 	const authed = await ensureAuth()
 	if (!authed) {
 		console.error(`[PB] Cannot get project ${id}: Server auth not available`)

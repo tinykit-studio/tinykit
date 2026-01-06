@@ -9,7 +9,6 @@
   import { auth, pb } from "$lib/pocketbase.svelte";
   import { get_featured_kits_with_templates, type KitWithTemplates, type Template } from "$lib/templates";
   import { processCode, dynamic_iframe_srcdoc, generate_design_css } from "$lib/compiler/init";
-  import { build_app } from "../lib/api.svelte";
 
   const kits = get_featured_kits_with_templates();
   let is_creating = $state(false);
@@ -176,22 +175,8 @@
       // Batch create selected templates
       const created_projects = await project_service.batch_create_kit(kit.id, templates_to_create);
 
-      // Build all projects in parallel for preview thumbnails
-      console.log(`Building ${created_projects.length} projects...`);
-      const build_results = await Promise.all(
-        created_projects.map(p =>
-          build_app(p.id)
-            .then(res => {
-              console.log(`Built ${p.name}:`, res);
-              return { success: true, project: p.name };
-            })
-            .catch(err => {
-              console.error(`Failed to build ${p.name}:`, err);
-              return { success: false, project: p.name, error: err };
-            })
-        )
-      );
-      console.log('Build results:', build_results);
+      // Note: We don't auto-build here - thumbnails only show for deployed apps
+      // Users can deploy individual apps when ready
 
       // Redirect to dashboard with this kit selected
       goto(`/tinykit?kit=${kit.id}`);

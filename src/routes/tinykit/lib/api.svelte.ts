@@ -583,14 +583,22 @@ function generate_production_html({ body, head = '', hydration_js, config }: Pro
  * Includes realtime subscription support via PocketBase
  */
 function generate_data_module(project_id: string, collections: string[]): string {
+	// Guard against undefined/null project_id being stringified
+	const safe_project_id = project_id || ''
+
 	// Generate collection entries
 	const collection_entries = collections
 		.map(name => `  ${name}: create_collection('${name}')`)
 		.join(',\n')
 
 	return `
-const PROJECT_ID = '${project_id}'
+const PROJECT_ID = '${safe_project_id}'
 const API_BASE = '/_tk/data'
+
+// Validate PROJECT_ID is set
+if (!PROJECT_ID) {
+  console.warn('[db] No project ID configured - data operations will fail')
+}
 
 // Global registry for realtime updates
 const _collections = {}

@@ -143,7 +143,7 @@
 
 			// Setup complete, auto-login with the same credentials
 			await auth.login(email, password);
-			goto("/tinykit/dashboard");
+			goto("/tinykit");
 		} catch (err: any) {
 			error = err.message || "Setup failed. Please try again.";
 		} finally {

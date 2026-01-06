@@ -139,18 +139,20 @@
     },
   );
 
-  // Watch for content/design/data_files changes only (not agent_chat or record data)
+  // Watch for content/design/data_files changes AND project_id changes
   // Using JSON.stringify ensures we only react to actual value changes, not reference changes
+  // Including project_id ensures srcdoc is recreated when project changes
   watch(
     () => store?.project
       ? JSON.stringify({
+          project_id, // Include project_id to trigger recreation when it changes
           content: store.content,
           design: store.design,
           data_files: store.data_files
         })
       : null,
     () => {
-      if (store?.project) {
+      if (store?.project && project_id) {
         apply_config_update(
           store.content || [],
           store.design || [],

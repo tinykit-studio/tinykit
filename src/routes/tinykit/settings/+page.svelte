@@ -250,7 +250,7 @@
 	<header class="border-b border-[var(--builder-border)] px-6 py-4">
 		<div class="max-w-2xl mx-auto flex items-center gap-4">
 			<a
-				href="/tinykit/dashboard"
+				href="/tinykit"
 				class="p-2 -ml-2 text-[var(--builder-text-secondary)] hover:text-[var(--builder-text-primary)] transition-colors"
 			>
 				<ArrowLeft class="w-5 h-5" />

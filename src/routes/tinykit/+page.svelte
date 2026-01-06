@@ -86,6 +86,11 @@
 
     // Load data
     await Promise.all([load_projects(), load_kits()]);
+
+    // First-time user with no projects? Guide them to create one
+    if (projects.length === 0 && kits.length === 0) {
+      goto("/tinykit/new-kit");
+    }
   });
 
   async function load_projects() {

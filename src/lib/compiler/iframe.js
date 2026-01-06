@@ -21,13 +21,21 @@ export const generate_design_css = (design) => {
  * @returns {string}
  */
 const generate_data_module = (project_id, collections) => {
+  // Guard against undefined/null project_id being stringified as 'undefined'/'null'
+  const safe_project_id = project_id || ''
+
   const collection_entries = collections
     .map(name => `  ${name}: create_collection('${name}')`)
     .join(',\n')
 
   return `
-const PROJECT_ID = '${project_id}'
+const PROJECT_ID = '${safe_project_id}'
 const API_BASE = '/_tk/data'
+
+// Validate PROJECT_ID is set
+if (!PROJECT_ID) {
+  console.warn('[db] No project ID configured - data operations will fail')
+}
 
 // Global registry for realtime updates
 const _collections = {}
