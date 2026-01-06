@@ -455,6 +455,25 @@ For file fields, use placeholder images for demo data: "placeholder.jpg" (square
 	return tools
 }
 
+// Extract code from failed tool calls (when model writes tool call as text instead of using API)
+function extract_failed_tool_call(text: string): string | null {
+	// Pattern 1: write_code({ code: "..." }) or write_code({ code: `...` })
+	const fn_match = text.match(/write_code\s*\(\s*\{\s*code:\s*[`"']([\s\S]+?)[`"']\s*\}\s*\)/)
+	if (fn_match) return fn_match[1]
+
+	// Pattern 2: JSON-style { "name": "write_code", ... "code": "..." }
+	const json_match = text.match(/"name":\s*"write_code"[\s\S]*?"code":\s*[`"']([\s\S]+?)[`"']/)
+	if (json_match) return json_match[1]
+
+	// Pattern 3: ```svelte block after mentioning write_code
+	if (text.includes('write_code')) {
+		const svelte_match = text.match(/```svelte\n([\s\S]+?)```/)
+		if (svelte_match && svelte_match[1].length > 100) return svelte_match[1]
+	}
+
+	return null
+}
+
 export async function run_agent(
 	config: AgentConfig,
 	project_id: string,
@@ -516,6 +535,7 @@ export async function run_agent(
 	// Stream both text and tool calls using fullStream
 	let full_text = ''
 	const seen_tool_calls = new Set<string>()
+	let had_write_code_call = false
 
 	for await (const part of result.fullStream) {
 		if (part.type === 'text-delta') {
@@ -529,6 +549,7 @@ export async function run_agent(
 			const toolCallId = (part as any).toolCallId
 			if (toolCallId && seen_tool_calls.has(toolCallId)) continue
 			if (toolCallId) seen_tool_calls.add(toolCallId)
+			if (part.toolName === 'write_code') had_write_code_call = true
 			callbacks?.onToolCall?.(toolCallId, part.toolName, (part as any).input || {})
 		} else if (part.type === 'tool-result') {
 			// AI SDK 5.x uses 'output' property for tool results
@@ -545,6 +566,17 @@ export async function run_agent(
 			if (finishReason === 'length') {
 				console.warn('[Agent] Response cut off due to max token limit')
 			}
+		}
+	}
+
+	// Fallback: if model wrote code as text instead of calling write_code tool, extract and apply it
+	if (!had_write_code_call) {
+		const missed_code = extract_failed_tool_call(full_text)
+		if (missed_code) {
+			console.log('[Agent] Detected failed write_code call in text, auto-applying code')
+			await updateProject(project_id, { frontend_code: missed_code })
+			callbacks?.onToolCall?.('auto-extract', 'write_code', { code: '[extracted from response]' })
+			callbacks?.onToolResult?.('auto-extract', 'write_code', 'Auto-applied code from response')
 		}
 	}
 
