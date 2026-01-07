@@ -111,22 +111,6 @@ export type TokenUsage = {
 	duration?: number // seconds
 }
 
-// File types
-export type FileTreeItem = {
-	name: string
-	path: string
-	type: "file" | "directory"
-	children?: FileTreeItem[]
-}
-
-// API endpoint type (placeholder for future backend API routing)
-export type ApiEndpoint = {
-	id: string
-	path: string
-	method: "GET" | "POST" | "PUT" | "DELETE"
-	handler: string
-}
-
 export type EditorLanguage = "javascript" | "typescript" | "html" | "css" | "json" | "markdown" | "svelte"
 
 
