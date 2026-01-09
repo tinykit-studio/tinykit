@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from "@iconify/svelte";
   import { fade } from "svelte/transition";
-  import { Database, Download, Plus, Image, File, Trash2 } from "lucide-svelte";
+  import { Database, Download, Upload, Plus, Image, File, Trash2 } from "lucide-svelte";
   import { watch } from "runed";
   import { onMount } from "svelte";
   import { dndzone } from "svelte-dnd-action";
@@ -567,6 +567,73 @@
     a.click();
     URL.revokeObjectURL(url);
   }
+
+  let upload_input: HTMLInputElement | null = $state(null);
+
+  function trigger_upload() {
+    upload_input?.click();
+  }
+
+  async function handle_upload(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file || !selected_file || !file_content) return;
+
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+
+      // Handle both array format and object format with records
+      let records: DataRecord[] = [];
+      if (Array.isArray(data)) {
+        records = data;
+      } else if (data.records && Array.isArray(data.records)) {
+        records = data.records;
+      } else {
+        alert("Invalid format. Expected a JSON array or an object with a 'records' array.");
+        return;
+      }
+
+      // Validate that records have at least some matching columns
+      if (records.length > 0 && file_content.schema.length > 0) {
+        const schema_cols = new Set(file_content.schema.map((c) => c.name));
+        const first_record_cols = Object.keys(records[0]);
+        const matching = first_record_cols.filter((c) => schema_cols.has(c));
+
+        if (matching.length === 0) {
+          const proceed = confirm(
+            `Warning: No matching columns found between uploaded data and schema.\n\n` +
+            `Schema columns: ${[...schema_cols].join(", ")}\n` +
+            `Upload columns: ${first_record_cols.join(", ")}\n\n` +
+            `Continue anyway?`
+          );
+          if (!proceed) return;
+        }
+      }
+
+      // Ensure each record has an id
+      const processed_records = records.map((record) => {
+        if (!record.id) {
+          return { ...record, id: generate_id() };
+        }
+        return record;
+      });
+
+      const updated: CollectionData = {
+        schema: file_content.schema,
+        records: processed_records,
+        icon: file_content.icon
+      };
+
+      await save_collection(updated);
+    } catch (err) {
+      console.error("Failed to parse upload:", err);
+      alert("Failed to parse JSON file. Please ensure it's valid JSON.");
+    } finally {
+      // Reset input so the same file can be uploaded again
+      input.value = "";
+    }
+  }
 </script>
 
 <div class="h-full flex flex-col font-sans text-sm">
@@ -642,6 +709,20 @@
 
     {#if selected_file && file_content}
       <div class="flex items-center gap-1 flex-shrink-0">
+        <input
+          bind:this={upload_input}
+          type="file"
+          accept=".json,application/json"
+          onchange={handle_upload}
+          class="hidden"
+        />
+        <button
+          onclick={trigger_upload}
+          class="p-1.5 text-[var(--builder-text-secondary)] hover:text-[var(--builder-text-primary)] transition-colors"
+          title="Upload JSON"
+        >
+          <Upload class="w-4 h-4" />
+        </button>
         <button
           onclick={download_collection}
           class="p-1.5 text-[var(--builder-text-secondary)] hover:text-[var(--builder-text-primary)] transition-colors"
