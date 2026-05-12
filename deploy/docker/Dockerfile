@@ -1,9 +1,12 @@
 FROM node:20-alpine
 
+RUN apk add --no-cache bash curl
+
 WORKDIR /app
 
 # Install dependencies
 COPY package*.json ./
+COPY scripts ./scripts
 RUN npm ci --production=false
 
 # Copy app
