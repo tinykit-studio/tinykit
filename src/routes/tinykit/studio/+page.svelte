@@ -663,7 +663,6 @@
       <div class="hidden md:block">
         <Header
           project_title={project_title ?? ""}
-          project_id={store?.project?.id ?? ""}
           kit_id={store?.project?.kit}
           {vibe_zone_enabled}
           bind:preview_position
@@ -1010,7 +1009,6 @@
         <!-- Mobile Top Toolbar -->
         <Header
           project_title={project_title ?? ""}
-          project_id={store?.project?.id ?? ""}
           kit_id={store?.project?.kit}
           {vibe_zone_enabled}
           bind:preview_position

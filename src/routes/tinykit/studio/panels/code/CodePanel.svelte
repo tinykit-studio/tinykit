@@ -202,7 +202,7 @@ export const daily_checkin = {
             <div
                 class="absolute top-2 right-2 z-10 flex flex-col items-center gap-0.5 p-0.5 rounded-full backdrop-blur-sm shadow-sm shadow-black/40 bg-[var(--builder-bg-secondary)] border border-[var(--builder-border)]"
             >
-                <Tooltip.Root openDelay={200}>
+                <Tooltip.Root delayDuration={200}>
                     <Tooltip.Trigger>
                         <button
                             class="p-1.5 rounded-full transition-colors {active_tab ===
@@ -219,7 +219,7 @@ export const daily_checkin = {
                         <p class="text-xs text-muted-foreground">Coming soon</p>
                     </Tooltip.Content>
                 </Tooltip.Root>
-                <Tooltip.Root openDelay={200}>
+                <Tooltip.Root delayDuration={200}>
                     <Tooltip.Trigger>
                         <button
                             class="p-1.5 rounded-full transition-colors {active_tab ===

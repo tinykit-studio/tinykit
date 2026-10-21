@@ -89,7 +89,7 @@ export type ToolCall = {
 
 export type StreamItem =
 	| { type: 'text'; content: string }
-	| { type: 'tool'; name: string; args?: Record<string, any>; result?: string }
+	| { type: 'tool'; id?: string; name: string; args?: Record<string, any>; result?: string }
 
 export type AgentMessage = {
 	role: "user" | "assistant"

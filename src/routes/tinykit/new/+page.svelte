@@ -17,6 +17,11 @@
   type TemplateArchetype = 'app' | 'form' | 'dashboard' | 'site';
   import type { Kit } from "../types";
 
+  let { data } = $props();
+
+  // Domain is set only when creating an app from the domain connection flow.
+  let domain = $derived(data.domain || "");
+
   let prompt = $state("");
   let is_creating = $state(false);
   let error_message = $state("");
@@ -118,6 +123,7 @@
       const project = await project_service.create({
         name: "",
         kit: kit_id,
+        domain: domain || undefined,
         initial_prompt: prompt,
       });
 
@@ -169,6 +175,7 @@
       const project = await project_service.create({
         name: template.name,
         kit: kit_id,
+        domain: domain || undefined,
         frontend_code: template.frontend_code || "",
         design: template.design || [],
         content: template.content || [],
@@ -257,6 +264,7 @@
       const project = await project_service.create({
         name: project_name,
         kit: kit_id,
+        domain: domain || undefined,
         frontend_code: snapshot_data.frontend_code || "",
         design: snapshot_data.design || [],
         content: snapshot_data.content || [],

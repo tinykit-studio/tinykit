@@ -22,6 +22,7 @@ RUN mkdir -p pocketbase/pb_data workspace
 EXPOSE 3000
 ENV PORT=3000
 ENV HOST=0.0.0.0
+ENV BODY_SIZE_LIMIT=10M
 
 # Make start script executable
 COPY deploy/railway/start.sh ./start.sh
