@@ -124,7 +124,7 @@
 			</Dialog.Description>
 		</Dialog.Header>
 
-		<div class="py-4 space-y-4">
+		<div class="py-4 space-y-4 overflow-y-auto max-h-[60vh]">
 			<!-- Preview URL option -->
 			{#if deploy_success}
 				<!-- Success state -->

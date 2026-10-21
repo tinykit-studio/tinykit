@@ -6,19 +6,19 @@ import registerPromiseWorker from 'promise-worker/register'
 import commonjs from './plugins/commonjs'
 import json from './plugins/json'
 import glsl from './plugins/glsl'
-import { VERSION as SVELTE_VERSION } from 'svelte/compiler'
+import { svelte_runtime } from './svelte-runtime-sources.js'
+import { create_module_loader } from './module-loader.js'
 import IconifyShim from '../shims/IconifyIcon.svelte?raw'
 
 const sveltePromiseWorker = new PromiseWorker(new svelteWorker())
 
 // Based on https://github.com/pngwn/REPLicant & the Svelte REPL package (https://github.com/sveltejs/sites/tree/master/packages/repl)
 
-// Use esm.sh for all npm packages (better ESM support, handles subpaths correctly)
+// Use esm.sh for third-party npm packages; Svelte itself is bundled locally.
 const CDN_URL = 'https://esm.sh'
-const SVELTE_CDN = `${CDN_URL}/svelte@${SVELTE_VERSION}`
 
-// In-memory cache for external modules (persists for worker lifetime)
-const module_cache = new Map()
+// One loader per worker keeps successful modules cached across compilations.
+const load_module = create_module_loader()
 
 // Transform <style global> to :global { } wrapper (svelte-preprocess syntax)
 function processGlobalStyles(code) {
@@ -202,6 +202,9 @@ async function rollup_worker({ component, head = { code: '', data: {} }, hydrate
 								}
 							}
 
+							const local_runtime = svelte_runtime.resolve(importee, importer, isSSR)
+							if (local_runtime) return local_runtime
+
 							// 3) Local virtual files (in-memory Svelte sources)
 							if (component_lookup.has(importee)) return importee
 
@@ -226,17 +229,10 @@ async function rollup_worker({ component, head = { code: '', data: {} }, hydrate
 								if (importee.startsWith(`${CDN_URL}/`)) return importee
 							}
 
-							// 8) Svelte runtime pinned
-							// For SSR: use a shim that makes lifecycle hooks no-ops
-							if (importee === 'svelte') {
-								return isSSR ? 'virtual:svelte-ssr' : SVELTE_CDN
-							}
-							if (importee.startsWith('svelte/')) return `${CDN_URL}/svelte@${SVELTE_VERSION}/${importee.slice('svelte/'.length)}`
-
-							// 9) Iconify shim
+							// 8) Iconify shim
 							if (importee === '@iconify/svelte') return 'virtual:IconifyIcon.svelte'
 
-							// 10) Bare package → resolve via esm.sh
+							// 9) Bare package → resolve via esm.sh
 							if (importee.includes('.mjs') || importee.includes('.js')) {
 								// Already a resolved module path, return as-is
 								return importee
@@ -244,23 +240,10 @@ async function rollup_worker({ component, head = { code: '', data: {} }, hydrate
 							return `${CDN_URL}/${importee}`
 						},
 						async load(id) {
+							const local_runtime = svelte_runtime.load(id)
+							if (local_runtime !== null) return local_runtime
 							if (id === 'virtual:esm-env') {
 								return `export const DEV = false; export const PROD = true; export const BROWSER = ${isSSR ? 'false' : 'true'};`
-							}
-
-							// SSR shim for svelte - re-exports everything but makes lifecycle hooks no-ops
-							if (id === 'virtual:svelte-ssr') {
-								return `
-// Re-export everything from real svelte
-export * from '${SVELTE_CDN}';
-
-// Override lifecycle hooks with no-ops for SSR
-export function onMount(fn) { /* no-op in SSR */ }
-export function onDestroy(fn) { /* no-op in SSR */ }
-export function beforeUpdate(fn) { /* no-op in SSR */ }
-export function afterUpdate(fn) { /* no-op in SSR */ }
-export function tick() { return Promise.resolve(); }
-`
 							}
 
 							// Iconify shim - a Svelte 5 component that wraps iconify-icon web component
@@ -361,27 +344,8 @@ proxy.url = function(url) {
 								return component_lookup.get(id)
 							}
 
-							// Fetch external modules with caching
 							if (/^https?:/.test(id)) {
-								// Check cache first
-								if (module_cache.has(id)) {
-									return module_cache.get(id)
-								}
-
-								try {
-									const response = await fetch(id)
-									if (!response.ok) {
-										throw new Error(`Failed to fetch ${id}: ${response.status} ${response.statusText}`)
-									}
-									const code = await response.text()
-
-									// Cache the result
-									module_cache.set(id, code)
-									return code
-								} catch (error) {
-									console.error(`Error loading external module: ${id}`, error)
-									throw error
-								}
+								return load_module(id)
 							}
 
 							return null

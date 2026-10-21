@@ -72,7 +72,7 @@
     is_mobile = false,
   }: HeaderProps = $props();
 
-  let dashboard_href = $derived(kit_id ? `/tinykit?kit=${kit_id}` : "/tinykit");
+  let dashboard_href = $derived(kit_id ? `/tinykit?kit=${kit_id}` : "/tinykit?dashboard=1");
 
   const position_options: {
     id: PreviewPosition;

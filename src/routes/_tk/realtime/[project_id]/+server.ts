@@ -41,7 +41,8 @@ export const GET: RequestHandler = async ({ params }) => {
 
 			try {
 				unsubscribe = await pb.collection('_tk_projects').subscribe(project_id, (e) => {
-					if (e.action === 'update' && e.record.data) {
+					// Only send data_updated if data exists and is an object (not null/undefined)
+					if (e.action === 'update' && e.record.data && typeof e.record.data === 'object') {
 						const message = `event: data_updated\ndata: ${JSON.stringify(e.record.data)}\n\n`
 						try {
 							controller.enqueue(encoder.encode(message))

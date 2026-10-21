@@ -203,13 +203,13 @@ async function parse_form_data_with_files(
 		} else if (key.startsWith('_file:')) {
 			// File field (our convention)
 			const field_name = key.slice(6) // Remove '_file:' prefix
-			if (value instanceof File) {
+			if (typeof value !== 'string') {
 				if (!file_fields.has(field_name)) {
 					file_fields.set(field_name, [])
 				}
 				file_fields.get(field_name)!.push(value)
 			}
-		} else if (value instanceof File) {
+		} else if (typeof value !== 'string') {
 			// Direct file field (Pocketbase-style)
 			if (!file_fields.has(key)) {
 				file_fields.set(key, [])
