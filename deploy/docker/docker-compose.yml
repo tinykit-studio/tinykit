@@ -16,6 +16,7 @@ services:
       # Server config
       - HOST=0.0.0.0
       - PORT=3000
+      - BODY_SIZE_LIMIT=${BODY_SIZE_LIMIT:-10M}
       - WORKSPACE_DIR=/app/workspace
 
     extra_hosts:

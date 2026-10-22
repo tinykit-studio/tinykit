@@ -42,6 +42,10 @@ docker compose -f deploy/docker/docker-compose.yml up -d --build
 
 If you use `.env`, include `--env-file .env` as in the setup command.
 
+After upgrading to v0.1.1, republish existing apps to receive the bundled Svelte runtime and data-client fixes. The Canvas template upload fix applies to newly created Canvas apps; upgrading does not replace existing app source or records.
+
+Docker and Railway default to a 10 MB request-body limit, including multipart upload overhead. To change it with Compose, set `BODY_SIZE_LIMIT` in `.env` and use `--env-file .env` when starting the service.
+
 ## Storage and backups
 
 `/app/pocketbase/pb_data` contains the database, uploaded files, and setup credentials. Keep its volume when recreating the container. The Compose file also retains the existing workspace volume for compatibility.

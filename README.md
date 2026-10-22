@@ -56,7 +56,7 @@
 
 **Run hundreds of apps on one server.** Point any domain → get a working app.
 
-> Tinykit is early alpha. This maintenance update focuses on Docker setup and custom AI endpoints. See [the changelog](./CHANGELOG.md) for changes. Feedback and bug reports are welcome on [GitHub](https://github.com/tinykit-studio/tinykit/issues) and [Discord](https://discord.gg/NfMjt3yUtn).
+> Tinykit is early alpha. This maintenance update improves Docker setup, custom AI endpoints, domain setup, Canvas uploads, and preview/publishing reliability. See [the changelog](./CHANGELOG.md) for changes and upgrade instructions. Feedback and bug reports are welcome on [GitHub](https://github.com/tinykit-studio/tinykit/issues) and [Discord](https://discord.gg/NfMjt3yUtn).
 
 ### Star the project to give the maintainers a dopamine hit ⭐
 
