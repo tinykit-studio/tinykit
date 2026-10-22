@@ -78,22 +78,23 @@
   // Watch for target field changes and focus on the field
   watch(
     () => [target_field, local_fields.length] as const,
-    async ([field_name, fields_count]) => {
+    ([field_name, fields_count]) => {
       if (field_name && fields_count > 0) {
         const field = local_fields.find((f) => f.name === field_name);
         if (field) {
-          await tick();
-          const input = field_inputs[field.id];
-          if (input) {
-            // Scroll into view and focus
-            input.scrollIntoView({ behavior: "smooth", block: "center" });
-            input.focus();
-            // Add highlight animation
-            input.classList.add("field-highlight");
-            setTimeout(() => input.classList.remove("field-highlight"), 1500);
-          }
-          // Consume the target only after successful focus
-          on_target_consumed?.();
+          void tick().then(() => {
+            const input = field_inputs[field.id];
+            if (input) {
+              // Scroll into view and focus
+              input.scrollIntoView({ behavior: "smooth", block: "center" });
+              input.focus();
+              // Add highlight animation
+              input.classList.add("field-highlight");
+              setTimeout(() => input.classList.remove("field-highlight"), 1500);
+            }
+            // Consume the target only after successful focus
+            on_target_consumed?.();
+          });
         }
       }
     },
@@ -102,7 +103,7 @@
   // Modal state for adding new fields
   let show_add_modal = $state(false);
   let new_name = $state("");
-  let new_type = $state("text");
+  let new_type = $state<ContentFieldType>("text");
   let new_value = $state("");
   let new_description = $state("");
 

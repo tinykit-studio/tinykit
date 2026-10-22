@@ -33,6 +33,8 @@
 	}
 
 	const PROVIDERS = [
+		{ id: "deepseek", name: "DeepSeek", models: [{ id: "deepseek-flash", label: "deepseek-flash" }] },
+		{ id: "openai-compatible", name: "Custom / local (OpenAI-compatible)", models: [] },
 		{
 			id: "anthropic",
 			name: "Anthropic",
@@ -95,6 +97,12 @@
 	let validation_error = $state<string | null>(null);
 	let api_key_modified = $state(false);
 	let masked_api_key = $state("");
+	let saved_provider = $state("");
+	let saved_base_url = $state("");
+	let clear_api_key = $state(false);
+	let custom_endpoint = $derived(config.provider === "openai-compatible" || (config.provider === "openai" && !!config.base_url?.trim()));
+	let same_endpoint = $derived(config.provider === saved_provider && (config.base_url || "").trim().replace(/\/+$/, "") === saved_base_url);
+	let can_test = $derived(!!config.api_key || (same_endpoint && !!config.has_api_key && !clear_api_key) || (custom_endpoint && !!config.base_url?.trim()));
 
 	let available_models = $derived(
 		PROVIDERS.find((p) => p.id === config.provider)?.models || [],
@@ -120,6 +128,9 @@
 			if (data.value) {
 				// Store masked key separately, clear the input field
 				masked_api_key = data.value.api_key || "";
+				saved_provider = data.value.provider;
+				saved_base_url = (data.value.base_url || "").trim().replace(/\/+$/, "");
+				clear_api_key = false;
 				config = {
 					...config,
 					...data.value,
@@ -146,6 +157,7 @@
 				base_url: config.base_url || null,
 			};
 
+			if (clear_api_key) value.api_key = "";
 			// Only include api_key if user entered a new one
 			if (api_key_modified && config.api_key) {
 				value.api_key = config.api_key;
@@ -166,13 +178,7 @@
 				throw new Error(data.error || "Failed to save settings");
 			}
 
-			// If we saved a new key, update the masked display
-			if (api_key_modified && config.api_key) {
-				masked_api_key = "•".repeat(Math.min(config.api_key.length - 4, 20)) + config.api_key.slice(-4);
-				config.api_key = "";
-				config.has_api_key = true;
-				api_key_modified = false;
-			}
+			await load_settings();
 
 			save_success = true;
 			setTimeout(() => {
@@ -189,6 +195,11 @@
 	function handle_provider_change(e: Event) {
 		const target = e.target as HTMLSelectElement;
 		config.provider = target.value;
+		config.base_url = "";
+		config.api_key = "";
+		config.model = "";
+		api_key_modified = false;
+		clear_api_key = false;
 		// Set default model for this provider
 		const provider = PROVIDERS.find((p) => p.id === config.provider);
 		if (provider && provider.models.length > 0) {
@@ -200,7 +211,7 @@
 	}
 
 	async function test_api_key() {
-		if (!config.api_key) return;
+		if (!can_test) return;
 
 		validation_status = "testing";
 		validation_error = null;
@@ -215,6 +226,7 @@
 				body: JSON.stringify({
 					provider: config.provider,
 					api_key: config.api_key,
+					use_saved_key: !config.api_key && same_endpoint && !clear_api_key,
 					base_url: config.base_url || undefined,
 				}),
 			});
@@ -236,6 +248,7 @@
 	function handle_api_key_change() {
 		// Mark as modified and reset validation when key changes
 		api_key_modified = true;
+		clear_api_key = false;
 		validation_status = "idle";
 		validation_error = null;
 	}
@@ -312,7 +325,7 @@
 								class="block text-sm font-medium text-[var(--builder-text-secondary)] mb-2"
 							>
 								API Key
-								{#if config.has_api_key && !api_key_modified}
+								{#if config.has_api_key && same_endpoint && !api_key_modified && !clear_api_key}
 									<span class="ml-2 text-green-500 font-normal">
 										✓ Configured
 									</span>
@@ -337,7 +350,7 @@
 											: "password"}
 										bind:value={config.api_key}
 										oninput={handle_api_key_change}
-										placeholder={config.has_api_key && !api_key_modified
+										placeholder={config.has_api_key && same_endpoint && !api_key_modified && !clear_api_key
 											? masked_api_key || "Enter new key to replace"
 											: "Enter your API key"}
 										class="w-full px-3 py-2 pr-10 bg-[var(--builder-bg-tertiary)] border border-[var(--builder-border)] rounded-lg text-[var(--builder-text-primary)] placeholder:text-[var(--builder-text-muted)] focus:outline-none focus:border-[var(--builder-accent)] font-mono text-sm"
@@ -358,7 +371,7 @@
 								<button
 									type="button"
 									onclick={test_api_key}
-									disabled={!config.api_key ||
+									disabled={!can_test ||
 										validation_status === "testing"}
 									class="px-3 py-2 bg-[var(--builder-bg-tertiary)] border border-[var(--builder-border)] rounded-lg text-[var(--builder-text-secondary)] hover:text-[var(--builder-text-primary)] hover:border-[var(--builder-accent)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 text-sm"
 								>
@@ -378,19 +391,40 @@
 							</div>
 							{#if validation_status === "valid"}
 								<p class="text-xs text-green-500 mt-1.5">
-									API key is valid
+									Connection successful. Model and tool support depend on your server.
 								</p>
 							{:else if validation_status === "invalid" && validation_error}
 								<p class="text-xs text-red-400 mt-1.5">
 									{validation_error}
 								</p>
-							{:else if config.has_api_key && !api_key_modified}
+							{:else if config.has_api_key && same_endpoint && !api_key_modified && !clear_api_key}
 								<p class="text-xs text-[var(--builder-text-muted)] mt-1.5">
 									Enter a new key to replace the existing one
 								</p>
 							{/if}
 						</div>
 
+						{#if ["openai", "openai-compatible", "deepseek"].includes(config.provider)}
+							<div>
+								<label for="base_url" class="block text-sm font-medium text-[var(--builder-text-secondary)] mb-2">Server URL {config.provider === "openai-compatible" ? "(required)" : "(optional)"}</label>
+								<input id="base_url" type="url" bind:value={config.base_url}
+									oninput={() => { validation_status = "idle"; validation_error = null; }}
+									placeholder={config.provider === "deepseek" ? "https://api.deepseek.com" : "http://localhost:1234/v1"}
+									class="w-full px-3 py-2 bg-[var(--builder-bg-tertiary)] border border-[var(--builder-border)] rounded-lg text-[var(--builder-text-primary)]" />
+								<p class="text-xs text-[var(--builder-text-muted)] mt-1.5">Use the API base URL, including /v1 if your server requires it. The server must be reachable from Tinykit.</p>
+							</div>
+						{/if}
+						{#if custom_endpoint}
+							<div class="text-xs text-[var(--builder-text-muted)]">
+								API keys are optional for local servers without authentication. Choose a model that supports tool calling.
+								{#if config.has_api_key && same_endpoint}
+									<label class="flex gap-2 mt-2"><input type="checkbox" bind:checked={clear_api_key} onchange={() => { config.api_key = ""; validation_status = "idle"; }} />Remove saved API key</label>
+								{/if}
+							</div>
+						{/if}
+						{#if config.has_api_key && !same_endpoint}
+							<p class="text-xs text-[var(--builder-text-muted)]">The saved key belongs to a different provider or URL. Enter the key for this server, or leave it empty if none is required.</p>
+						{/if}
 						<!-- Model -->
 						<div>
 							<label
@@ -399,17 +433,14 @@
 							>
 								Model
 							</label>
-							<select
-								id="model"
-								bind:value={config.model}
-								class="w-full px-3 py-2 bg-[var(--builder-bg-tertiary)] border border-[var(--builder-border)] rounded-lg text-[var(--builder-text-primary)] focus:outline-none focus:border-[var(--builder-accent)]"
-							>
+							<input id="model" bind:value={config.model} list="model-suggestions"
+								placeholder="Exact model ID from your provider"
+								class="w-full px-3 py-2 bg-[var(--builder-bg-tertiary)] border border-[var(--builder-border)] rounded-lg text-[var(--builder-text-primary)]" />
+							<datalist id="model-suggestions">
 								{#each available_models as model (model.id)}
-									<option value={model.id}
-										>{model.label}</option
-									>
+									<option value={model.id}>{model.label}</option>
 								{/each}
-							</select>
+							</datalist>
 						</div>
 					</div>
 				</section>
@@ -424,7 +455,7 @@
 				{/if}
 
 				<!-- Info message when no API key -->
-				{#if !config.has_api_key && !config.api_key}
+				{#if !custom_endpoint && !config.has_api_key && !config.api_key}
 					<div
 						class="px-4 py-3 bg-[var(--builder-bg-tertiary)] border border-[var(--builder-border)] rounded-lg text-[var(--builder-text-secondary)] text-sm"
 					>

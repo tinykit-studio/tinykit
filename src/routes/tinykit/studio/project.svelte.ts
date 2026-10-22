@@ -326,7 +326,9 @@ export class ProjectStore {
      */
     async set_builder_theme(theme_id: string) {
         if (!this.project) return;
-        apply_builder_theme(theme_id);
+        const theme = builder_themes.find(theme => theme.id === theme_id);
+        if (!theme) return;
+        apply_builder_theme(theme);
         await this.update_settings({ builder_theme_id: theme_id });
     }
 

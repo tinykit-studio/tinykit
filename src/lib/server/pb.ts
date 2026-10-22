@@ -7,6 +7,8 @@
 import PocketBase from 'pocketbase'
 import { env } from '$env/dynamic/private'
 import * as fs from 'fs'
+import { settings_from_env, type LLMSettings } from '$lib/ai/config'
+export type { LLMSettings } from '$lib/ai/config'
 
 const PB_URL = env.POCKETBASE_URL || 'http://127.0.0.1:8091'
 const SETUP_FILE = './pocketbase/pb_data/.setup_complete'
@@ -453,16 +455,6 @@ export async function deleteSnapshot(projectId: string, snapshotId: string) {
 }
 
 /**
- * LLM configuration type
- */
-export interface LLMSettings {
-	provider: 'openai' | 'anthropic' | 'gemini'
-	api_key: string
-	model: string
-	base_url?: string
-}
-
-/**
  * Get LLM settings - checks env vars first, then falls back to database
  * Env vars: LLM_API_KEY, LLM_PROVIDER, LLM_MODEL, LLM_BASE_URL
  */
@@ -513,14 +505,8 @@ export function unauthorizedResponse(message = 'Unauthorized') {
  */
 export async function getLLMSettings(): Promise<LLMSettings | null> {
 	// Check env vars first (for users who prefer not to store keys in DB)
-	if (env.LLM_API_KEY) {
-		return {
-			provider: (env.LLM_PROVIDER as LLMSettings['provider']) || 'anthropic',
-			api_key: env.LLM_API_KEY,
-			model: env.LLM_MODEL || 'claude-sonnet-4-20250514',
-			base_url: env.LLM_BASE_URL || undefined
-		}
-	}
+	const env_settings = settings_from_env(env)
+	if (env_settings) return env_settings
 
 	// Fall back to database settings
 	const authed = await ensureAuth()

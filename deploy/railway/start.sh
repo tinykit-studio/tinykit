@@ -40,6 +40,7 @@ fi
 
 # Start the Node.js server
 echo "Starting SvelteKit server..."
+export BODY_SIZE_LIMIT="${BODY_SIZE_LIMIT:-10M}"
 node build/index.js &
 NODE_PID=$!
 

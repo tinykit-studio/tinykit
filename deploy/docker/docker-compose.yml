@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   crud-one:
     build:
@@ -8,15 +6,21 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # Required: AI Provider
-      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
-      - LLM_API_KEY=${LLM_API_KEY}
-      - LLM_MODEL=${LLM_MODEL:-gpt-4}
+      # Optional: configure AI here, or in Settings after setup
+      - LLM_PROVIDER=${LLM_PROVIDER:-}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-}
+
+      - LLM_BASE_URL=${LLM_BASE_URL:-}
 
       # Server config
       - HOST=0.0.0.0
       - PORT=3000
+      - BODY_SIZE_LIMIT=${BODY_SIZE_LIMIT:-10M}
       - WORKSPACE_DIR=/app/workspace
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
     volumes:
       # Persistent storage

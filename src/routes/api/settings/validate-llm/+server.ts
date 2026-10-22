@@ -1,8 +1,11 @@
 import { json } from '@sveltejs/kit'
+import { env } from '$env/dynamic/private'
 import type { RequestHandler } from './$types'
 import PocketBase from 'pocketbase'
+import { pb, ensureAuth } from '$lib/server/pb'
+import { normalize_base_url, allows_no_key, endpoint_for, type LLMProvider } from '$lib/ai/config'
 
-const PB_URL = 'http://127.0.0.1:8091'
+const PB_URL = env.POCKETBASE_URL || 'http://127.0.0.1:8091'
 
 async function isAuthenticated(request: Request): Promise<boolean> {
 	const authHeader = request.headers.get('Authorization')
@@ -48,13 +51,17 @@ interface ValidateRequest {
 	provider: string
 	api_key: string
 	base_url?: string
+	use_saved_key?: boolean
 }
 
 async function validate_openai(api_key: string, base_url?: string): Promise<{ valid: boolean, error?: string }> {
-	const url = base_url ? `${base_url}/models` : 'https://api.openai.com/v1/models'
+	const normalized = normalize_base_url(base_url)
+	const url = normalized ? `${normalized}/models` : 'https://api.openai.com/v1/models'
 	try {
 		const res = await fetch(url, {
-			headers: { 'Authorization': `Bearer ${api_key}` }
+			headers: api_key ? { 'Authorization': `Bearer ${api_key}` } : {},
+			signal: AbortSignal.timeout(10000),
+			redirect: 'error'
 		})
 		if (res.ok) return { valid: true }
 		if (res.status === 401) return { valid: false, error: 'Invalid API key' }
@@ -109,7 +116,7 @@ async function validate_gemini(api_key: string): Promise<{ valid: boolean, error
 
 async function validate_deepseek(api_key: string): Promise<{ valid: boolean, error?: string }> {
 	// DeepSeek uses OpenAI-compatible API
-	return validate_openai(api_key, 'https://api.deepseek.com/v1')
+	return validate_openai(api_key, 'https://api.deepseek.com')
 }
 
 // POST /api/settings/validate-llm
@@ -124,15 +131,28 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 
 	try {
-		const { provider, api_key, base_url } = await request.json() as ValidateRequest
+		const { provider, base_url, use_saved_key, api_key: supplied_key } = await request.json() as ValidateRequest
+		let api_key = supplied_key || ''
+		normalize_base_url(base_url)
+		if (use_saved_key && authenticated && !api_key && await ensureAuth()) {
+			try {
+				const existing = (await pb.collection('_tk_settings').getOne('llm')).value
+				if (existing?.provider === provider && endpoint_for(existing) === endpoint_for({ provider: provider as LLMProvider, base_url })) {
+					api_key = existing.api_key || ''
+				}
+			} catch { /* No saved key: use the supplied configuration. */ }
+		}
 
-		if (!provider || !api_key) {
+		if (!provider || (!api_key && !allows_no_key({ provider: provider as LLMProvider, base_url }))) {
 			return json({ error: 'Missing provider or api_key' }, { status: 400 })
 		}
 
 		let result: { valid: boolean, error?: string }
 
 		switch (provider) {
+			case 'openai-compatible':
+				if (!normalize_base_url(base_url)) return json({ valid: false, error: 'A custom base URL is required.' }, { status: 400 })
+				// fall through
 			case 'openai':
 				result = await validate_openai(api_key, base_url)
 				break
@@ -143,7 +163,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				result = await validate_gemini(api_key)
 				break
 			case 'deepseek':
-				result = await validate_deepseek(api_key)
+				result = base_url ? await validate_openai(api_key, base_url) : await validate_deepseek(api_key)
 				break
 			default:
 				return json({ error: `Unknown provider: ${provider}` }, { status: 400 })
