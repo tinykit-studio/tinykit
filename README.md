@@ -72,6 +72,7 @@ The easiest way to get started is with Railway. Otherwise, you can run it locall
 One-click one-minute deploy on Railway, no config necessary. Configure your LLM from the app (or add key as ENV var).
 
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy/tinykit?referralCode=RCPU7k&utm_medium=integration&utm_source=template&utm_campaign=generic)
+[![Deploy to Light Cloud](https://light-cloud.com/button.svg)](https://console.light-cloud.com/new?repo=https://github.com/tinykit-studio/tinykit)
 
 Or deploy with [Docker](https://docs.tinykit.studio/docker) or a [VPS](https://docs.tinykit.studio/vps)
 
