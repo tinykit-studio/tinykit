@@ -6,9 +6,10 @@
     generate_design_css,
     extract_web_fonts,
     transform_content_fields,
+    reset_compiler_workers,
   } from "$lib/compiler/init";
   import { watch } from "runed";
-  import { Sparkles } from "lucide-svelte";
+  import { Sparkles, RotateCcw } from "lucide-svelte";
   import { isolateCompanionPreview, companionAssetReferences } from '$lib/compiler/companion';
   // Import store type only to avoid hard dependency if possible?
   // We need the value to access state.
@@ -46,8 +47,13 @@
   let iframe_loaded = $state(false);
   let compiled_app = $state<string | null>(null);
   let compile_error = $state<string | null>(null);
-  let error_type = $state<"compile" | "runtime">("compile");
+  let error_type = $state<"compile" | "runtime" | "timeout">("compile");
   let is_compiling = $state(false);
+
+  // A compile that never settles (e.g. a hung compiler worker) would otherwise leave
+  // the preview on its building animation forever. Generous: a cold first compile is slow.
+  const COMPILE_TIMEOUT = 20000;
+  let compile_timeout: ReturnType<typeof setTimeout> | undefined;
 
   // Infinite loop detection via heartbeat monitoring
   let last_heartbeat = $state(0);
@@ -63,6 +69,8 @@
 
   // Use store processing state if available
   let is_processing = $derived(store?.is_processing);
+  // Once declared stuck, stop the building animation so it doesn't contradict the error.
+  const is_building = $derived((is_compiling && error_type !== "timeout") || is_processing);
 
   // Debounced compilation to avoid rapid re-compiles
   const debounced_compile = debounce(() => {
@@ -314,6 +322,7 @@
       document.removeEventListener("visibilitychange", handle_visibility_change);
       send_data_update.cancel();
       debounced_compile.cancel();
+      clearTimeout(compile_timeout);
       if (heartbeat_check_interval) {
         clearInterval(heartbeat_check_interval);
         heartbeat_check_interval = null;
@@ -403,6 +412,15 @@
 
     is_compiling = true;
     compile_error = null;
+    error_type = "compile";
+    clearTimeout(compile_timeout);
+    compile_timeout = setTimeout(() => {
+      if (my_version !== compilation_version || !is_compiling) return;
+      compile_error = `Still compiling after ${COMPILE_TIMEOUT / 1000} seconds. The compiler may have stopped responding. Retry starts a fresh compiler.`;
+      error_type = "timeout";
+      // If the compile finishes later, its success report replaces this one.
+      on_compile?.({ ...report, state: 'error', error: compile_error });
+    }, COMPILE_TIMEOUT);
 
     try {
       const result = await processCode({
@@ -446,10 +464,18 @@
     } finally {
       // Only update UI state if this is still the current compilation
       if (my_version === compilation_version) {
+        clearTimeout(compile_timeout);
         is_compiling = false;
         on_compile?.({ ...report, state: compile_error ? 'error' : 'success', ...(compile_error ? { error: compile_error } : {}) });
       }
     }
+  }
+
+  function retry_compile() {
+    // The stuck compile may hold a hung worker; replace the workers before retrying.
+    reset_compiler_workers();
+    compile_error = null;
+    compile_component();
   }
 
   function send_to_iframe() {
@@ -471,10 +497,10 @@
 
 <div
   class="preview-container"
-  class:is-building={is_compiling || is_processing}
+  class:is-building={is_building}
   style="view-transition-name: preview-{project_id}"
 >
-  {#if is_compiling || is_processing}
+  {#if is_building}
     <div class="building-border"></div>
   {/if}
   {#if compile_error}
@@ -483,12 +509,15 @@
         <span class="error-icon">⚠</span>
         <div class="error-text">
           <div class="error-title">
-            {error_type === "compile" ? "Compilation Failed" : "Runtime Error"}
+            {error_type === "compile" ? "Compilation Failed" : error_type === "timeout" ? "Preview didn't finish compiling" : "Runtime Error"}
           </div>
           <div class="error-message">{compile_error}</div>
         </div>
       </div>
-      {#if !companion}<button
+      {#if error_type === "timeout"}<button class="fix-button" onclick={retry_compile}>
+        <RotateCcw class="w-3" />
+        Retry
+      </button>{:else if !companion}<button
         class="fix-button"
         onclick={() => {
           window.dispatchEvent(

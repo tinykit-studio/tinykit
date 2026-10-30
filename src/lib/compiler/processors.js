@@ -5,6 +5,7 @@ import { render } from 'svelte/server'
 
 let postcss_worker
 let rollup_worker
+let raw_workers = []
 let workers_initialized = false
 let worker_init_error = null
 
@@ -24,14 +25,25 @@ async function initWorkers() {
 			import('./workers/rollup.worker.js?worker')
 		])
 
-		postcss_worker = new PromiseWorker(new postCSSWorkerModule.default())
-		rollup_worker = new PromiseWorker(new rollupWorkerModule.default())
+		raw_workers = [new postCSSWorkerModule.default(), new rollupWorkerModule.default()]
+		postcss_worker = new PromiseWorker(raw_workers[0])
+		rollup_worker = new PromiseWorker(raw_workers[1])
 		workers_initialized = true
 	} catch (err) {
 		console.error('[Compiler] Failed to initialize workers:', err)
 		worker_init_error = err
 		throw err
 	}
+}
+
+// Terminate the compiler workers so the next compile starts fresh workers.
+// A hung worker never answers, so retrying on the same worker cannot recover.
+export function reset_workers() {
+	for (const worker of raw_workers) worker.terminate()
+	raw_workers = []
+	postcss_worker = rollup_worker = undefined
+	workers_initialized = false
+	worker_init_error = null
 }
 
 async function getPostCSSWorker() {
