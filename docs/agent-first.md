@@ -49,10 +49,12 @@ The agent reads the generated AGENTS.md, TINYKIT.md, and instructions.md. This
 first workflow uses one App.svelte plus content/design/schema JSON and flat
 assets. The CRM starter is fully editable; it is not a separate fixed app.
 
-Dev selects a free port for a newly created app and opens its **app-only
-preview**. Keep the command running while using it. The optional editing workspace
-is available at the separately printed editor URL. `tinykit dev --editor` opens
-that workspace instead. Existing exported apps retain their original dev defaults.
+Dev opens the **editor**: the live app alongside agent and publishing controls.
+`tinykit dev --app-only` opens just the app; both URLs are printed. A newly
+created app reuses its last port when it is free (saved in `.tinykit/port.json`)
+and otherwise selects a free one. Keep the command running while using it.
+`--editor` is still accepted for older scripts. Existing exported apps retain
+their original dev defaults.
 Use `--no-open` when the agent will open the printed URL itself.
 
 App records persist separately from files and survive source updates and dev

@@ -55,12 +55,19 @@ export async function startCompanion(directory, { port, open, appOnly }) {
   if (major < 20 || (major === 20 && minor < 19)) throw new Error('tinykit dev requires Node.js 20.19 or newer.');
   const root = await realpath(directory);
   const initial = await readWorkspace(root);
-  port = await availablePort(port ?? (initial.config.local_first ? 0 : 5173)); // New local apps select a free port.
-  appOnly ??= initial.config.local_first === true;
   const runtime = join(root, '.tinykit');
+  const portPath = join(runtime, 'port.json');
+  if (port === undefined && initial.config.local_first) {
+    // Reuse the last port so bookmarked editor URLs keep working; fall back to any free port.
+    let saved;
+    try { saved = JSON.parse(await readFile(portPath, 'utf8')).port; } catch {}
+    port = Number.isInteger(saved) ? await availablePort(saved).catch(() => availablePort(0)) : await availablePort(0);
+  } else port = await availablePort(port ?? 5173);
   await mkdir(runtime, { recursive: true, mode: 0o700 });
   if (await realpath(runtime) !== runtime) throw new Error('.tinykit must not be a symlink.');
   const release = await claimWorkspace(runtime);
+  // Best effort: a failed save only means the next run picks a new port.
+  if (initial.config.local_first) await writeAtomic(portPath, { port }).catch(() => {});
   let pbProcess, viteProcess, timer, closing = false, syncing = Promise.resolve();
   const stopChild = async child => {
     if (!child?.pid || child.exitCode !== null || child.signalCode !== null) return;
@@ -149,18 +156,18 @@ export async function startCompanion(directory, { port, open, appOnly }) {
     let frontendReady = false;
     for (let i = 0; i < 100; i++) {
       if (viteError) throw viteError;
-      if (viteProcess.exitCode !== null) throw new Error('Companion frontend exited during startup.');
+      if (viteProcess.exitCode !== null) throw new Error('The editor server exited during startup.');
       try {
         const response = await fetch(`http://127.0.0.1:${port}/companion/state`, { signal: AbortSignal.timeout(1000) });
         if (response.ok) { frontendReady = true; break; }
       } catch {}
       await delay(100);
     }
-    if (!frontendReady) throw new Error('Companion frontend did not become ready.');
+    if (!frontendReady) throw new Error('The editor server did not become ready.');
     const url = `http://127.0.0.1:${port}/companion`;
     const previewUrl = url + '?view=app';
     await writeAtomic(join(runtime, 'dev-server.json'), { pid: process.pid, url, preview_url: previewUrl, project_id: projectId });
-    console.log(`\nTinykit app preview: ${previewUrl}\nEditing workspace: ${url}\nWatching ${root}\nEdit App.svelte in your agent. Ctrl+C stops this workspace.\n`);
+    console.log(`\n${initial.config.name} is running.\n\n  Editor:    ${url}\n  App only:  ${previewUrl}\n\nWatching ${root} for changes. Ctrl+C to stop.\n`);
     if (open) {
       const command = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open';
       const opener = spawn(command, [appOnly ? previewUrl : url], { stdio: 'ignore' });
@@ -184,7 +191,7 @@ export async function startCompanion(directory, { port, open, appOnly }) {
     const schedule = () => { timer = setTimeout(() => { syncing = tick().finally(() => { if (!closing) schedule(); }); }, 250); };
     schedule();
     pbProcess.once('exit', () => { if (!closing) { console.error('Local data process stopped.'); cleanup().then(() => process.exit(1)); } });
-    viteProcess.once('exit', () => { if (!closing) { console.error('Companion frontend stopped.'); cleanup().then(() => process.exit(1)); } });
+    viteProcess.once('exit', () => { if (!closing) { console.error('The editor server stopped.'); cleanup().then(() => process.exit(1)); } });
   } catch (error) {
     await cleanup();
     process.removeListener('SIGINT', stop);

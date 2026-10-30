@@ -12,7 +12,7 @@ export const usage = `Tinykit local development
   tinykit logout [--server <origin>]
   tinykit export <project-id> <new-directory> [--server <origin>] [--include-records]
   tinykit export <export.json> <new-directory> [--svelte] [--server <origin>]
-  tinykit dev [directory] [--port <port>] [--no-open] [--editor]
+  tinykit dev [directory] [--port <port>] [--no-open] [--app-only]
   tinykit skill install [--directory <skills-directory>] [--json]
   tinykit edit [directory|project-id] [--server <origin>] [--directory <folder>] [--json]
   tinykit launcher install [--json]  (macOS; one-time Studio button setup)
@@ -83,11 +83,12 @@ export async function run(args) {
     return print(command === 'login' ? await login({ ...options, root, server }) : await logout(server), options.json);
   }
   if (command === 'dev') {
-    let directory = '.', port, open = true, hasDirectory = false, editor = false;
+    let directory = '.', port, open = true, hasDirectory = false, editor = false, appOnly = false;
     for (let i = 0; i < rest.length; i++) {
       if (rest[i] === '--port') port = Number(rest[++i]);
       else if (rest[i] === '--no-open') open = false;
-      else if (rest[i] === '--editor') editor = true;
+      else if (rest[i] === '--editor') editor = true; // Older default; the editor now opens without it.
+      else if (rest[i] === '--app-only') appOnly = true;
       else if (rest[i].startsWith('-') || hasDirectory) throw new Error(`Unknown argument: ${rest[i]}`);
       else { directory = rest[i]; hasDirectory = true; }
     }
@@ -95,10 +96,12 @@ export async function run(args) {
     const root = resolve(directory), component = await componentConfig(root);
     if (component) {
       if(editor)throw new Error('--editor is available for single-component Tinykit apps.');
+      // Svelte projects only have the app view, so --app-only needs no handling.
       return startComponentDev(component.root, { port: port ?? 5180, open });
     }
     const { startCompanion } = await import('./companion/dev.mjs');
-    return startCompanion(root, { port, open, appOnly: editor ? false : undefined });
+    if (editor && appOnly) throw new Error('Choose --editor or --app-only, not both.');
+    return startCompanion(root, { port, open, appOnly });
   }
   if (command === 'check' || command === 'status' || command === 'stop') {
     const paths = rest.filter(arg => arg !== '--json');

@@ -42,9 +42,9 @@ request. The supported new-app format is a single Svelte 5 component plus
 JSON definitions and assets. For the data API, field formats, and limitations,
 read [app-format.md](references/app-format.md).
 
-Keep one dev process running. Use its printed **app preview** URL, not the
-editing-workspace URL, when showing the user the app. A free port is selected
-for new local apps. If an execution sandbox prevents a local listener, use the
+Keep one dev process running. Use its printed **App only** URL, not the
+**Editor** URL, when showing the user the app. New local apps reuse their last
+port when it is free and otherwise select a free one. If an execution sandbox prevents a local listener, use the
 environment's normal permission mechanism or explain the concrete limitation;
 headless checks still work. Do not stop unrelated processes to free a port.
 

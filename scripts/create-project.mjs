@@ -1,11 +1,13 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { resolve, basename, join } from 'node:path';
+import { resolve, basename, join, relative, isAbsolute } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { exportWorkspace } from './companion/workspace.mjs';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const quote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
+// Shell-quote only when needed so the printed next step reads like a normal command.
+const shellPath = (value) => (/^[\w./~-]+$/.test(value) ? value : quote(value));
 const names = {
   blank: null,
   crm: 'personal-crm',
@@ -99,8 +101,10 @@ export async function createProject(options) {
   await writeFile(join(directory, 'TINYKIT.md'), formatGuide);
   await writeFile(
     join(directory, 'README.md'),
-    `# ${name}\n\nA local Tinykit app. Read AGENTS.md and TINYKIT.md to customize it with your coding agent.\n\nRun tinykit dev to open the app preview, tinykit check --json to build-check it, and tinykit dev --editor to use the optional editing workspace. Keep the dev process running while you use the preview. Restarting it retains local records.\n\nPublication is optional and requires your own upgraded Tinykit server. The app is ${options.visibility}. First publication creates an empty hosted database; local records stay local. Later publications preserve hosted records and uploads.\n`
+    `# ${name}\n\nA local Tinykit app. Read AGENTS.md and TINYKIT.md to customize it with your coding agent.\n\nRun tinykit dev to open the editor, which shows the live app alongside editing and publishing controls (tinykit dev --app-only opens just the app). Run tinykit check --json to build-check it. Keep the dev process running while you use the app. Restarting it retains local records.\n\nPublication is optional and requires your own upgraded Tinykit server. The app is ${options.visibility}. First publication creates an empty hosted database; local records stay local. Later publications preserve hosted records and uploads.\n`
   );
+  const fromCwd = relative(process.cwd(), directory);
+  const displayPath = fromCwd && !fromCwd.startsWith('..') && !isAbsolute(fromCwd) ? fromCwd : directory;
   return {
     ok: true,
     directory,
@@ -115,6 +119,6 @@ export async function createProject(options) {
       dev: `${cli} dev ${quote(directory)} --no-open`,
       check: `${cli} check ${quote(directory)} --json`
     },
-    message: `Created ${name} at ${directory}. Start it with tinykit dev ${quote(directory)}. No hosting account is required; first publication starts with empty hosted records.`
+    message: `Created ${name} in ${displayPath}\n\nNext:\n  cd ${shellPath(displayPath)}\n  tinykit dev\n\nEverything runs locally; no account needed.`
   };
 }

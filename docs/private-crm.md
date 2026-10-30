@@ -8,7 +8,7 @@ and linked IDs must already exist. Import companies before contacts and deals.
 
 ## Preview and daily use
 
-`tinykit dev` runs the local editing workspace at `/companion`. **Open app
+`tinykit dev` runs the local editor at `/companion`. **Open app
 preview** opens `/companion?view=app` without the agent and publishing controls.
 Both views use the same isolated local records. The preview is available only
 while the local development process is running.

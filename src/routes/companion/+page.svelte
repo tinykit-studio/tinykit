@@ -56,7 +56,7 @@
 <div class="companion-shell" class:app-only={appOnly}>
   {#if !appOnly}
   <header>
-    <div><span class="brand">tinykit</span><span class="divider">/</span><strong>{project?.name || 'Opening app…'}</strong><span class="badge">Editing workspace</span><a class="app-link" href="/companion?view=app" target="_blank" rel="noreferrer">Open app preview ↗</a></div>
+    <div><span class="brand">tinykit</span><span class="divider">/</span><strong>{project?.name || 'Opening app…'}</strong><span class="badge">Editor</span><a class="app-link" href="/companion?view=app" target="_blank" rel="noreferrer">Open app preview ↗</a></div>
     <span class="sync-status" role="status">{connectionError ? 'Disconnected' : status?.import_error ? 'Import paused' : status?.compile?.state === 'error' ? 'Compile error' : status?.compile?.state === 'pending' ? 'Compiling preview…' : status ? `Watching files · revision ${status.revision}` : 'Connecting…'}</span>
   </header>
   {/if}
@@ -64,7 +64,7 @@
     {#if !appOnly}
     <aside>
       <h1>App editor</h1>
-      <p>This is the editing workspace. Customize here, then publish to use your app at its own address.</p>
+      <p>Customize your app here, then publish it to use it at its own address.</p>
       <AgentPanel />
       <HostedPanel source_revision={status?.source_revision} import_error={status?.import_error} />
       <details class="project-files"><summary>Project files</summary>
