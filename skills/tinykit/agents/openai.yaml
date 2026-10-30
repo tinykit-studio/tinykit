@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tinykit"
+  short_description: "Build and run private apps with Tinykit"
+  default_prompt: "Use $tinykit to build a private app with persistent data and a local preview."

@@ -9,6 +9,7 @@
   } from "$lib/compiler/init";
   import { watch } from "runed";
   import { Sparkles } from "lucide-svelte";
+  import { isolateCompanionPreview, companionAssetReferences } from '$lib/compiler/companion';
   // Import store type only to avoid hard dependency if possible?
   // We need the value to access state.
   // Using relative path to access route-level store
@@ -16,19 +17,29 @@
   import { debounce, cloneDeep } from "lodash-es";
   let {
     project_id,
+    project_store,
+    companion = false,
+    preview_capability = '',
+    source_revision = '',
+    on_compile,
   }: {
     project_id: string;
+    project_store?: any;
+    companion?: boolean;
+    preview_capability?: string;
+    source_revision?: string;
+    on_compile?: (report: { revision: string; attempt: string; state: 'pending' | 'success' | 'error'; error?: string }) => void;
   } = $props();
 
   // Try to get store from context
-  let store: any = null;
-  try {
-    store = getProjectStore();
-  } catch (e) {
-    // Ignore - not in studio context
-  }
+  const context_store = (() => {
+    try { return getProjectStore(); }
+    catch { return null; }
+  })();
+  const store = $derived(project_store || context_store);
 
   // let realtime_unsubscribe: (() => void) | null = null;
+  const source_tree = $derived(Boolean(store?.project?.source_bundle));
   let is_mounted = false;
 
   let preview_iframe = $state<HTMLIFrameElement | null>(null);
@@ -41,6 +52,7 @@
   // Infinite loop detection via heartbeat monitoring
   let last_heartbeat = $state(0);
   let heartbeat_check_interval: ReturnType<typeof setInterval> | null = null;
+  let last_freeze_check_at = 0;
   let freeze_detected = $state(false); // Prevents auto-recompile after freeze
   let mounting_in_progress = $state(false); // Track if mount is in progress
   let mount_started_at = $state(0); // When mount started
@@ -54,7 +66,7 @@
 
   // Debounced compilation to avoid rapid re-compiles
   const debounced_compile = debounce(() => {
-    if (!is_processing && active_code && !freeze_detected) {
+    if (!source_tree && !is_processing && active_code && !freeze_detected) {
       compile_component();
     }
   }, 150);
@@ -63,8 +75,11 @@
   const active_code = $derived(store?.project?.frontend_code);
   let last_code_snapshot = ""; // Track code to detect actual changes
   watch(
-    () => ({ is_processing, active_code }),
-    ({ is_processing, active_code }) => {
+    () => ({ is_processing, active_code, source_revision }),
+    (value, previous) => {
+      // Store snapshots can change after a data write without changing source.
+      if (previous && value.is_processing === previous.is_processing && value.active_code === previous.active_code && value.source_revision === previous.source_revision) return;
+      const { is_processing, active_code } = value;
       if (is_processing) return;
       // Clear freeze flag when code actually changes (user edited or snapshot restored)
       if (active_code && active_code !== last_code_snapshot) {
@@ -75,9 +90,15 @@
       if (active_code) {
         debounced_compile();
       } else if (!active_code) {
+        compilation_version++;
         compiled_app = null;
         compile_error = null;
         post_to_iframe({ event: "CLEAR_APP" });
+        if (on_compile) {
+          const report = { revision: source_revision, attempt: crypto.randomUUID() };
+          on_compile({ ...report, state: 'pending' });
+          on_compile({ ...report, state: 'success' });
+        }
       }
     },
   );
@@ -97,7 +118,7 @@
     last_data_hash = data_hash;
     post_to_iframe({
       event: "DATA_UPDATED",
-      payload: { data: JSON.parse(data_hash) },
+      payload: { data: companion ? companionAssetReferences(JSON.parse(data_hash), project_id, preview_capability) : JSON.parse(data_hash) },
     });
   }, 50);
 
@@ -122,7 +143,8 @@
   // Reset state when project_id changes
   watch(
     () => project_id,
-    () => {
+    (id, previous) => {
+      if (id === previous) return;
       // Reset all state
       iframe_loaded = false;
       compiled_app = null;
@@ -193,15 +215,32 @@
   }
 
   function check_for_freeze() {
+    const now = Date.now();
+    const parent_was_paused = last_freeze_check_at > 0 && now - last_freeze_check_at > HEARTBEAT_TIMEOUT;
+    last_freeze_check_at = now;
+    // A suspended parent cannot distinguish a frozen iframe from delayed timers.
+    // Give the iframe another heartbeat after the parent resumes.
+    if (parent_was_paused) {
+      last_heartbeat = now;
+      if (mounting_in_progress) mount_started_at = now;
+      return;
+    }
+    if (source_tree) return;
     if (!iframe_loaded) return;
 
-    // Skip freeze detection when tab is hidden - browsers throttle background tabs
-    if (document.visibilityState === "hidden") return;
+    // Embedded browser tabs can remain "visible" when their native host loses
+    // focus, while throttling the iframe's timers. Agent handoff must not turn
+    // that pause into a permanent runtime error when the user returns.
+    if (document.visibilityState === "hidden" || !document.hasFocus()) {
+      last_heartbeat = now;
+      if (mounting_in_progress) mount_started_at = now;
+      return;
+    }
 
     // Skip freeze detection during grace period after code change (e.g., snapshot restore)
     if (last_code_change_at > 0) {
       const grace_elapsed = Date.now() - last_code_change_at;
-      if (grace_elapsed < CODE_CHANGE_GRACE_PERIOD) {
+      if (grace_elapsed < (companion ? 5000 : CODE_CHANGE_GRACE_PERIOD)) {
         return;
       }
     }
@@ -209,7 +248,7 @@
     // Check mount timeout first (very tight - 600ms)
     if (mounting_in_progress && mount_started_at > 0) {
       const mount_elapsed = Date.now() - mount_started_at;
-      if (mount_elapsed > MOUNT_TIMEOUT) {
+      if (mount_elapsed > (companion ? 5000 : MOUNT_TIMEOUT)) {
         trigger_freeze_recovery("Infinite loop detected during component mount. Fix your code and save to retry.");
         return;
       }
@@ -218,7 +257,7 @@
     // Check heartbeat timeout (general freeze detection)
     if (last_heartbeat > 0) {
       const elapsed = Date.now() - last_heartbeat;
-      if (elapsed > HEARTBEAT_TIMEOUT) {
+      if (elapsed > (companion ? 5000 : HEARTBEAT_TIMEOUT)) {
         trigger_freeze_recovery("Infinite loop detected - your code is blocking the main thread. Fix the loop and save to retry.");
         return;
       }
@@ -270,6 +309,7 @@
 
     return () => {
       is_mounted = false;
+      compilation_version++;
       window.removeEventListener("message", handle_iframe_message);
       document.removeEventListener("visibilitychange", handle_visibility_change);
       send_data_update.cancel();
@@ -314,7 +354,9 @@
           design: design_fields,
           project_id,
           data_collections,
+          preview_capability: companion ? preview_capability : '',
         });
+        if (companion) srcdoc = isolateCompanionPreview(srcdoc, project_id, preview_capability);
 
         if (!active_code) return;
         compile_component();
@@ -328,7 +370,7 @@
       content_hash = new_content_hash;
       post_to_iframe({
         event: "UPDATE_CONTENT",
-        payload: { content: transform_content_fields(new_content, project_id) },
+        payload: { content: companion ? companionAssetReferences(transform_content_fields(new_content, project_id), project_id, preview_capability) : transform_content_fields(new_content, project_id) },
       });
     }
 
@@ -351,10 +393,13 @@
   }
 
   async function compile_component() {
+    if (source_tree) return;
     // Don't compile if we just detected a freeze (user must edit code first)
     if (freeze_detected) return;
 
     const my_version = ++compilation_version;
+    const report = { revision: source_revision, attempt: on_compile ? crypto.randomUUID() : '' };
+    on_compile?.({ ...report, state: 'pending' });
 
     is_compiling = true;
     compile_error = null;
@@ -402,6 +447,7 @@
       // Only update UI state if this is still the current compilation
       if (my_version === compilation_version) {
         is_compiling = false;
+        on_compile?.({ ...report, state: compile_error ? 'error' : 'success', ...(compile_error ? { error: compile_error } : {}) });
       }
     }
   }
@@ -414,8 +460,9 @@
     post_to_iframe({
       event: "SET_APP",
       payload: {
-        componentApp: compiled_app,
-        data: project_data,
+        componentApp: companion ? companionAssetReferences(compiled_app, project_id, preview_capability) : compiled_app,
+        content: companion ? companionAssetReferences(transform_content_fields(content_fields, project_id), project_id, preview_capability) : transform_content_fields(content_fields, project_id),
+        data: companion ? companionAssetReferences(project_data, project_id, preview_capability) : project_data,
       },
     });
   }
@@ -441,7 +488,7 @@
           <div class="error-message">{compile_error}</div>
         </div>
       </div>
-      <button
+      {#if !companion}<button
         class="fix-button"
         onclick={() => {
           window.dispatchEvent(
@@ -453,15 +500,20 @@
       >
         <Sparkles class="w-3" />
         Ask agent to fix this
-      </button>
+      </button>{/if}
     </div>
   {/if}
-  {#if srcdoc}
+  {#if source_tree}
+    <iframe title="Published app"
+      src={`/tinykit/preview/${project_id}?v=${encodeURIComponent(store.project.published_html || '')}`}
+      sandbox={companion ? "allow-scripts allow-forms allow-modals allow-popups allow-downloads" : "allow-scripts allow-forms allow-modals allow-popups allow-same-origin allow-downloads"}
+      class="preview-iframe"></iframe>
+  {:else if srcdoc}
     <iframe
       bind:this={preview_iframe}
       title="Preview"
       {srcdoc}
-      sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"
+      sandbox={companion ? "allow-scripts allow-forms allow-modals allow-popups allow-downloads" : "allow-scripts allow-forms allow-modals allow-popups allow-same-origin allow-downloads"}
       class="preview-iframe"
       class:has-error={compile_error}
       class:is-updating={is_compiling}

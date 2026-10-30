@@ -18,6 +18,9 @@
   // Import components
   import Header from "./components/Header.svelte";
   import TemplatePicker from "./components/TemplatePicker.svelte";
+  import ExportProjectDialog from "./components/ExportProjectDialog.svelte";
+  import LocalAgentDialog from "./components/LocalAgentDialog.svelte";
+  import { localEditLink } from "$lib/local-edit-command";
   import DomainPicker from "./components/DomainPicker.svelte";
   import AgentPanel from "./panels/agent/AgentPanel.svelte";
   import CodePanel from "./panels/code/CodePanel.svelte";
@@ -584,11 +587,33 @@
     }
   }
 
-  async function handle_download_project() {
+  let show_export_dialog = $state(false);
+  let local_agent_app = $state<{ id: string; title: string } | null>(null);
+  let local_agent_link = $derived.by(() => {
+    if (!store.project) return undefined;
+    try { return localEditLink(store.project.id, $page.url.origin); }
+    catch { return undefined; }
+  });
+
+  function handle_edit_local_agent() {
+    if (!store.project) return;
+    local_agent_app = { id: store.project.id, title: store.project.name || 'This app' };
+    // The toolbar anchor performs the native handoff as the click's default action.
+  }
+
+  function handle_download_project() {
+    show_export_dialog = true;
+  }
+
+  async function download_project(options: { include_records: boolean; include_assets: boolean }) {
     try {
-      const response = await fetch(`/api/projects/${project_id}/export`);
+      const query = new URLSearchParams({ include_records: options.include_records ? '1' : '0', include_assets: options.include_assets ? '1' : '0' });
+      const response = await fetch(`/api/projects/${project_id}/export?${query}`, {
+        headers: { Authorization: `Bearer ${pb.authStore.token}` },
+      });
       if (!response.ok) {
-        throw new Error(`Failed to export: ${response.statusText}`);
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || `Failed to export: ${response.statusText}`);
       }
       const data = await response.json();
       const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -604,7 +629,7 @@
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error("Failed to download project:", err);
-      alert("Failed to download project. See console for details.");
+      throw err;
     }
   }
 
@@ -676,6 +701,8 @@
           on_deploy={handle_deploy}
           on_load_templates={handle_load_templates}
           on_download_project={handle_download_project}
+          on_edit_local_agent={handle_edit_local_agent}
+          local_edit_href={local_agent_link}
           on_reset_project={handle_reset_project}
           on_toggle_vibe_zone={toggle_vibe_lounge}
           on_title_change={handle_title_change}
@@ -1022,6 +1049,8 @@
           on_deploy={handle_deploy}
           on_load_templates={handle_load_templates}
           on_download_project={handle_download_project}
+          on_edit_local_agent={handle_edit_local_agent}
+          local_edit_href={local_agent_link}
           on_reset_project={handle_reset_project}
           on_toggle_vibe_zone={toggle_vibe_lounge}
           is_mobile={true}
@@ -1114,6 +1143,12 @@
       </div>
 
       <!-- Template Picker Modal -->
+      {#if local_agent_app}
+        <LocalAgentDialog project_id={local_agent_app.id} project_title={local_agent_app.title} on_close={() => (local_agent_app = null)} />
+      {/if}
+      {#if show_export_dialog}
+        <ExportProjectDialog on_download={download_project} on_close={() => (show_export_dialog = false)} />
+      {/if}
       {#if show_template_picker}
         <TemplatePicker
           on_select={handle_template_selected}

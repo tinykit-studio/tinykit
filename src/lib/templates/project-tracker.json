@@ -1,0 +1,171 @@
+{
+  "id": "project-tracker",
+  "name": "Project tracker",
+  "description": "Track projects, tasks, and notes.",
+  "preview": "lucide:folder-kanban",
+  "tags": [
+    "projects",
+    "productivity",
+    "companion"
+  ],
+  "kits": [
+    "business",
+    "freelance"
+  ],
+  "frontend_code": "<script>\n  import { onMount } from 'svelte';\n  import content from '$content';\n  import data from '$data';\n\n  const listParams = { all: true };\n  const statuses = [{value:'active',label:'In progress'}, {value:'planned',label:'Planned'}, {value:'done',label:'Done'}];\n  let projects = $state([]), tasks = $state([]);\n  let ready = $state(false), failure = $state(''), loadFailure = $state(''), busy = $state(false), retrying = $state(false);\n  let selectedId = $state(''), filter = $state('all'), search = $state('');\n  let showCreate = $state(false), projectName = $state(''), description = $state('');\n  let newTask = $state(''), editing = $state(false), edit = $state({});\n  let unsubscribe = () => {}, disposed = false, generation = 0;\n  let projectsReady = $state(false), tasksReady = $state(false), projectsFailed = $state(false), tasksFailed = $state(false);\n  let projectsVersion = 0, tasksVersion = 0, selectionVersion = 0, editVersion = 0;\n  const selected = $derived(projects.find(project => project.id === selectedId) || null);\n  const visible = $derived(projects.filter(project => (filter === 'all' || project.status === filter) && [project.name, project.description, project.owner].some(value => String(value || '').toLowerCase().includes(search.trim().toLowerCase()))));\n  const active = $derived(projects.filter(project => project.status === 'active').length);\n  const completed = $derived(projects.filter(project => project.status === 'done').length);\n  const projectTasks = $derived(tasks.filter(task => task.project_id === selectedId));\n  const completedTasks = $derived(projectTasks.filter(task => task.done).length);\n  const statusLabel = value => statuses.find(status => status.value === value)?.label || 'Planned';\n\n  function parseDate(value) {\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value || '')) return null;\n    const [year, month, day] = value.split('-').map(Number);\n    if (year < 1) return null;\n    const date = new Date(0);\n    date.setFullYear(year, month - 1, day); date.setHours(0, 0, 0, 0);\n    return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date : null;\n  }\n  function dateLabel(value) {\n    const date = parseDate(value);\n    return date ? date.toLocaleDateString(undefined, {month:'short',day:'numeric'}) : 'No deadline';\n  }\n  function updateReadiness() {\n    ready = projectsReady && tasksReady;\n    loadFailure = projectsFailed && tasksFailed ? 'Projects and tasks could not be loaded.' : projectsFailed ? 'Projects could not be loaded.' : tasksFailed ? 'Tasks could not be loaded.' : '';\n  }\n  function receiveProjects(rows) {\n    if (disposed) return;\n    projectsVersion++; projects = [...rows]; projectsReady = true; projectsFailed = false;\n    if (selectedId && !projects.some(project => project.id === selectedId)) { selectedId = ''; editing = false; selectionVersion++; editVersion++; }\n    updateReadiness();\n  }\n  function receiveTasks(rows) {\n    if (disposed) return;\n    tasksVersion++; tasks = [...rows]; tasksReady = true; tasksFailed = false; updateReadiness();\n  }\n  function loadFailed(collection) {\n    if (disposed) return;\n    if (collection === 'projects') projectsFailed = true; else tasksFailed = true;\n    updateReadiness();\n  }\n  function load() {\n    if (disposed) return;\n    const current = ++generation;\n    retrying = false;\n    unsubscribe();\n    const stopProjects = data.projects.subscribe(rows => { if (!disposed && generation === current) receiveProjects(rows); }, listParams, () => { if (!disposed && generation === current) loadFailed('projects'); });\n    const stopTasks = data.tasks.subscribe(rows => { if (!disposed && generation === current) receiveTasks(rows); }, listParams, () => { if (!disposed && generation === current) loadFailed('tasks'); });\n    unsubscribe = () => { stopProjects(); stopTasks(); };\n  }\n  async function retryLoad() {\n    if (retrying || disposed) return;\n    retrying = true;\n    const current = generation, versions = [projectsVersion, tasksVersion];\n    const results = await Promise.allSettled([data.projects.list(listParams), data.tasks.list(listParams)]);\n    if (disposed || current !== generation) return;\n    if (versions[0] === projectsVersion) {\n      if (results[0].status === 'fulfilled') receiveProjects(results[0].value); else loadFailed('projects');\n    }\n    if (versions[1] === tasksVersion) {\n      if (results[1].status === 'fulfilled') receiveTasks(results[1].value); else loadFailed('tasks');\n    }\n    retrying = false;\n  }\n  onMount(() => { load(); return () => { disposed = true; generation++; unsubscribe(); }; });\n\n  async function save(operation, success) {\n    if (busy || disposed) return false;\n    busy = true; failure = '';\n    try { const result = await operation(); if (!disposed) success?.(result); return true; }\n    catch { if (!disposed) failure = 'Could not save this change. Please try again.'; return false; }\n    finally { if (!disposed) busy = false; }\n  }\n  function select(project) {\n    if (selectedId === project.id) return;\n    selectedId = project.id; newTask = ''; editing = false; selectionVersion++; editVersion++;\n  }\n  function clearFilters() { filter = 'all'; search = ''; }\n  async function createProject(event) {\n    event.preventDefault(); if (busy || disposed || !projectsReady) return;\n    const name = projectName.trim(), context = description.trim();\n    if (!name) { failure = 'Enter a project name.'; return; }\n    const selection = selectionVersion, nameDraft = projectName, descriptionDraft = description;\n    await save(() => data.projects.create({name,description:context,status:'active',owner:'',due_date:'',notes:'',created_at:new Date().toISOString()}), project => {\n      if (selectionVersion === selection) { selectedId = project.id; selectionVersion++; editing = false; editVersion++; newTask = ''; clearFilters(); }\n      if (projectName === nameDraft && description === descriptionDraft) { projectName = ''; description = ''; showCreate = false; }\n    });\n  }\n  function beginEdit() { if (!selected) return; edit = {...selected}; editing = true; editVersion++; }\n  function cancelEdit() { editing = false; editVersion++; }\n  async function saveProject(event) {\n    event.preventDefault(); if (busy || disposed) return;\n    const id = edit.id, name = edit.name?.trim();\n    if (!id || !name) { failure = 'Enter a project name.'; return; }\n    if (edit.due_date && !parseDate(edit.due_date)) { failure = 'Enter a valid deadline.'; return; }\n    if (!statuses.some(status => status.value === edit.status)) { failure = 'Choose a project status.'; return; }\n    const fields = {name,description:String(edit.description || '').trim(),status:edit.status,owner:String(edit.owner || '').trim(),due_date:edit.due_date || '',notes:edit.notes || ''};\n    const selection = selectionVersion, version = editVersion;\n    await save(() => data.projects.update(id, fields), () => { if (selectedId === id && selectionVersion === selection && editVersion === version) editing = false; });\n  }\n  async function addTask(event, id) {\n    event.preventDefault(); if (busy || disposed) return;\n    const draft = newTask, title = draft.trim(), selection = selectionVersion;\n    if (!title) { failure = 'Enter a task title.'; return; }\n    if (!projects.some(project => project.id === id)) return;\n    await save(() => data.tasks.create({project_id:id,title,done:false,created_at:new Date().toISOString()}), () => { if (selectedId === id && selectionVersion === selection && newTask === draft) newTask = ''; });\n  }\n  async function toggleTask(task, event) {\n    const id = task.id, done = !!event.currentTarget.checked, control = event.currentTarget;\n    await save(() => data.tasks.update(id, {done}));\n    if (!disposed) control.checked = !!tasks.find(task => task.id === id)?.done;\n  }\n  async function deleteTask(id) { await save(() => data.tasks.delete(id)); }\n</script>\n\n<svelte:head><title>{content.title || 'Project tracker'}</title></svelte:head>\n<div class=\"tracker\">\n  <main>\n    <header><div><h1>{content.title || 'Project tracker'}</h1>{#if content.subtitle}<p>{content.subtitle}</p>{/if}</div><button class=\"primary\" onclick={() => showCreate = !showCreate} aria-expanded={showCreate} disabled={busy || !projectsReady}>New project</button></header>\n    {#if loadFailure}<div class=\"error\" role=\"alert\"><span>{loadFailure}</span><button onclick={retryLoad} disabled={retrying}>{retrying ? 'Retrying\u2026' : 'Retry loading'}</button></div>{/if}\n    {#if failure}<div class=\"error\" role=\"alert\"><span>{failure}</span><button onclick={() => failure = ''}>Dismiss</button></div>{/if}\n    <section class=\"stats\" aria-label=\"Project summary\"><div><span>Total projects</span><strong>{projectsReady ? projects.length : '\u2014'}</strong></div><div><span>In progress</span><strong>{projectsReady ? active : '\u2014'}</strong></div><div><span>Completed</span><strong>{projectsReady ? completed : '\u2014'}</strong></div></section>\n    {#if showCreate}\n      <form class=\"create-form\" onsubmit={createProject} aria-label=\"New project\">\n        <label>Project name<input bind:value={projectName} maxlength=\"120\" placeholder=\"Project name\" disabled={busy} required /></label>\n        <label>Description<input bind:value={description} maxlength=\"1000\" placeholder=\"Optional description\" disabled={busy} /></label>\n        <div><button type=\"button\" onclick={() => showCreate = false} disabled={busy}>Cancel</button><button class=\"primary\" disabled={busy || !projectName.trim()}>{busy ? 'Creating\u2026' : 'Create project'}</button></div>\n      </form>\n    {/if}\n    <div class=\"work\">\n      <section class=\"projects\" aria-label=\"Projects\">\n        <div class=\"section-heading\"><h2>Projects</h2><span>{visible.length}</span></div>\n        <label class=\"search\"><span>Search projects</span><input type=\"search\" bind:value={search} placeholder=\"Find a project\u2026\" /></label>\n        <div class=\"filters\" aria-label=\"Filter projects\"><button class:current={filter === 'all'} aria-pressed={filter === 'all'} onclick={() => filter = 'all'}>All</button>{#each statuses as status}<button class:current={filter === status.value} aria-pressed={filter === status.value} onclick={() => filter = status.value}>{status.label}</button>{/each}</div>\n        {#if !projectsReady && !projectsFailed}<p class=\"empty\" role=\"status\">Loading projects\u2026</p>{:else if !visible.length && projectsReady}<div class=\"empty\"><h3>{projects.length ? 'No matching projects' : 'No projects yet'}</h3>{#if projects.length}<button onclick={clearFilters}>Clear filters</button>{:else}<button onclick={() => showCreate = true} disabled={busy}>Create project</button>{/if}</div>{:else}\n          <div class=\"project-list\">{#each visible as project (project.id)}\n            {@const rows = tasks.filter(task => task.project_id === project.id)}\n            <button class=\"project-card\" class:selected={selectedId === project.id} onclick={() => select(project)} aria-pressed={selectedId === project.id}>\n              <div class=\"card-top\"><span class=\"status\" class:done={project.status === 'done'}>{statusLabel(project.status)}</span></div>\n              <h3>{project.name}</h3>{#if project.description}<p>{project.description}</p>{/if}\n              <div class=\"card-footer\"><span>{project.owner || 'Unassigned'}</span><span>{dateLabel(project.due_date)}</span></div>\n              {#if rows.length}<div class=\"task-progress\"><progress max={rows.length} value={rows.filter(task => task.done).length} aria-label={`Tasks completed for ${project.name}`}></progress><span>{rows.filter(task => task.done).length}/{rows.length} tasks</span></div>{/if}\n            </button>\n          {/each}</div>\n        {/if}\n      </section>\n      <section class=\"details\" aria-label=\"Project details\">\n        {#if selected}\n          <div class=\"section-heading\"><h2>Project details</h2><button onclick={beginEdit} disabled={busy || editing}>Edit project</button></div>\n          {#if editing}\n            <form class=\"edit-form\" onsubmit={saveProject}>\n              <label>Project name<input bind:value={edit.name} disabled={busy} maxlength=\"120\" required /></label><label>Description<textarea bind:value={edit.description} disabled={busy} rows=\"2\" maxlength=\"1000\"></textarea></label>\n              <div class=\"edit-row\"><label>Status<select bind:value={edit.status} disabled={busy}>{#each statuses as status}<option value={status.value}>{status.label}</option>{/each}</select></label><label>Owner<input bind:value={edit.owner} disabled={busy} maxlength=\"120\" /></label></div>\n              <label>Deadline<input type=\"date\" bind:value={edit.due_date} disabled={busy} /></label><label>Notes<textarea bind:value={edit.notes} disabled={busy} rows=\"4\" maxlength=\"10000\"></textarea></label>\n              <div class=\"form-actions\"><button type=\"button\" onclick={cancelEdit} disabled={busy}>Cancel</button><button class=\"primary\" disabled={busy}>{busy ? 'Saving\u2026' : 'Save project'}</button></div>\n            </form>\n          {:else}\n            <h2 class=\"detail-title\">{selected.name}</h2>{#if selected.description}<p>{selected.description}</p>{/if}\n            <div class=\"metadata\"><span class=\"status\" class:done={selected.status === 'done'}>{statusLabel(selected.status)}</span><span>{selected.owner || 'No owner yet'}</span><span>{dateLabel(selected.due_date)}</span></div>\n            <div class=\"section-heading tasks-heading\"><h3>Tasks</h3><span>{completedTasks}/{projectTasks.length}</span></div>\n            <form class=\"add-task\" onsubmit={event => addTask(event, selected.id)}><label class=\"sr-only\" for=\"new-task\">New task</label><input id=\"new-task\" bind:value={newTask} placeholder=\"Task title\" disabled={busy || !tasksReady} maxlength=\"500\" /><button class=\"primary\" disabled={busy || !tasksReady || !newTask.trim()}>Add task</button></form>\n            {#if !tasksReady}<p class=\"task-empty\" role=\"status\">{tasksFailed ? 'Tasks could not be loaded.' : 'Loading tasks\u2026'}</p>{/if}\n            <ul class=\"tasks\">{#each projectTasks as task (task.id)}<li><label><input type=\"checkbox\" checked={task.done} disabled={busy} onchange={event => toggleTask(task, event)} /><span class:finished={task.done}>{task.title}</span></label><button class=\"delete-task\" aria-label={`Delete ${task.title}`} disabled={busy} onclick={() => deleteTask(task.id)}>\u00d7</button></li>{/each}</ul>\n            {#if tasksReady && !projectTasks.length}<p class=\"task-empty\">No tasks yet.</p>{/if}\n            <div class=\"notes\"><h3>Notes</h3><p>{selected.notes || 'No notes yet.'}</p></div>\n          {/if}\n        {:else}<div class=\"detail-empty\"><h2>Select a project</h2><p>View its details, tasks, and notes.</p></div>{/if}\n      </section>\n    </div>\n  </main>\n</div>\n<style>\n  .tracker { min-height:100vh; background:var(--page-background,#f5f6f1); color:var(--heading-color,#23342b); font-family:system-ui,-apple-system,sans-serif; font-size:14px; line-height:1.5; }\n  * { box-sizing:border-box; }\n  main { max-width:1200px; margin:auto; padding:28px 28px 40px; }\n  header { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:24px; }\n  h1 { font-size:20px; font-weight:600; letter-spacing:-.3px; margin:0; }\n  h2 { font-size:15px; font-weight:600; margin:0; }\n  h3 { font-size:14px; font-weight:500; margin:0; }\n  p { color:#667365; margin:8px 0; line-height:1.5; overflow-wrap:anywhere; }\n  button,input,textarea,select { font:inherit; }\n  button { cursor:pointer; min-height:36px; border:1px solid #d9dfd3; border-radius:5px; background:#fff; color:inherit; padding:7px 12px; font-size:13px; font-weight:500; }\n  button:hover:enabled { background:#edf2e9; }\n  button:disabled { opacity:.5; cursor:default; }\n  .primary { color:white; background:var(--accent-color,#3e5e4c); border-color:var(--accent-color,#3e5e4c); }\n  .primary:hover:enabled { filter:brightness(.94); background:var(--accent-color,#3e5e4c); }\n  .stats { display:grid; grid-template-columns:repeat(3,1fr); border-bottom:1px solid #dce2d6; padding-bottom:20px; margin-bottom:24px; gap:16px; }\n  .stats span { display:block; font-size:12px; color:#667365; }\n  .stats strong { display:block; font-size:22px; line-height:1.4; font-weight:500; font-variant-numeric:tabular-nums; }\n  .work { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,.9fr); gap:20px; align-items:start; }\n  .projects,.details { min-width:0; background:#fff; border:1px solid #dfe5d9; border-radius:6px; padding:20px; }\n  .section-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:16px; }\n  .section-heading>span { font-size:12px; color:#667365; font-variant-numeric:tabular-nums; }\n  .search { display:block; }\n  .search>span,.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }\n  input,textarea,select { width:100%; min-width:0; min-height:38px; border:1px solid #dce2d5; border-radius:5px; background:#fcfdf9; padding:8px 10px; color:inherit; font-size:14px; }\n  input::placeholder,textarea::placeholder { color:#788274; }\n  textarea { resize:vertical; }\n  .filters { display:flex; flex-wrap:wrap; gap:4px; margin:12px 0 16px; }\n  .filters button { border-color:transparent; background:transparent; padding:6px 9px; color:#667365; font-size:12px; }\n  .filters button.current { background:#e8eee1; color:var(--accent-color,#3e5e4c); }\n  .project-list { display:grid; gap:8px; }\n  .project-card { display:block; text-align:left; width:100%; padding:14px; border-radius:5px; border:1px solid #e2e6dc; background:#fff; overflow-wrap:anywhere; }\n  .project-card.selected { border-color:var(--accent-color,#3e5e4c); background:#f4f7ee; }\n  .card-top,.card-footer { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }\n  .status { display:inline-block; background:#edf1e8; color:var(--accent-color,#3e5e4c); border-radius:4px; padding:3px 7px; font-size:11px; font-weight:500; }\n  .status.done { background:#e3eddf; }\n  .project-card h3 { margin:9px 0 4px; font-size:15px; }\n  .project-card p { font-weight:400; font-size:13px; margin-bottom:12px; }\n  .card-footer { color:#667365; font-size:12px; font-weight:400; margin-top:10px; }\n  .task-progress { display:flex; align-items:center; gap:12px; margin-top:12px; font-size:11px; color:#667365; }\n  progress { appearance:none; display:block; width:100%; height:4px; border:0; border-radius:4px; overflow:hidden; background:#e2e8d9; }\n  progress::-webkit-progress-bar { background:#e2e8d9; }\n  progress::-webkit-progress-value { background:var(--accent-color,#3e5e4c); }\n  progress::-moz-progress-bar { background:var(--accent-color,#3e5e4c); }\n  .task-progress>span { white-space:nowrap; }\n  .details { position:sticky; top:20px; }\n  .detail-title { font-size:18px; letter-spacing:-.3px; margin:20px 0 8px; overflow-wrap:anywhere; }\n  .metadata { display:flex; gap:10px; align-items:center; flex-wrap:wrap; font-size:12px; color:#667365; margin-top:16px; overflow-wrap:anywhere; }\n  .tasks-heading { margin-top:24px; margin-bottom:12px; }\n  .add-task { display:flex; gap:8px; }\n  .add-task button { white-space:nowrap; }\n  .tasks { list-style:none; padding:0; margin:12px 0; }\n  .tasks li { display:flex; align-items:center; border-bottom:1px solid #eef1e8; gap:8px; }\n  .tasks label { display:flex; align-items:center; gap:10px; flex:1; min-width:0; padding:10px 0; font-size:14px; }\n  .tasks label span { overflow-wrap:anywhere; }\n  .tasks input { width:18px; height:18px; min-height:18px; flex-shrink:0; margin:0; accent-color:var(--accent-color,#3e5e4c); }\n  .finished { text-decoration:line-through; color:#788274; }\n  .delete-task { min-width:36px; border:0; padding:4px 8px; background:transparent; color:#667365; font-size:20px; }\n  .notes { border-top:1px solid #e6ebdf; margin-top:20px; padding-top:16px; }\n  .notes p { white-space:pre-wrap; font-size:13px; }\n  .task-empty { font-size:13px; }\n  .detail-empty { padding:30px 8px; text-align:center; }\n  .detail-empty h2 { font-size:15px; }\n  .detail-empty p { font-size:13px; }\n  .create-form { padding:20px; background:#fff; border:1px solid #d9e1d1; border-radius:6px; margin-bottom:20px; display:grid; grid-template-columns:1fr 1fr; gap:16px; }\n  .create-form>div { grid-column:1/-1; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }\n  label { font-size:13px; color:#52664d; min-width:0; }\n  label>input,label>textarea,label>select { margin-top:6px; }\n  .edit-form { display:grid; gap:14px; }\n  .edit-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }\n  .form-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:8px; }\n  .empty { padding:30px 8px; text-align:center; font-size:13px; }\n  .empty button { margin-top:12px; }\n  .error { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; background:#fff8f4; border:1px solid #ead4be; padding:12px; border-radius:5px; margin-bottom:20px; color:#8d4726; font-size:13px; }\n  button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible { outline:2px solid var(--accent-color,#3e5e4c); outline-offset:3px; }\n  @media(max-width:800px) { .work { grid-template-columns:1fr; } .details { position:static; } }\n  @media(max-width:520px) { main { padding:20px 14px 32px; } header { gap:12px; } header>.primary { white-space:nowrap; padding:7px 10px; } .create-form { grid-template-columns:1fr; } .projects,.details,.create-form { padding:16px; } .edit-row { grid-template-columns:1fr; } input,textarea,select { font-size:16px; } .stats { gap:10px; } .stats span { font-size:11px; } }\n  @media(prefers-reduced-motion:reduce) { * { scroll-behavior:auto; } }\n</style>\n",
+  "content": [
+    {
+      "id": "title",
+      "name": "Title",
+      "type": "text",
+      "value": "Project tracker",
+      "description": ""
+    },
+    {
+      "id": "subtitle",
+      "name": "Subtitle",
+      "type": "text",
+      "value": "",
+      "description": ""
+    }
+  ],
+  "design": [
+    {
+      "id": "page-background",
+      "name": "Background",
+      "css_var": "--page-background",
+      "type": "color",
+      "value": "#f5f6f1",
+      "description": ""
+    },
+    {
+      "id": "accent-color",
+      "name": "Accent",
+      "css_var": "--accent-color",
+      "type": "color",
+      "value": "#3e5e4c",
+      "description": ""
+    },
+    {
+      "id": "heading-color",
+      "name": "Text",
+      "css_var": "--heading-color",
+      "type": "color",
+      "value": "#23342b",
+      "description": ""
+    }
+  ],
+  "data": {
+    "projects": {
+      "schema": [
+        {
+          "name": "name",
+          "type": "text"
+        },
+        {
+          "name": "description",
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "type": "text"
+        },
+        {
+          "name": "owner",
+          "type": "text"
+        },
+        {
+          "name": "due_date",
+          "type": "text"
+        },
+        {
+          "name": "notes",
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "type": "text"
+        }
+      ],
+      "records": []
+    },
+    "tasks": {
+      "schema": [
+        {
+          "name": "project_id",
+          "type": "text"
+        },
+        {
+          "name": "title",
+          "type": "text"
+        },
+        {
+          "name": "done",
+          "type": "boolean"
+        },
+        {
+          "name": "created_at",
+          "type": "text"
+        }
+      ],
+      "records": []
+    }
+  },
+  "preview_records": {
+    "projects": [
+      {
+        "id": "sample-website",
+        "name": "Website refresh",
+        "description": "Update the homepage, navigation, and project pages.",
+        "status": "active",
+        "owner": "Alex",
+        "due_date": "2026-10-28",
+        "notes": "Keep it simple. Start with the pages people visit most.",
+        "created_at": "2026-10-21T12:00:00Z"
+      },
+      {
+        "id": "sample-launch",
+        "name": "Studio launch",
+        "description": "Prepare the site, pricing, and launch checklist.",
+        "status": "planned",
+        "owner": "Sam",
+        "due_date": "",
+        "notes": "",
+        "created_at": "2026-10-21T12:00:00Z"
+      },
+      {
+        "id": "sample-research",
+        "name": "Customer conversations",
+        "description": "Interview customers and record product feedback.",
+        "status": "done",
+        "owner": "Alex",
+        "due_date": "",
+        "notes": "Three conversations, lots of useful ideas.",
+        "created_at": "2026-10-21T12:00:00Z"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "sample-task-1",
+        "project_id": "sample-website",
+        "title": "Sketch the new homepage",
+        "done": true,
+        "created_at": "2026-10-21T12:00:00Z"
+      },
+      {
+        "id": "sample-task-2",
+        "project_id": "sample-website",
+        "title": "Choose the type and colors",
+        "done": false,
+        "created_at": "2026-10-21T12:00:00Z"
+      },
+      {
+        "id": "sample-task-3",
+        "project_id": "sample-launch",
+        "title": "Write the first announcement",
+        "done": false,
+        "created_at": "2026-10-21T12:00:00Z"
+      }
+    ]
+  }
+}

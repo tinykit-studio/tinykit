@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import { getProject, pb } from '$lib/server/pb'
+import { getProject, pb, withProjectLock } from '$lib/server/pb'
 import { check_rate_limit, check_origin, get_client_ip } from '$lib/server/data-security'
 import { validate_schema } from '$lib/server/data-utils'
 
@@ -85,66 +85,68 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 	const { project_id, collection, id } = params
 
 	try {
-		const project = await getProject(project_id)
-		if (!project) throw error(404, 'Project not found')
+		return await withProjectLock(project_id, async () => {
+			const project = await getProject(project_id)
+			if (!project) throw error(404, 'Project not found')
 
-		// Security checks
-		check_origin(request, project.domain)
-		check_rate_limit(get_client_ip(request))
+			// Security checks
+			check_origin(request, project.domain)
+			check_rate_limit(get_client_ip(request))
 
-		// Parse request body - handle both JSON and FormData
-		let updates: Record<string, any>
-		const content_type = request.headers.get('content-type') || ''
+			// Parse request body - handle both JSON and FormData
+			let updates: Record<string, any>
+			const content_type = request.headers.get('content-type') || ''
 
-		if (content_type.includes('multipart/form-data')) {
-			updates = await parse_form_data_with_files(request, project_id)
-		} else if (content_type.includes('application/json')) {
-			updates = await request.json()
-		} else {
-			try {
-				updates = await request.json()
-			} catch {
+			if (content_type.includes('multipart/form-data')) {
 				updates = await parse_form_data_with_files(request, project_id)
+			} else if (content_type.includes('application/json')) {
+				updates = await request.json()
+			} else {
+				try {
+					updates = await request.json()
+				} catch {
+					updates = await parse_form_data_with_files(request, project_id)
+				}
 			}
-		}
 
-		const data = project.data || {}
+			const data = project.data || {}
 
-		if (!(collection in data)) {
-			throw error(404, 'Collection not found')
-		}
+			if (!(collection in data)) {
+				throw error(404, 'Collection not found')
+			}
 
-		const collection_data = data[collection]
-		const records = get_records(collection_data)
-		// Use loose comparison to handle numeric IDs from legacy data
-		const index = records.findIndex((r: any) => String(r.id) === String(id))
-		if (index === -1) {
-			throw error(404, 'Record not found')
-		}
+			const collection_data = data[collection]
+			const records = get_records(collection_data)
+			// Use loose comparison to handle numeric IDs from legacy data
+			const index = records.findIndex((r: any) => String(r.id) === String(id))
+			if (index === -1) {
+				throw error(404, 'Record not found')
+			}
 
-		// Validate fields against schema
-		const { warnings } = validate_schema(collection_data, updates)
+			// Validate fields against schema
+			const { warnings } = validate_schema(collection_data, updates)
 
-		// Update record, preserving id
-		const existing = records[index]
-		const updated = {
-			...existing,
-			...updates,
-			id: existing.id
-		}
+			// Update record, preserving id
+			const existing = records[index]
+			const updated = {
+				...existing,
+				...updates,
+				id: existing.id
+			}
 
-		records[index] = updated
-		data[collection] = set_records(collection_data, records)
+			records[index] = updated
+			data[collection] = set_records(collection_data, records)
 
-		// Save back to project
-		await pb.collection('_tk_projects').update(project_id, { data })
+			// Save back to project
+			await pb.collection('_tk_projects').update(project_id, { data })
 
-		// Include warnings in response if any
-		const response_body = warnings.length > 0
-			? { ...updated, _warnings: warnings }
-			: updated
+			// Include warnings in response if any
+			const response_body = warnings.length > 0
+				? { ...updated, _warnings: warnings }
+				: updated
 
-		return json(response_body)
+			return json(response_body)
+		})
 	} catch (err: any) {
 		if (err.status) throw err
 		console.error('[Data API] Update error:', err)
@@ -242,34 +244,36 @@ export const DELETE: RequestHandler = async ({ params, request }) => {
 	const { project_id, collection, id } = params
 
 	try {
-		const project = await getProject(project_id)
-		if (!project) throw error(404, 'Project not found')
+		return await withProjectLock(project_id, async () => {
+			const project = await getProject(project_id)
+			if (!project) throw error(404, 'Project not found')
 
-		// Security checks
-		check_origin(request, project.domain)
-		check_rate_limit(get_client_ip(request))
+			// Security checks
+			check_origin(request, project.domain)
+			check_rate_limit(get_client_ip(request))
 
-		const data = project.data || {}
+			const data = project.data || {}
 
-		if (!(collection in data)) {
-			throw error(404, 'Collection not found')
-		}
+			if (!(collection in data)) {
+				throw error(404, 'Collection not found')
+			}
 
-		const records = get_records(data[collection])
-		// Use loose comparison to handle numeric IDs from legacy data
-		const index = records.findIndex((r: any) => String(r.id) === String(id))
-		if (index === -1) {
-			throw error(404, 'Record not found')
-		}
+			const records = get_records(data[collection])
+			// Use loose comparison to handle numeric IDs from legacy data
+			const index = records.findIndex((r: any) => String(r.id) === String(id))
+			if (index === -1) {
+				throw error(404, 'Record not found')
+			}
 
-		// Remove record
-		records.splice(index, 1)
-		data[collection] = set_records(data[collection], records)
+			// Remove record
+			records.splice(index, 1)
+			data[collection] = set_records(data[collection], records)
 
-		// Save back to project
-		await pb.collection('_tk_projects').update(project_id, { data })
+			// Save back to project
+			await pb.collection('_tk_projects').update(project_id, { data })
 
-		return new Response(null, { status: 204 })
+			return new Response(null, { status: 204 })
+		})
 	} catch (err: any) {
 		if (err.status) throw err
 		console.error('[Data API] Delete error:', err)

@@ -37,7 +37,7 @@ export function check_origin(request: Request, project_domain: string | undefine
 		'http://127.0.0.1:5173'
 	]
 
-	if (!allowed_origins.some(allowed => origin.startsWith(allowed))) {
+	if (origin !== new URL(request.url).origin && !allowed_origins.includes(origin)) {
 		throw error(403, 'Origin not allowed')
 	}
 }

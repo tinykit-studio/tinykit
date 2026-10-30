@@ -58,7 +58,7 @@ export async function delete_snapshot(project_id: string, id: string): Promise<v
 
 export async function restore_from_snapshot_data(
 	project_id: string,
-	data: { frontend_code: string; design: DesignField[]; content: ContentField[]; collections?: CollectionSchema[] }
+	data: { frontend_code: string; design: DesignField[]; content: ContentField[]; collections?: CollectionSchema[]; data?: Record<string, any>; backend_code?: string; custom_instructions?: string; source_bundle?: Project['source_bundle'] | null }
 ): Promise<void> {
 	const project = await get_project(project_id)
 	const update_data: Partial<Project> = {
@@ -66,9 +66,13 @@ export async function restore_from_snapshot_data(
 		design: data.design,
 		content: data.content
 	}
+	if (data.backend_code !== undefined) update_data.backend_code = data.backend_code
+	if (data.custom_instructions !== undefined) update_data.custom_instructions = data.custom_instructions
+	if (data.source_bundle !== undefined) update_data.source_bundle = data.source_bundle
+	if (data.data !== undefined) update_data.data = data.data
 
 	// Restore collection schemas and records if provided
-	if (data.collections && Array.isArray(data.collections) && data.collections.length > 0) {
+	if (data.data === undefined && data.collections && Array.isArray(data.collections) && data.collections.length > 0) {
 		const updated_data = { ...project.data }
 		for (const col of data.collections) {
 			// Restore both schema and records from snapshot

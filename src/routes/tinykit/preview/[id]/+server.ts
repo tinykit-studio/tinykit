@@ -28,7 +28,7 @@ export const GET: RequestHandler = async ({ params }) => {
 
 	// Serve the production app (compiled HTML from file attachment)
 	if (project.published_html) {
-		const file_url = pb.files.getURL(project, project.published_html)
+		const file_url = pb.files.getURL(project, project.published_html, { token: await pb.files.getToken() })
 		const response = await fetch(file_url)
 		if (response.ok) {
 			const html = await response.text()

@@ -1,7 +1,8 @@
 import { json, error } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import { getProject, pb } from '$lib/server/pb'
+import { getProject, pb, withProjectLock } from '$lib/server/pb'
 import { check_rate_limit, check_origin, get_client_ip } from '$lib/server/data-security'
+import { assert_unique_record, DataMutationError } from '$lib/server/data-mutations'
 import { validate_schema, generate_id } from '$lib/server/data-utils'
 
 /**
@@ -108,70 +109,74 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	const { project_id, collection } = params
 
 	try {
-		// Get project first (needed for origin check and file uploads)
-		const project = await getProject(project_id)
-		if (!project) throw error(404, 'Project not found')
+		return await withProjectLock(project_id, async () => {
+			// Get project first (needed for origin check and file uploads)
+			const project = await getProject(project_id)
+			if (!project) throw error(404, 'Project not found')
 
-		// Security checks
-		check_origin(request, project.domain)
-		check_rate_limit(get_client_ip(request))
+			// Security checks
+			check_origin(request, project.domain)
+			check_rate_limit(get_client_ip(request))
 
-		// Parse request body - handle both JSON and FormData
-		let body: Record<string, any>
-		const content_type = request.headers.get('content-type') || ''
+			// Parse request body - handle both JSON and FormData
+			let body: Record<string, any>
+			const content_type = request.headers.get('content-type') || ''
 
-		if (content_type.includes('multipart/form-data')) {
-			// FormData with potential file uploads
-			body = await parse_form_data_with_files(request, project_id)
-		} else if (content_type.includes('application/json')) {
-			body = await request.json()
-		} else {
-			// Try JSON first, fall back to FormData
-			try {
-				body = await request.json()
-			} catch {
+			if (content_type.includes('multipart/form-data')) {
+				// FormData with potential file uploads
 				body = await parse_form_data_with_files(request, project_id)
+			} else if (content_type.includes('application/json')) {
+				body = await request.json()
+			} else {
+				// Try JSON first, fall back to FormData
+				try {
+					body = await request.json()
+				} catch {
+					body = await parse_form_data_with_files(request, project_id)
+				}
 			}
-		}
 
-		const data = project.data || {}
+			const data = project.data || {}
 
-		// Initialize collection if it doesn't exist (new format)
-		if (!(collection in data)) {
-			data[collection] = { schema: [], records: [] }
-		}
+			// Initialize collection if it doesn't exist (new format)
+			if (!(collection in data)) {
+				data[collection] = { schema: [], records: [] }
+			}
 
-		// Expect { schema, records } format
-		const collection_data = data[collection]
-		if (!collection_data.records) {
-			collection_data.records = []
-		}
+			// Expect { schema, records } format
+			if (Array.isArray(data[collection])) data[collection] = {schema: [], records: data[collection]}
+			const collection_data = data[collection]
+			if (!collection_data.records) {
+				collection_data.records = []
+			}
 
-		// Validate fields against schema
-		const { warnings } = validate_schema(collection_data, body)
+			// Validate fields against schema
+			const { warnings } = validate_schema(collection_data, body)
 
-		// Generate ID if not provided
-		const record = {
-			id: body.id || generate_id(),
-			...body
-		}
+			assert_unique_record(collection_data.records, body, new URL(request.url).searchParams.getAll('unique'))
 
-		// Add record
-		collection_data.records.push(record)
+			// Generate ID if not provided
+			const record = {
+				id: body.id || generate_id(),
+				...body
+			}
 
-		// Save back to project
-		await pb.collection('_tk_projects').update(project_id, { data })
+			// Add record
+			collection_data.records.push(record)
 
-		// Include warnings in response if any
-		const response_body = warnings.length > 0
-			? { ...record, _warnings: warnings }
-			: record
+			// Save back to project
+			await pb.collection('_tk_projects').update(project_id, { data })
 
-		return json(response_body, { status: 201 })
+			// Include warnings in response if any
+			const response_body = warnings.length > 0
+				? { ...record, _warnings: warnings }
+				: record
+
+			return json(response_body, { status: 201 })
+		})
 	} catch (err: any) {
-		if (err.status === 404) {
-			throw error(404, 'Project not found')
-		}
+		if (err instanceof DataMutationError) throw error(err.status, err.message)
+		if (err.status) throw err
 		console.error('[Data API] Create error:', err)
 		throw error(500, 'Failed to create record')
 	}

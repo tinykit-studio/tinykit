@@ -440,7 +440,7 @@
             </div>
             <a
               href="/tinykit/settings"
-              class="inline-flex items-center gap-2 px-4 py-2 bg-[var(--builder-accent)] text-white rounded-lg hover:bg-[var(--builder-accent-hover)] transition-colors text-sm font-medium"
+              class="inline-flex items-center gap-2 px-4 py-2 bg-[var(--builder-accent)] text-[var(--builder-accent-text)] rounded-lg hover:bg-[var(--builder-accent-hover)] transition-colors text-sm font-medium"
             >
               <Settings class="w-4 h-4" />
               Configure AI
@@ -642,7 +642,7 @@
           class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-colors {agent_input.trim() &&
           !show_loading &&
           llm_configured !== false
-            ? 'bg-[var(--builder-accent)] text-white'
+            ? 'bg-[var(--builder-accent)] text-[var(--builder-accent-text)]'
             : 'bg-[var(--builder-bg-tertiary)] text-[var(--builder-text-secondary)]'}"
         >
           <ArrowUp class="w-4 h-4" />

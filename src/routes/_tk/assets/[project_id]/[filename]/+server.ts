@@ -79,7 +79,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
 		const file_url = pb.files.getURL(
 			{ id: project.id, collectionId: project.collectionId || '_tk_projects' },
 			filename,
-			thumb ? { thumb } : undefined
+			{ ...(thumb ? { thumb } : {}), token: await pb.files.getToken() }
 		)
 
 		// Proxy the file from Pocketbase

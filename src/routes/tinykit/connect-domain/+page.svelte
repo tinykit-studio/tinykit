@@ -92,12 +92,7 @@
 	}
 
 	function go_to_new_app() {
-		// First kit, or new-kit if none exist
-		if (kits.length > 0) {
-			goto(`/tinykit/new?kit=${kits[0].id}&domain=${encodeURIComponent(domain)}`)
-		} else {
-			goto(`/tinykit/new-kit?domain=${encodeURIComponent(domain)}`)
-		}
+		goto(`/tinykit/new?domain=${encodeURIComponent(domain)}`)
 	}
 </script>
 

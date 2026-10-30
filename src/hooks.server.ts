@@ -1,6 +1,8 @@
 import type { Handle } from '@sveltejs/kit'
 import { env } from '$env/dynamic/private'
 import { getProjectByDomain, trackAvailableDomain } from '$lib/server/pb'
+import { companionEnabled, guardCompanion, companionAsset, companionPreviewRequest } from '$lib/server/companion'
+import { privateAppGuard } from '$lib/server/private-apps'
 
 /**
  * Normalize a domain for matching
@@ -28,6 +30,43 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	// Store domain in locals for use by routes
 	event.locals.domain = domain
+
+	// This separate local mode exposes only the companion and its isolated app data.
+	// It never opens Studio administration or a PocketBase proxy without login.
+	if (companionEnabled()) {
+		const isolatedPreview = companionPreviewRequest(event.request)
+		if (!isolatedPreview) guardCompanion(event.request)
+		if (isolatedPreview && event.request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors_headers })
+		const finish = (response: Response) => {
+			if (isolatedPreview) for (const [key, value] of Object.entries(cors_headers)) response.headers.set(key, value)
+			return response
+		}
+		const id = env.TINYKIT_COMPANION_ID!
+		const assetPrefix = `/_tk/assets/${id}/`
+		if (url.pathname.startsWith(assetPrefix) && event.request.method === 'GET') {
+			const filename = decodeURIComponent(url.pathname.slice(assetPrefix.length))
+			if (!filename.startsWith('placeholder')) {
+				try { return finish(await companionAsset(filename)) } catch (err: any) {
+					// Files uploaded while using the preview live in its isolated PocketBase.
+					if (err.status !== 404) throw err
+				}
+			}
+			return finish(await resolve(event))
+		}
+		if (url.pathname === '/companion' || url.pathname === '/companion/state' || url.pathname === '/companion/hosted' || url.pathname === '/companion/agent' || url.pathname.startsWith(`/_tk/data/${id}/`) || url.pathname === `/_tk/realtime/${id}`) return finish(await resolve(event))
+		return new Response('Not available in the local companion.', { status: 404 })
+	}
+
+	const access = await privateAppGuard(event)
+	if (access.response) return access.response
+	if (access.private) {
+		const response = await resolve(event)
+		const headers = new Headers(response.headers)
+		headers.set('Cache-Control', 'private, no-store')
+		headers.set('Vary', 'Cookie, Authorization')
+		headers.set('X-Content-Type-Options', 'nosniff')
+		return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
+	}
 
 	// Handle CORS preflight for /_tk/ routes (data API, assets, realtime)
 	if (url.pathname.startsWith('/_tk/') && event.request.method === 'OPTIONS') {

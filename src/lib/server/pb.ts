@@ -9,7 +9,7 @@ import { env } from '$env/dynamic/private'
 import * as fs from 'fs'
 
 const PB_URL = env.POCKETBASE_URL || 'http://127.0.0.1:8091'
-const SETUP_FILE = './pocketbase/pb_data/.setup_complete'
+const SETUP_FILE = env.TINYKIT_SETUP_FILE || './pocketbase/pb_data/.setup_complete'
 
 // Create singleton PB client
 export const pb = new PocketBase(PB_URL)
@@ -78,7 +78,17 @@ function getPasswordCredentials(): { email: string; password: string } | null {
 	return null
 }
 
+let authenticationInFlight: Promise<boolean> | null = null
+
 export async function ensureAuth(): Promise<boolean> {
+	if (authenticationInFlight) return authenticationInFlight
+	const attempt = authenticateServer()
+	authenticationInFlight = attempt
+	try { return await attempt }
+	finally { if (authenticationInFlight === attempt) authenticationInFlight = null }
+}
+
+async function authenticateServer(): Promise<boolean> {
 	// If already authenticated with valid token, return true
 	if (isAuthenticated && pb.authStore.isValid) {
 		return true
@@ -180,9 +190,12 @@ export type Project = {
 	collectionId: string
 	collectionName: string
 	name: string
+	owner?: string
+	visibility?: 'public' | 'private' | ''
 	domain: string
 	kit: string
 	frontend_code: string
+	source_bundle?: { format_version: number; files: Record<string, string> }
 	backend_code: string
 	published_html: string // filename of the compiled HTML file attachment
 	assets: string[] // filenames of uploaded assets
@@ -193,6 +206,8 @@ export type Project = {
 	custom_instructions: string
 	data: Record<string, any>
 	settings: Record<string, any>
+	cli_schema?: Record<string, any[]>
+	cli_publication?: any
 	created: string
 	updated: string
 }
@@ -238,7 +253,18 @@ export async function getProject(id: string): Promise<Project | null> {
 	}
 
 	try {
-		return await pb.collection('_tk_projects').getOne(id)
+		const project = await pb.collection('_tk_projects').getOne<Project>(id)
+		// Schema activation is independent of stored rows. Materialize empty new
+		// collections for the data API without changing the persisted records.
+		if (project.cli_schema) {
+			const data = { ...(project.data || {}) }
+			for (const [name, schema] of Object.entries(project.cli_schema)) {
+				const current = data[name]
+				data[name] = { schema, records: Array.isArray(current) ? current : current?.records || [] }
+			}
+			project.data = data
+		}
+		return project
 	} catch (err: any) {
 		console.error(`[PB] Failed to get project ${id}:`, err?.message || err)
 		return null
@@ -275,6 +301,9 @@ export async function getProjectByDomain(domain: string): Promise<Project | null
  */
 export async function createProject(data: {
 	name: string
+	owner?: string
+	visibility?: 'public' | 'private'
+	data?: Record<string, any>
 	domain?: string
 	kit?: string
 	frontend_code?: string
@@ -287,6 +316,8 @@ export async function createProject(data: {
 
 	const project_data: any = {
 		name: data.name,
+		owner: data.owner || '',
+		visibility: data.visibility || 'public',
 		domain: data.domain?.toLowerCase() || '',
 		kit: data.kit || 'custom',
 		frontend_code: data.frontend_code || '',
@@ -296,7 +327,7 @@ export async function createProject(data: {
 		snapshots: [],
 		agent_chat: [],
 		custom_instructions: '',
-		data: {},
+		data: data.data || {},
 		settings: {
 			vibe_zone_enabled: false,
 			project_title: data.name
@@ -337,11 +368,12 @@ export async function updateProject(projectId: string, data: any): Promise<Proje
 	updateQueues.set(projectId, task)
 
 	// Clean up queue map when done to prevent memory leaks
-	task.finally(() => {
+	const cleanup = () => {
 		if (updateQueues.get(projectId) === task) {
 			updateQueues.delete(projectId)
 		}
-	})
+	}
+	task.then(cleanup, cleanup)
 
 	return task
 }
@@ -541,7 +573,7 @@ export async function getLLMSettings(): Promise<LLMSettings | null> {
  * Helper to run an atomic read-modify-write operation on a project.
  * This ensures that concurrent operations don't overwrite each other.
  */
-async function withProjectLock<T>(projectId: string, fn: () => Promise<T>): Promise<T> {
+export async function withProjectLock<T>(projectId: string, fn: () => Promise<T>): Promise<T> {
 	// Wait for any existing lock on this project
 	const prev = projectLocks.get(projectId) || Promise.resolve()
 
@@ -550,11 +582,12 @@ async function withProjectLock<T>(projectId: string, fn: () => Promise<T>): Prom
 	projectLocks.set(projectId, task)
 
 	// Clean up when done
-	task.finally(() => {
+	const cleanup = () => {
 		if (projectLocks.get(projectId) === task) {
 			projectLocks.delete(projectId)
 		}
-	})
+	}
+	task.then(cleanup, cleanup)
 
 	return task
 }

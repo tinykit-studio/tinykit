@@ -1,9 +1,8 @@
 <script lang="ts">
   import Logo from "$lib/assets/Logo.svelte";
-  import { fade } from "svelte/transition";
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { Button } from "$lib/components/ui/button";
+  import { Button, buttonVariants } from "$lib/components/ui/button";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import * as Popover from "$lib/components/ui/popover";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -13,7 +12,7 @@
   import { auth } from "$lib/pocketbase.svelte";
   import { watch } from "runed";
 
-  import { ExternalLink, Check, Loader2, Rocket } from "lucide-svelte";
+  import { ExternalLink, Check, Loader2, Rocket, SquareTerminal } from "lucide-svelte";
 
   import type { TabId, PreviewPosition } from "../../types";
   import type { ComponentType } from "svelte";
@@ -45,6 +44,8 @@
     on_deploy: () => void;
     on_load_templates: () => void;
     on_download_project: () => void;
+    on_edit_local_agent: () => void;
+    local_edit_href?: string;
     on_reset_project: () => void;
     on_toggle_vibe_zone?: () => void;
     on_title_change?: (title: string) => void;
@@ -66,13 +67,17 @@
     on_deploy,
     on_load_templates,
     on_download_project,
+    on_edit_local_agent,
+    local_edit_href,
     on_reset_project,
     on_toggle_vibe_zone,
     on_title_change,
     is_mobile = false,
   }: HeaderProps = $props();
 
-  let dashboard_href = $derived(kit_id ? `/tinykit?kit=${kit_id}` : "/tinykit?dashboard=1");
+  let dashboard_href = $derived(
+    kit_id ? `/tinykit?kit=${kit_id}` : "/tinykit?dashboard=1",
+  );
 
   const position_options: {
     id: PreviewPosition;
@@ -235,7 +240,7 @@
     class="h-14 border-t border-[var(--builder-border)] bg-[var(--builder-bg-primary)] flex items-center justify-between px-4 flex-shrink-0 relative z-30"
   >
     <!-- Left: Logo -->
-    <a href={dashboard_href} class="logo">
+    <a href={dashboard_href} class="logo" aria-label="Back to apps">
       <Logo />
     </a>
 
@@ -261,7 +266,9 @@
         {#each tabs as tab}
           {@const Icon = tab.icon}
           {@const is_tool_active = active_tool_tabs.has(tab.id)}
-          {@const tool_class = is_tool_active ? `tool-active tool-active--${tab.id}` : ''}
+          {@const tool_class = is_tool_active
+            ? `tool-active tool-active--${tab.id}`
+            : ""}
           <DropdownMenu.Item
             onclick={() => on_tab_change(tab.id)}
             class="cursor-pointer hover:bg-[var(--builder-bg-secondary)] flex items-center gap-3 py-3 text-base {current_tab ===
@@ -276,13 +283,14 @@
       </DropdownMenu.Content>
     </DropdownMenu.Root>
 
+    <a href={local_edit_href} data-sveltekit-reload class={buttonVariants({ variant: 'ghost', size: 'sm' })} onclickcapture={on_edit_local_agent} aria-label="Edit with local agent" title="Edit with local agent"><SquareTerminal class="w-4 h-4" /></a>
     <!-- Right: Deploy -->
     <div class="relative">
       <Button
         onclick={on_deploy}
         disabled={is_deploying}
         size="sm"
-        class="font-sans relative"
+        class="font-sans relative px-4"
       >
         <span class={is_deploying || deploy_success ? "invisible" : ""}
           >Deploy</span
@@ -326,20 +334,21 @@
 {:else}
   <!-- Desktop Header -->
   <header
-    class="h-12 border-b bg-[var(--builder-bg-primary)] flex items-center justify-between px-4 relative z-30"
-    style="border-color: color-mix(in srgb, var(--builder-border) 40%, transparent)"
+    class="studio-header h-14 border-b bg-[var(--builder-bg-primary)] flex items-center justify-between px-4 relative z-30"
+    style="border-color: var(--builder-border)"
   >
     <!-- Left: Logo -->
-    <div class="flex items-center space-x-3 flex-shrink-0">
-      <a href={dashboard_href} class="logo">
+    <div class="studio-project flex items-center space-x-3">
+      <a href={dashboard_href} class="logo" aria-label="Back to apps">
         <Logo />
       </a>
       <!-- Project name and save status -->
       <span class="text-[var(--builder-text-secondary)]">·</span>
-      <div class="flex items-center">
+      <div class="project-title-group flex items-center gap-2">
         {#if is_editing_title}
           <input
             type="text"
+            aria-label="App name"
             bind:value={title_input_value}
             onblur={finish_editing_title}
             onkeydown={handle_title_keydown}
@@ -348,7 +357,8 @@
         {:else}
           <button
             onclick={start_editing_title}
-            class="text-[var(--builder-text-secondary)] text-sm hover:text-[var(--builder-text-primary)] transition-colors"
+            class="project-title text-[var(--builder-text-primary)] text-sm hover:text-[var(--builder-text-secondary)] transition-colors"
+            title="Rename app"
           >
             {project_title}
           </button>
@@ -356,7 +366,13 @@
         <!-- Save status indicator -->
         {#if save_status.is_saving || save_status.has_unsaved || save_status.last_saved_at}
           <Popover.Root>
-            <Popover.Trigger>
+            <Popover.Trigger
+              aria-label={save_status.is_saving
+                ? "Saving changes"
+                : save_status.has_unsaved
+                  ? "Unsaved changes"
+                  : "All changes saved"}
+            >
               {#if save_status.is_saving}
                 <span
                   class="w-2 h-2 rounded-full bg-amber-400 animate-pulse cursor-help"
@@ -386,16 +402,22 @@
     </div>
 
     <!-- Center: Horizontal Tabs -->
-    <nav class="flex flex-1 justify-center">
+    <nav
+      class="studio-nav flex flex-1 justify-center"
+      aria-label="Studio panels"
+    >
       <div class="flex items-center">
         {#each tabs as tab}
           {@const Icon = tab.icon}
           {@const is_tool_active = active_tool_tabs.has(tab.id)}
           <button
             data-tab-id={tab.id}
-            class="pl-3 pr-4 h-12 flex items-center gap-1.5 text-xs font-sans relative transition-colors whitespace-nowrap {current_tab ===
+            aria-pressed={current_tab === tab.id}
+            aria-label={tab.label}
+            title={`${tab.label} (⌘${tab.shortcut})`}
+            class="studio-tab px-3 h-9 rounded-md flex items-center gap-1.5 text-xs font-sans relative transition-colors whitespace-nowrap {current_tab ===
             tab.id
-              ? 'text-[var(--builder-text-primary)]'
+              ? 'bg-[var(--builder-bg-tertiary)] text-[var(--builder-text-primary)]'
               : 'text-[var(--builder-text-secondary)] hover:text-[var(--builder-text-primary)]'}"
             class:tool-active={is_tool_active}
             class:tool-active--code={is_tool_active && tab.id === "code"}
@@ -408,8 +430,8 @@
               class="flex items-center gap-2"
               class:invisible={mod_key_held}
             >
-              <Icon class="w-3 h-3" />
-              <span>{tab.label}</span>
+              <Icon class="w-3.5 h-3.5" />
+              <span class="tab-label">{tab.label}</span>
             </span>
             {#if mod_key_held}
               <span
@@ -417,12 +439,6 @@
               >
                 ⌘{tab.shortcut}
               </span>
-            {/if}
-            {#if current_tab === tab.id}
-              <div
-                in:fade={{ duration: 100 }}
-                class="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--builder-accent)]"
-              ></div>
             {/if}
           </button>
         {/each}
@@ -439,14 +455,11 @@
         <HelpCircle size={18} />
       </button>
       <DropdownMenu.Root>
-        <DropdownMenu.Trigger>
-          <Button
-            variant="ghost"
-            size="sm"
-            class="font-sans text-[var(--builder-text-secondary)] hover:text-[var(--builder-text-primary)] hover:bg-[var(--builder-bg-secondary)]"
-            >⋮</Button
-          >
-        </DropdownMenu.Trigger>
+        <DropdownMenu.Trigger
+          aria-label="More app actions"
+          class="h-8 w-8 rounded-md text-[var(--builder-text-secondary)] hover:text-[var(--builder-text-primary)] hover:bg-[var(--builder-bg-secondary)]"
+          >⋮</DropdownMenu.Trigger
+        >
         <DropdownMenu.Content align="end" class="w-64">
           <button
             type="button"
@@ -491,7 +504,7 @@
                   onclick={() => (preview_position = option.id)}
                   class="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs transition-colors {preview_position ===
                   option.id
-                    ? 'bg-[var(--builder-accent)] text-white'
+                    ? 'bg-[var(--builder-accent)] text-[var(--builder-accent-text)]'
                     : 'bg-[var(--builder-bg-tertiary)] text-[var(--builder-text-secondary)] hover:bg-[var(--builder-bg-secondary)] hover:text-[var(--builder-text-primary)]'}"
                   title="Preview on {option.label}"
                 >
@@ -533,12 +546,14 @@
           </DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Root>
+      <!-- Keep handoff independent of delegated editor click handlers. -->
+      <a href={local_edit_href} data-sveltekit-reload class={buttonVariants({ variant: 'outline', size: 'sm' })} onclickcapture={on_edit_local_agent} aria-label="Edit with local agent" title="Edit with local agent"><SquareTerminal class="w-4 h-4" /><span class="hidden lg:inline">Edit with local agent</span></a>
       <div class="relative">
         <Button
           onclick={on_deploy}
           disabled={is_deploying}
           size="sm"
-          class="font-sans relative"
+          class="font-sans relative px-4"
         >
           <span class={is_deploying || deploy_success ? "invisible" : ""}
             >Deploy</span
@@ -752,6 +767,50 @@ data.todos.subscribe(records => {
 </Dialog.Root>
 
 <style>
+  .studio-header {
+    gap: 16px;
+  }
+  .studio-project {
+    min-width: 0;
+    flex: 0 1 240px;
+  }
+  .project-title-group {
+    min-width: 0;
+  }
+  .project-title-group input {
+    min-width: 0;
+    width: 170px;
+  }
+  .project-title {
+    max-width: 170px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .studio-nav > div {
+    gap: 3px;
+  }
+  .studio-tab:hover {
+    background: var(--builder-bg-secondary);
+  }
+  @media (min-width: 768px) and (max-width: 1100px) {
+    .studio-project {
+      flex-basis: 180px;
+    }
+    .project-title {
+      max-width: 100px;
+    }
+    .studio-tab {
+      padding-inline: 10px;
+    }
+    .tab-label {
+      display: none;
+    }
+    .studio-nav > div {
+      gap: 5px;
+    }
+  }
+
   :global(.help-dialog) {
     max-width: 520px;
   }
@@ -908,12 +967,14 @@ data.todos.subscribe(records => {
 
   .tool-active--content {
     color: var(--tool-content) !important;
-    text-shadow: 0 0 12px color-mix(in srgb, var(--tool-content) 80%, transparent);
+    text-shadow: 0 0 12px
+      color-mix(in srgb, var(--tool-content) 80%, transparent);
   }
 
   .tool-active--design {
     color: var(--tool-design) !important;
-    text-shadow: 0 0 12px color-mix(in srgb, var(--tool-design) 80%, transparent);
+    text-shadow: 0 0 12px
+      color-mix(in srgb, var(--tool-design) 80%, transparent);
   }
 
   .tool-active--data {
