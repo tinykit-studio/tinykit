@@ -1,11 +1,13 @@
 // @ts-nocheck
-import registerPromiseWorker from 'promise-worker/register'
-import { compile as svelte_compile } from 'svelte/compiler'
+import { compile } from 'svelte/compiler'
 
-registerPromiseWorker(async function ({ code, svelteOptions }) {
+// Runs inside the rollup worker. Some embedded browsers (e.g. the Claude desktop
+// app's browser pane) cannot start a URL-based worker from inside another worker,
+// so compiling in a nested worker left the preview stuck on "building".
+export function compile_svelte({ code, svelteOptions }) {
 	try {
 		// Always enable sourcemaps for better debugging
-		const res = svelte_compile(code, {
+		const res = compile(code, {
 			...svelteOptions,
 			enableSourcemap: true
 		})
@@ -30,4 +32,4 @@ registerPromiseWorker(async function ({ code, svelteOptions }) {
 			}
 		}
 	}
-})
+}
