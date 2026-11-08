@@ -7,12 +7,12 @@ import ts from 'typescript';
 import { parse } from 'acorn';
 import { compile } from 'svelte/compiler';
 
-function loadTS(path, imports = {}) {
+function loadTS(path, imports = {}, globals = {}) {
   const { outputText } = ts.transpileModule(readFileSync(new URL('../' + path, import.meta.url), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
   });
   const exports = {};
-  vm.runInNewContext(outputText, { exports, require: name => {
+  vm.runInNewContext(outputText, { ...globals, exports, require: name => {
     assert.ok(name in imports, `Unexpected import: ${name}`);
     return imports[name];
   }});
@@ -125,3 +125,62 @@ for (const [name, generate] of [['preview', preview], ['production', production]
     assert.equal(latest[0].title, 'third');
   });
 }
+
+
+test('the first published request waits for PocketBase authentication started by domain tracking', async () => {
+  const { promise: refresh, resolve: finishRefresh } = Promise.withResolvers();
+  const project = { id: 'published', published_html: 'index.html' };
+  const html = '<h1>Published app</h1>';
+  let refreshes = 0;
+  let authenticated = false;
+
+  class MockPocketBase {
+    authStore = { isValid: false, save() {}, clear() {} };
+    files = { getURL: () => 'http://pocketbase/index.html' };
+    autoCancellation() {}
+    collection(name) {
+      if (name === '_superusers') return {
+        authRefresh: async () => {
+          refreshes++;
+          await refresh;
+          authenticated = true;
+          this.authStore.isValid = true;
+        }
+      };
+      assert.equal(name, '_tk_projects');
+      const read = async () => {
+        assert.equal(authenticated, true);
+        return project;
+      };
+      return { getOne: read, getFirstListItem: read };
+    }
+  }
+
+  const environment = { env: {} };
+  const server = loadTS('src/lib/server/pb.ts', {
+    pocketbase: { default: MockPocketBase },
+    fs: { existsSync: () => true, readFileSync: () => '{"auth_token":"test-token"}', writeFileSync() {} },
+    '$env/dynamic/private': environment,
+    '$lib/ai/config': {}
+  }, { console: { log() {}, warn() {}, error() {} } });
+  const { handle } = loadTS('src/hooks.server.ts', {
+    '$env/dynamic/private': environment, '$lib/server/pb': server
+  }, { URL });
+  const { GET } = loadTS('src/routes/tinykit/preview/[id]/+server.ts', {
+    '@sveltejs/kit': { error: (status, message) => Object.assign(new Error(message), { status }) },
+    '$lib/server/pb': server
+  }, { Response, fetch: async () => new Response(html) });
+
+  const request = new Request('https://app.example/tinykit/preview/published');
+  const firstResponse = handle({
+    event: { request, locals: {} },
+    resolve: () => GET({ params: { id: project.id } })
+  });
+  assert.equal(refreshes, 1);
+  finishRefresh();
+
+  const response = await firstResponse;
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), html);
+  assert.equal(refreshes, 1, 'domain tracking and the published route share one token refresh');
+});
