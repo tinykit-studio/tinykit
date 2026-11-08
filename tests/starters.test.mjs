@@ -78,18 +78,19 @@ test('creating apps supports no kit, a selected kit, and per-app template identi
   assert.equal(writes[2].settings.template_id, template.id);
 });
 
-function templateScript(id, collections) {
+function templateScript(id, collections, { storageBlocked = false, window = {} } = {}) {
   const template = catalog.get_template(id);
   let script = template.frontend_code.match(/<script[^>]*>([\s\S]*?)<\/script>/)[1];
   const imports = parse(script, {ecmaVersion:'latest', sourceType:'module'}).body.filter(node => node.type === 'ImportDeclaration');
   for (const node of imports.reverse()) script = script.slice(0, node.start) + script.slice(node.end);
   const timers = new Map();
   const cleanup = [];
+  const effects = [];
   let timerId = 0;
   const context = vm.createContext({
     data: collections, content: Object.fromEntries(template.content.map(field => [field.id, field.value])),
-    $state: value => value, $effect: () => {}, $derived: {by: fn => fn()},
-    onDestroy: callback => cleanup.push(callback), console, window: {}, URL,
+    $state: value => value, $effect: callback => effects.push(callback), $derived: {by: fn => fn()},
+    onDestroy: callback => cleanup.push(callback), console, window, URL, URLSearchParams,
     crypto: {randomUUID: () => "created-record"},
     localStorage: {getItem: () => null, setItem: () => {}, removeItem: () => {}},
     setTimeout: callback => {timers.set(++timerId, callback); return timerId;},
@@ -98,9 +99,57 @@ function templateScript(id, collections) {
     clearInterval: id => timers.delete(id),
     Audio: class {play() {return Promise.resolve();}}
   });
+  if (storageBlocked) Object.defineProperty(context, 'localStorage', {
+    get() { throw new DOMException('Storage is unavailable in this sandbox', 'SecurityError'); }
+  });
   vm.runInContext(script, context);
-  return {run: source => vm.runInContext(source, context), timers, cleanup};
+  return {run: source => vm.runInContext(source, context), timers, cleanup, effects};
 }
+
+test('Voting Board sends the vote and updates the button when storage access throws', async () => {
+  const votes = [];
+  const app = templateScript('voting-board', {features: {
+    subscribe: receive => receive([]),
+    update: async (id, {votes: count}) => votes.push([id, count])
+  }}, {storageBlocked: true});
+  await app.run('upvote({id: "feature", votes: 2})');
+  assert.deepEqual(votes, [['feature', 3]]);
+  assert.equal(app.run('has_voted("feature")'), true);
+});
+
+test('Event RSVP can submit, reset, and toggle the host panel when storage access throws', async () => {
+  const guests = [];
+  const app = templateScript('event-rsvp', {guests: {
+    subscribe: receive => receive([]), create: async record => guests.push(record)
+  }}, {storageBlocked: true});
+  app.effects[0]();
+  await app.run('name = "Test guest"; email = "guest@example.test"; submit_rsvp({preventDefault(){}})');
+  assert.equal(guests.length, 1);
+  assert.equal(app.run('submitted && !submitting'), true);
+  assert.equal(app.run('reset_rsvp(); submitted'), false);
+  assert.equal(app.run('password_input = content.host_password; check_password(); flipped'), true);
+  assert.equal(app.run('exit_admin(); flipped'), false);
+});
+
+test('Dev Blog can open and lock its editor when storage access throws', () => {
+  const app = templateScript('dev-blog', {posts: {subscribe: receive => receive([])}}, {storageBlocked: true});
+  app.effects[1]();
+  assert.equal(app.run('password_input = content.admin_password; check_password(); unlocked && !password_error'), true);
+  assert.equal(app.run('lock(); unlocked'), false);
+});
+
+test('HN Reader keeps theme and read state and navigates within an opaque app', () => {
+  const location = { pathname: '/tinykit/preview/example00000000', hash: '#/saved?item=123' };
+  const app = templateScript('hn-reader', {saved: {subscribe: receive => receive([])}}, {storageBlocked: true, window: {location}});
+  app.effects[0]();
+  app.effects[1]();
+  assert.equal(app.run('toggle_dark_mode(); dark_mode'), true);
+  assert.equal(app.run('mark_read(123); read_ids.has(123)'), true);
+  assert.equal(app.run('get_view_from_path()'), 'saved');
+  assert.equal(app.run('get_id_from_hash()'), '123');
+  assert.equal(app.run('view = "saved"; close_modal(); window.location.hash'), '#/saved');
+  assert.equal(location.pathname, '/tinykit/preview/example00000000');
+});
 
 test('Notes: switching notes flushes pending edits to their original note', async () => {
   const writes = [];
