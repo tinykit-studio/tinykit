@@ -22,6 +22,7 @@ pb.autoCancellation(false)
 // Initialize admin auth
 let isAuthenticated = false
 let lastCredentialsCheck = 0
+let authInFlight: Promise<boolean> | null = null
 
 // Get auth token from setup file or credentials from env vars
 function getAuthConfig(): { token: string } | { email: string; password: string } | null {
@@ -80,17 +81,10 @@ function getPasswordCredentials(): { email: string; password: string } | null {
 	return null
 }
 
-let authenticationInFlight: Promise<boolean> | null = null
-
 export async function ensureAuth(): Promise<boolean> {
-	if (authenticationInFlight) return authenticationInFlight
-	const attempt = authenticateServer()
-	authenticationInFlight = attempt
-	try { return await attempt }
-	finally { if (authenticationInFlight === attempt) authenticationInFlight = null }
-}
+	// The request hook can start authentication before the published route needs it.
+	if (authInFlight) return authInFlight
 
-async function authenticateServer(): Promise<boolean> {
 	// If already authenticated with valid token, return true
 	if (isAuthenticated && pb.authStore.isValid) {
 		return true
@@ -105,11 +99,18 @@ async function authenticateServer(): Promise<boolean> {
 
 	// Check for new config every 5 seconds if not authenticated
 	const now = Date.now()
-	if (!isAuthenticated && now - lastCredentialsCheck < 5000) {
+	if (now - lastCredentialsCheck < 5000) {
 		return false
 	}
 	lastCredentialsCheck = now
 
+	authInFlight = authenticate().finally(() => {
+		authInFlight = null
+	})
+	return authInFlight
+}
+
+async function authenticate(): Promise<boolean> {
 	const config = getAuthConfig()
 	if (!config) {
 		console.warn('[PB] No auth config available (server needs setup)')

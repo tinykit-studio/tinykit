@@ -7,12 +7,12 @@ import ts from 'typescript';
 import { parse } from 'acorn';
 import { compile } from 'svelte/compiler';
 
-function loadTS(path, imports = {}) {
+function loadTS(path, imports = {}, globals = {}) {
   const { outputText } = ts.transpileModule(readFileSync(new URL('../' + path, import.meta.url), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
   });
   const exports = {};
-  vm.runInNewContext(outputText, { exports, require: name => {
+  vm.runInNewContext(outputText, { ...globals, exports, require: name => {
     assert.ok(name in imports, `Unexpected import: ${name}`);
     return imports[name];
   }});
@@ -125,3 +125,74 @@ for (const [name, generate] of [['preview', preview], ['production', production]
     assert.equal(latest[0].title, 'third');
   });
 }
+
+
+test('cold published requests wait for authentication and enforce private access', async () => {
+  const { promise: refresh, resolve: finishRefresh } = Promise.withResolvers();
+  const project = { id: 'published000001', published_html: 'index.html', visibility: 'public' };
+  const privateProject = { ...project, id: 'private00000001', visibility: 'private', owner: 'owner' };
+  const html = '<h1>Published app</h1>';
+  let refreshes = 0;
+  let authenticated = false;
+
+  class MockPocketBase {
+    authStore = { isValid: false, save() {}, clear() {} };
+    files = { getURL: () => 'http://pocketbase/index.html', getToken: async () => 'file-token' };
+    autoCancellation() {}
+    collection(name) {
+      if (name === '_superusers') return {
+        authRefresh: async () => {
+          refreshes++;
+          await refresh;
+          authenticated = true;
+          this.authStore.isValid = true;
+        }
+      };
+      assert.equal(name, '_tk_projects');
+      const read = async id => {
+        assert.equal(authenticated, true);
+        return id === privateProject.id ? privateProject : project;
+      };
+      return { getOne: read, getFirstListItem: () => read(project.id) };
+    }
+  }
+
+  const environment = { env: {} };
+  const server = loadTS('src/lib/server/pb.ts', {
+    pocketbase: { default: MockPocketBase },
+    fs: { existsSync: () => true, readFileSync: () => '{"auth_token":"test-token"}', writeFileSync() {} },
+    '$env/dynamic/private': environment,
+    '$lib/ai/config': {}
+  }, { console: { log() {}, warn() {}, error() {} } });
+  const privacy = loadTS('src/lib/server/private-apps.ts', { './pb': server }, { Request, Response, Headers });
+  const { handle } = loadTS('src/hooks.server.ts', {
+    '$env/dynamic/private': environment, '$lib/server/pb': server,
+    '$lib/server/companion': { companionEnabled: () => false },
+    '$lib/server/private-apps': privacy
+  }, { URL });
+  const { GET } = loadTS('src/routes/tinykit/preview/[id]/+server.ts', {
+    '@sveltejs/kit': { error: (status, message) => Object.assign(new Error(message), { status }) },
+    '$lib/server/pb': server
+  }, { Response, fetch: async () => new Response(html) });
+
+  const preview = id => {
+    const url = new URL('https://app.example/tinykit/preview/' + id);
+    return handle({
+      event: { url, request: new Request(url), locals: {}, cookies: { get: () => undefined } },
+      resolve: () => GET({ params: { id } })
+    });
+  };
+  const responses = Promise.allSettled([preview(project.id), preview(privateProject.id)]);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(refreshes, 1);
+  finishRefresh();
+
+  const [published, denied] = await responses;
+  if (published.status === 'rejected') throw published.reason;
+  if (denied.status === 'rejected') throw denied.reason;
+  assert.equal(published.value.status, 200);
+  assert.equal(await published.value.text(), html);
+  assert.equal(denied.value.status, 303);
+  assert.match(denied.value.headers.get('Location'), /^\/login\?next=/);
+  assert.equal(refreshes, 1, 'both published routes share one token refresh');
+});
