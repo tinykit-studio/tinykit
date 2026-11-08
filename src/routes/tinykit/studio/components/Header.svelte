@@ -2,7 +2,7 @@
   import Logo from "$lib/assets/Logo.svelte";
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { Button, buttonVariants } from "$lib/components/ui/button";
+  import { Button } from "$lib/components/ui/button";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import * as Popover from "$lib/components/ui/popover";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -45,7 +45,6 @@
     on_load_templates: () => void;
     on_download_project: () => void;
     on_edit_local_agent: () => void;
-    local_edit_href?: string;
     on_reset_project: () => void;
     on_toggle_vibe_zone?: () => void;
     on_title_change?: (title: string) => void;
@@ -68,7 +67,6 @@
     on_load_templates,
     on_download_project,
     on_edit_local_agent,
-    local_edit_href,
     on_reset_project,
     on_toggle_vibe_zone,
     on_title_change,
@@ -283,7 +281,7 @@
       </DropdownMenu.Content>
     </DropdownMenu.Root>
 
-    <a href={local_edit_href} data-sveltekit-reload class={buttonVariants({ variant: 'ghost', size: 'sm' })} onclickcapture={on_edit_local_agent} aria-label="Edit with local agent" title="Edit with local agent"><SquareTerminal class="w-4 h-4" /></a>
+    <Button variant="ghost" size="sm" onclick={on_edit_local_agent} aria-label="Edit with local agent" title="Edit with local agent"><SquareTerminal class="w-4 h-4" /></Button>
     <!-- Right: Deploy -->
     <div class="relative">
       <Button
@@ -546,8 +544,7 @@
           </DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Root>
-      <!-- Keep handoff independent of delegated editor click handlers. -->
-      <a href={local_edit_href} data-sveltekit-reload class={buttonVariants({ variant: 'outline', size: 'sm' })} onclickcapture={on_edit_local_agent} aria-label="Edit with local agent" title="Edit with local agent"><SquareTerminal class="w-4 h-4" /><span class="hidden lg:inline">Edit with local agent</span></a>
+      <Button variant="outline" size="sm" onclick={on_edit_local_agent} aria-label="Edit with local agent" title="Edit with local agent"><SquareTerminal class="w-4 h-4" /><span class="hidden lg:inline">Edit with local agent</span></Button>
       <div class="relative">
         <Button
           onclick={on_deploy}

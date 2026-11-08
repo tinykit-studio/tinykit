@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { parseEditArgs, editProject, resolveEditWorkspace, ensureEditPreview, stopEditPreview, openEditAgent } from '../scripts/edit-project.mjs';
 import { exportStaticProject } from '../scripts/static-project/export.mjs';
 import { readSourceTree } from '../scripts/static-project/source-tree.mjs';
-import { localEditCommand, localEditLink } from '../src/lib/local-edit-command.js';
+import { localEditCommand, localEditLink, localEditPrompt } from '../src/lib/local-edit-command.js';
 import { parseLocalEditLink, openLocalEditLink, launcherPlist } from '../scripts/local-launcher.mjs';
 
 const id = '123456789abcdef', server = 'http://127.0.0.1:5173';
@@ -29,6 +29,14 @@ test('Studio command and edit arguments preserve identity and reject unsafe targ
   const options = parseEditArgs([id, '--server', server, '--directory', './new-app', '--no-agent', '--json']);
   assert.equal(options.input, id); assert.equal(options.server, server); assert.equal(options.launch, false);
   for (const args of [['--unknown'], ['--server'], ['--agent','unknown'], ['one','two']]) assert.throws(() => parseEditArgs(args));
+});
+test('Studio setup prompt uses the validated app target and stays in the current agent', () => {
+  const prompt = localEditPrompt(id, server);
+  assert.ok(prompt.includes(localEditCommand(id, server, true) + ' --no-agent'));
+  assert.match(prompt, /Never ask me to paste credentials into chat/);
+  assert.match(prompt, /Wait for my instructions before editing app files or publishing/);
+  assert.throws(() => localEditPrompt(id, 'https://user:password@example.com'));
+  assert.throws(() => localEditPrompt('$(bad)', server));
 });
 test('native links accept only server/project identity and round-trip Studio links', () => {
   const link = localEditLink(id, server), options = parseLocalEditLink(link);

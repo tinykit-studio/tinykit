@@ -1,64 +1,99 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import * as Dialog from '$lib/components/ui/dialog';
+  import * as Tabs from '$lib/components/ui/tabs';
   import { Button } from '$lib/components/ui/button';
-  import { localEditCommand, localEditLink } from '$lib/local-edit-command';
+  import { localEditCommand, localEditLink, localEditPrompt } from '$lib/local-edit-command';
 
   let { project_id, project_title, on_close }: {
     project_id: string; project_title: string; on_close: () => void;
   } = $props();
+
   let origin = $state('');
-  let fromCheckout = $state(true);
   let link = $state('');
+  let tab = $state('prompt');
+  let fromCheckout = $state(true);
+  let copyResult = $state<{ text: string; copied: boolean } | null>(null);
+  let setupError = $state('');
   const cli = $derived(fromCheckout ? 'npm run tinykit --' : 'tinykit');
   const command = $derived(link ? localEditCommand(project_id, origin, fromCheckout) : '');
-  let copied = $state(false);
-  let message = $state('');
+  const prompt = $derived(link ? localEditPrompt(project_id, origin) : '');
+  const isPrompt = $derived(tab === 'prompt');
+  const copyText = $derived(isPrompt ? prompt : command);
+  const activeCopyResult = $derived(copyResult?.text === copyText ? copyResult : null);
+
   onMount(() => {
     try {
       origin = window.location.origin;
       link = localEditLink(project_id, origin);
+    } catch (error) {
+      setupError = error instanceof Error ? error.message : 'Could not prepare local editing.';
     }
-    catch (error) { message = error instanceof Error ? error.message : 'Could not prepare the local editing command.'; }
   });
+
   async function copy() {
-    copied = false; message = '';
-    try { await navigator.clipboard.writeText(command); copied = true; }
-    catch { message = 'Select the command above and copy it to your terminal.'; }
+    const text = copyText;
+    copyResult = null;
+    try {
+      await navigator.clipboard.writeText(text);
+      copyResult = { text, copied: true };
+    } catch {
+      copyResult = { text, copied: false };
+    }
   }
 </script>
 
 <Dialog.Root open onOpenChange={(open) => { if (!open) on_close(); }}>
-  <Dialog.Content class="sm:max-w-[560px]">
+  <Dialog.Content class="max-h-[90dvh] overflow-y-auto sm:max-w-[600px]">
     <Dialog.Header>
       <Dialog.Title>Edit with local agent</Dialog.Title>
-      <Dialog.Description>Open {project_title || 'this app'} on your Mac with Codex Desktop.</Dialog.Description>
+      <Dialog.Description>Set up {project_title || 'this app'} for local editing.</Dialog.Description>
     </Dialog.Header>
-    <div class="grid gap-4 py-3 text-sm">
-      <p>Opening your local agent… If your browser asks, choose <strong>Open Tinykit Launcher</strong>. Tinykit opens this app’s registered folder and preview in Codex.</p>
-      <div class="grid gap-2">
-        <p class="font-medium">First time on this Mac?</p>
+
+    <Tabs.Root bind:value={tab}>
+      <Tabs.List aria-label="Local editing setup" class="w-full bg-[var(--builder-bg-secondary)]">
+        <Tabs.Trigger value="prompt" class="flex-1">Paste a prompt</Tabs.Trigger>
+        <Tabs.Trigger value="terminal" class="flex-1">Terminal setup</Tabs.Trigger>
+      </Tabs.List>
+
+      <Tabs.Content value="prompt" class="grid gap-3 pt-2 text-sm [&[hidden]]:hidden">
+        <p>Copy this prompt into Codex, Claude Code, or your preferred local coding agent. It asks the agent to prepare the app and start its preview.</p>
+        <label class="grid gap-2">
+          <span class="font-medium">Setup prompt</span>
+          <textarea readonly value={prompt} rows="8" class="w-full resize-y rounded-md border border-[var(--builder-border)] bg-[var(--builder-bg-secondary)] p-3 text-xs leading-relaxed"></textarea>
+        </label>
+      </Tabs.Content>
+
+      <Tabs.Content value="terminal" class="grid gap-3 pt-2 text-sm [&[hidden]]:hidden">
         <label class="flex items-center gap-2 text-xs">
-          <input type="checkbox" bind:checked={fromCheckout} onchange={() => { copied = false; message = ''; }} />
+          <input type="checkbox" bind:checked={fromCheckout} />
           Run commands from a Tinykit checkout
         </label>
         {#if fromCheckout}
           <p class="text-xs opacity-75">Open your <a class="underline" href="https://github.com/tinykit-studio/tinykit" target="_blank" rel="noreferrer">Tinykit checkout</a> in Terminal. Use Node 22+ and run <code>npm ci</code> once.</p>
         {/if}
-        <p class="text-xs opacity-75">Sign in to this Tinykit server with <code>{cli} login --server {origin} --email you@example.com</code>. Use your own email. Then run the command below to set up this app and open Codex.</p>
-      </div>
-      <label class="grid gap-2">
-        <span class="font-medium">Local editing command</span>
-        <input readonly value={command} onclick={(event) => event.currentTarget.select()} class="w-full rounded-md border border-[var(--builder-border)] bg-[var(--builder-bg-secondary)] p-3 text-xs font-mono text-[var(--builder-text-primary)]" />
-      </label>
-      <p class="text-xs opacity-75">Live records stay on the server. To use this Studio button next time, run <code>{cli} launcher install</code> once. The launcher uses Apple’s Command Line Tools and opens apps you’ve already set up.</p>
-      {#if copied}<p role="status" class="text-sm">Command copied. Paste it into your terminal.</p>{/if}
-      {#if message}<p role="alert" class="text-sm">{message}</p>{/if}
-    </div>
-    <Dialog.Footer>
-      <Button variant="outline" onclickcapture={on_close}>Close</Button>
-      <Button variant="outline" disabled={!command} onclickcapture={copy}>{copied ? 'Copied' : 'Copy command'}</Button>
-      <Button href={link || undefined} data-sveltekit-reload disabled={!link}>Open again</Button>
+        <p class="text-xs opacity-75">Sign in with <code>{cli} login --server {origin} --email you@example.com</code>, using your own email. Then run the command below to set up this app and open Codex Desktop on your Mac.</p>
+        <label class="grid gap-2">
+          <span class="font-medium">Local editing command</span>
+          <input readonly value={command} onclick={(event) => event.currentTarget.select()} class="w-full rounded-md border border-[var(--builder-border)] bg-[var(--builder-bg-secondary)] p-3 text-xs font-mono text-[var(--builder-text-primary)]" />
+        </label>
+        <p class="text-xs opacity-75">Live records stay on the server. To enable direct opening from Studio, run <code>{cli} launcher install</code> once. The launcher uses Apple’s Command Line Tools and opens apps you’ve already set up.</p>
+      </Tabs.Content>
+    </Tabs.Root>
+
+    {#if setupError}<p role="alert" class="text-sm">{setupError}</p>{/if}
+    {#if activeCopyResult?.copied}
+      <p role="status" class="text-sm">{isPrompt ? 'Prompt copied. Paste it into your local agent.' : 'Command copied. Paste it into your terminal.'}</p>
+    {:else if activeCopyResult}
+      <p role="alert" class="text-sm">Select the {isPrompt ? 'prompt' : 'command'} above and copy it manually.</p>
+    {/if}
+
+    <Dialog.Footer class="flex-wrap gap-2 sm:space-x-0">
+      <Button variant="ghost" onclick={on_close}>Close</Button>
+      {#if link}
+        <Button variant="outline" href={link} data-sveltekit-reload>Open in Codex Desktop</Button>
+      {/if}
+      <Button disabled={!copyText} onclick={copy}>{isPrompt ? 'Copy prompt' : 'Copy command'}</Button>
     </Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>

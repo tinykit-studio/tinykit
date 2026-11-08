@@ -20,7 +20,6 @@
   import TemplatePicker from "./components/TemplatePicker.svelte";
   import ExportProjectDialog from "./components/ExportProjectDialog.svelte";
   import LocalAgentDialog from "./components/LocalAgentDialog.svelte";
-  import { localEditLink } from "$lib/local-edit-command";
   import DomainPicker from "./components/DomainPicker.svelte";
   import AgentPanel from "./panels/agent/AgentPanel.svelte";
   import CodePanel from "./panels/code/CodePanel.svelte";
@@ -596,16 +595,10 @@
 
   let show_export_dialog = $state(false);
   let local_agent_app = $state<{ id: string; title: string } | null>(null);
-  let local_agent_link = $derived.by(() => {
-    if (!store.project) return undefined;
-    try { return localEditLink(store.project.id, $page.url.origin); }
-    catch { return undefined; }
-  });
 
   function handle_edit_local_agent() {
     if (!store.project) return;
     local_agent_app = { id: store.project.id, title: store.project.name || 'This app' };
-    // The toolbar anchor performs the native handoff as the click's default action.
   }
 
   function handle_download_project() {
@@ -709,7 +702,6 @@
           on_load_templates={handle_load_templates}
           on_download_project={handle_download_project}
           on_edit_local_agent={handle_edit_local_agent}
-          local_edit_href={local_agent_link}
           on_reset_project={handle_reset_project}
           on_toggle_vibe_zone={toggle_vibe_lounge}
           on_title_change={handle_title_change}
@@ -1057,7 +1049,6 @@
           on_load_templates={handle_load_templates}
           on_download_project={handle_download_project}
           on_edit_local_agent={handle_edit_local_agent}
-          local_edit_href={local_agent_link}
           on_reset_project={handle_reset_project}
           on_toggle_vibe_zone={toggle_vibe_lounge}
           is_mobile={true}

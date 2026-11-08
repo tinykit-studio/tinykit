@@ -18,3 +18,23 @@ export function localEditLink(projectId, origin) {
   link.searchParams.set('project', projectId);
   return link.href;
 }
+
+/** @param {string} projectId @param {string} origin */
+export function localEditPrompt(projectId, origin) {
+  const command = localEditCommand(projectId, origin, true);
+  const server = new URL(origin).origin;
+  return [
+    'Set up this Tinykit app for local editing in this chat.',
+    '',
+    `Tinykit server: ${server}`,
+    `App ID: ${projectId}`,
+    '',
+    'Use Node 22+ and a local checkout of https://github.com/tinykit-studio/tinykit. Reuse a checkout if available. Run npm ci if its dependencies are missing.',
+    'Reuse an existing app folder only if its tinykit.json matches both the server and app ID. Keep any local edits intact.',
+    `From the Tinykit checkout, run: ${command} --no-agent`,
+    `If Tinykit asks me to sign in, pause and give me this command to run in my terminal, replacing YOUR_EMAIL with my Tinykit email: npm run tinykit -- login --server ${server} --email YOUR_EMAIL`,
+    'Let me enter my password in the terminal. Never ask me to paste credentials into chat.',
+    'Once the local preview is ready, tell me its URL and the path to the app files. If you cannot start a local preview, give me the command to run myself.',
+    'Wait for my instructions before editing app files or publishing.'
+  ].join('\n');
+}
