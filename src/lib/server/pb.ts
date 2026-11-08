@@ -201,6 +201,7 @@ export type Project = {
 	source_bundle?: { format_version: number; files: Record<string, string> }
 	backend_code: string
 	published_html: string // filename of the compiled HTML file attachment
+	legacy_storage_html?: string
 	assets: string[] // filenames of uploaded assets
 	design: any[]
 	content: any[]

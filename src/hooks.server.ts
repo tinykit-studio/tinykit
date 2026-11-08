@@ -3,6 +3,7 @@ import { env } from '$env/dynamic/private'
 import { getProjectByDomain, trackAvailableDomain } from '$lib/server/pb'
 import { companionEnabled, guardCompanion, companionAsset, companionPreviewRequest } from '$lib/server/companion'
 import { isAppPage, privateAppGuard } from '$lib/server/private-apps'
+import { withLegacyBrowserStorage } from '$lib/server/legacy-browser-storage.js'
 
 /**
  * Normalize a domain for matching
@@ -166,7 +167,17 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	const response = await resolve(event)
-	return untrustedFile || (isAppPage(route) && response.headers.get('Content-Type')?.startsWith('text/html'))
-		? isolateAppContent(response)
-		: response
+	const isPublicAppHtml = isAppPage(route) && response.headers.get('Content-Type')?.startsWith('text/html')
+	if (!untrustedFile && !isPublicAppHtml) return response
+	const isolated = isolateAppContent(response)
+	const project = event.locals.appProject
+	if (isPublicAppHtml && isolated.ok && project?.published_html && project.legacy_storage_html === project.published_html) {
+		isolated.headers.delete('Content-Length')
+		isolated.headers.delete('ETag')
+		isolated.headers.set('Cache-Control', 'no-store')
+		return new Response(withLegacyBrowserStorage(await isolated.text()), {
+			status: isolated.status, statusText: isolated.statusText, headers: isolated.headers
+		})
+	}
+	return isolated
 }

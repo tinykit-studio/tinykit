@@ -168,7 +168,8 @@ test('cold published requests wait for authentication and enforce private access
   const { handle } = loadTS('src/hooks.server.ts', {
     '$env/dynamic/private': environment, '$lib/server/pb': server,
     '$lib/server/companion': { companionEnabled: () => false },
-    '$lib/server/private-apps': privacy
+    '$lib/server/private-apps': privacy,
+    '$lib/server/legacy-browser-storage.js': { withLegacyBrowserStorage: value => value }
   }, { URL, Headers, Response });
   const { GET } = loadTS('src/routes/tinykit/preview/[id]/+server.ts', {
     '@sveltejs/kit': { error: (status, message) => Object.assign(new Error(message), { status }) },

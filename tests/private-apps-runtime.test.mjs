@@ -166,10 +166,11 @@ test('private apps restrict pages, records, files, realtime, builder APIs, and d
 });
 
 
-test('private-app migration preserves existing source assets, public apps, and custom collection rules', {skip:!process.env.TINYKIT_TEST_PRIVATE,timeout:60000},async t=>{
+test('upgrade preserves legacy public artifacts, records, source assets, and custom collection rules', {skip:!process.env.TINYKIT_TEST_PRIVATE,timeout:60000},async t=>{
   const temporary=await mkdtemp(join(tmpdir(),'tinykit-private-upgrade-'));
   const migrationDir=join(temporary,'old-migrations'),dataDir=join(temporary,'data'),hooks=join(temporary,'empty-hooks');await mkdir(migrationDir);await mkdir(hooks);
-  for(const file of await readdir(join(root,'pocketbase/pb_migrations')))if(file.endsWith('.js')&&file!=='1793300000_add_private_apps.js')await copyFile(join(root,'pocketbase/pb_migrations',file),join(migrationDir,file));
+  const upgradeMigrations = ['1793300000_add_private_apps.js', '1793300200_mark_legacy_publication_storage.js'];
+  for(const file of await readdir(join(root,'pocketbase/pb_migrations')))if(file.endsWith('.js')&&!upgradeMigrations.includes(file))await copyFile(join(root,'pocketbase/pb_migrations',file),join(migrationDir,file));
   const binary=join(root,'pocketbase/pocketbase'),email='migration@fixture.test',password='migration-fixture-password',pbPort=await port();
   const flags=['--automigrate=false','--dir',dataDir,'--migrationsDir',migrationDir,'--hooksDir',hooks];let child;
   async function stop(){if(child&&child.exitCode===null&&child.signalCode===null){const done=once(child,'exit'),timer=setTimeout(()=>child.kill('SIGKILL'),2000);child.kill();await done;clearTimeout(timer)}}
@@ -178,6 +179,13 @@ test('private-app migration preserves existing source assets, public apps, and c
   async function start(args){child=spawn(binary,['serve','--http',`127.0.0.1:${pbPort}`,...args],{stdio:'ignore'});const pb=new PocketBase(`http://127.0.0.1:${pbPort}`);await ready(async()=>(await pb.health.check()).code===200);await pb.collection('_superusers').authWithPassword(email,password);return pb}
   let admin=await start(flags);
   const project=await admin.collection('_tk_projects').create({name:'Existing public app',kit:'custom',data:{notes:{schema:[],records:[{id:'keep',title:'Keep the record'}]}}});
+  const legacyHTML='<!doctype html><script>localStorage.setItem("legacy","works")</script><h1>Legacy public build</h1>';
+  async function publishFile(html) {
+    const build = new FormData();
+    build.set('published_html', new Blob([html], {type:'text/html'}), 'index.html');
+    return admin.collection('_tk_projects').update(project.id, build);
+  }
+  const beforeUpgrade = await publishFile(legacyHTML);
   const form=new FormData();form.append('project',project.id);form.append('digest','existing');form.append('filename','image.svg');form.append('published','true');form.append('file',new Blob(['original source asset']),'image.svg');
   const asset=await admin.collection('_tk_source_assets').create(form);
   const collection=await admin.collections.getOne('_tk_projects'),rule="@request.auth.id != '' && name != 'hidden'";
@@ -186,6 +194,28 @@ test('private-app migration preserves existing source assets, public apps, and c
   const updatedFlags=['--automigrate=false','--dir',dataDir,'--migrationsDir',join(root,'pocketbase/pb_migrations'),'--hooksDir',join(root,'pocketbase/pb_hooks')];
   await exec(binary,['migrate','up',...updatedFlags]);admin=await start(updatedFlags);
   const upgraded=await admin.collection('_tk_projects').getOne(project.id);assert.deepEqual(upgraded.data,project.data);assert.notEqual(upgraded.visibility,'private');
+  assert.equal(upgraded.published_html,beforeUpgrade.published_html);
+  assert.equal(upgraded.legacy_storage_html,beforeUpgrade.published_html);
+  const original = await fetch(admin.files.getURL(upgraded,upgraded.published_html,{token:await admin.files.getToken()}));
+  assert.equal(await original.text(),legacyHTML);
+  const webPort = await port(), server = `http://127.0.0.1:${webPort}`;
+  const web = spawn(process.execPath,['scripts/companion/server.mjs',String(webPort)],{
+    cwd:root,stdio:'ignore',env:{...process.env,POCKETBASE_URL:admin.baseURL,POCKETBASE_ADMIN_EMAIL:email,POCKETBASE_ADMIN_PASSWORD:password,TINYKIT_SETUP_FILE:join(temporary,'unused'),TINYKIT_COMPANION_DIR:'',TINYKIT_COMPANION_ID:''}
+  });
+  t.after(async()=>{if(web.exitCode===null&&web.signalCode===null){const done=once(web,'exit');web.kill();await done;}});
+  const preview = server+'/tinykit/preview/'+project.id;
+  await ready(async()=>{const response=await fetch(preview);await response.body?.cancel();return response.ok;});
+  for (const url of [preview,preview+'/nested']) {
+    const response=await fetch(url);
+    const csp=response.headers.get('content-security-policy');
+    assert.match(csp,/\bsandbox\b/);
+    assert.doesNotMatch(csp,/allow-same-origin/);
+    const html=await response.text();
+    assert.ok(html.indexOf('data-tinykit-legacy-storage')>0 && html.indexOf('data-tinykit-legacy-storage')<html.indexOf('localStorage.setItem("legacy"'));
+  }
+  const newHTML='<!doctype html><h1>Updated public build</h1>';
+  await publishFile(newHTML);
+  assert.equal(await (await fetch(preview)).text(),newHTML);
   const upgradedRules=await admin.collections.getOne('_tk_projects');assert.match(upgradedRules.viewRule,/name != 'hidden'/);assert.equal(upgradedRules.updateRule,null);
   const restoredAsset=await admin.collection('_tk_source_assets').getOne(asset.id);assert.equal(restoredAsset.project,project.id);assert.equal(restoredAsset.file,asset.file);
   const bytes=await fetch(admin.files.getURL(restoredAsset,restoredAsset.file,{token:await admin.files.getToken()}));assert.equal(await bytes.text(),'original source asset');

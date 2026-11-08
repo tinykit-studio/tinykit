@@ -9,9 +9,11 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import net from 'node:net';
 import { createServer, request } from 'node:http';
+import { createHash } from 'node:crypto';
 import PocketBase from 'pocketbase';
 import { sourceHash } from '../scripts/static-project/source-tree.mjs';
 import { createProject } from '../scripts/create-project.mjs';
+import { exportWorkspace } from '../scripts/companion/workspace.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url)), exec = promisify(execFile);
 async function port() {
@@ -110,8 +112,17 @@ test('publication is atomic across web workers and the editor can review a new t
     const previewPath = `/tinykit/preview/${transition.id}`;
     const recordPath = `/api/collections/_tk_projects/records/${transition.id}`;
     const postBuild = (worker, body) => fetch(servers[worker] + buildPath, { method: 'POST', headers, body: JSON.stringify(body) });
-    const studioBaseline = await postBuild(0, { html: legacy });
+    const studioSnapshot = async (worker, path = buildPath) => {
+      const response = await fetch(servers[worker] + path, { headers });
+      assert.equal(response.status, 200, await response.clone().text());
+      assert.match(response.headers.get('cache-control'), /no-store/);
+      return response.json();
+    };
+    const baseline = await studioSnapshot(0);
+    assert.equal(baseline.inputs.frontend_code, legacy);
+    const studioBaseline = await postBuild(0, { html: legacy, expected_studio_revision: baseline.revision });
     assert.equal(studioBaseline.status, 200, await studioBaseline.text());
+    const { revision: competingStudioRevision } = await studioSnapshot(0);
     let release, arrived;
     const held = new Promise(resolve => { release = resolve; });
     const studioWriteStarted = new Promise(resolve => { arrived = resolve; });
@@ -124,7 +135,7 @@ test('publication is atomic across web workers and the editor can review a new t
       }
       return false;
     };
-    const studio = postBuild(0, { html: '<h1>Stale Studio artifact</h1>' });
+    const studio = postBuild(0, { html: '<h1>Stale Studio artifact</h1>', expected_studio_revision: competingStudioRevision });
     try {
       await Promise.race([studioWriteStarted, studio.then(response => assert.fail(`Studio finished before reaching PocketBase: ${response.status}`))]);
       const cli = await postBuild(1, { html: next, frontend_code: next, source_bundle: bundle(next), expected_source_hash: sourceHash(legacy) });
@@ -151,6 +162,34 @@ test('publication is atomic across web workers and the editor can review a new t
     assert.match(unavailable.headers.get('cache-control'), /no-store/);
     assert.doesNotMatch(await unavailable.text(), /First CLI publication/);
     intercept = undefined;
+
+    // Studio may finish compiling after a single-file CLI publish completed,
+    // before its HTTP request even arrives at the build endpoint.
+    const single = await owner.collection('_tk_projects').create({ name: 'Delayed Studio upload', kit: 'custom', visibility: 'private', frontend_code: legacy });
+    const singleBuild = `/api/projects/${single.id}/build`;
+    const oldStudio = await studioSnapshot(0, singleBuild);
+    const exported = await fetch(servers[1] + `/api/projects/${single.id}/export`, { headers });
+    assert.equal(exported.status, 200);
+    const singleWorkspace = join(temporary, 'single-cli');
+    await exportWorkspace(await exported.json(), singleWorkspace);
+    await writeFile(join(singleWorkspace, 'App.svelte'), next);
+    const { stdout } = await exec(process.execPath, ['scripts/tinykit.mjs', 'push', singleWorkspace, '--server', servers[1], '--publish', '--json'], {
+      cwd: root, env: { ...env, TINYKIT_TOKEN: auth.token }, maxBuffer: 2000000
+    });
+    assert.equal(JSON.parse(stdout).publish.state, 'succeeded');
+    const delayedUpload = body => fetch(servers[0] + singleBuild, { method: 'POST', headers, body: JSON.stringify(body) });
+    assert.equal((await delayedUpload({ html: legacy, expected_studio_revision: oldStudio.revision })).status, 409);
+    assert.equal((await delayedUpload({ html: legacy })).status, 409, 'an old browser must reload before publishing');
+    const published = await owner.collection('_tk_projects').getOne(single.id);
+    assert.equal(published.frontend_code, next);
+    const newerHtml = await fetch(admin.files.getURL(published, published.published_html, { token: await admin.files.getToken() }));
+    assert.equal(createHash('sha256').update(await newerHtml.text()).digest('hex'), published.cli_publication.html_digest);
+    const beforeFields = await studioSnapshot(0, singleBuild);
+    await owner.collection('_tk_projects').update(single.id, { name: 'Changed during Studio build' });
+    assert.equal((await delayedUpload({ html: next, expected_studio_revision: beforeFields.revision })).status, 409);
+    const afterFields = await studioSnapshot(0, singleBuild);
+    assert.equal(afterFields.inputs.name, 'Changed during Studio build');
+    assert.equal((await delayedUpload({ html: next, expected_studio_revision: afterFields.revision })).status, 200);
     const app = await createProject({ directory: join(temporary, 'fresh-app'), template: 'blank', visibility: 'private' });
     async function bridge(payload) {
       const child = track(spawn(process.execPath, ['scripts/companion/interface.mjs'], { cwd: root, env: { ...env, TINYKIT_COMPANION_DIR: app.directory }, stdio: ['pipe', 'pipe', 'pipe'] }));
@@ -168,8 +207,8 @@ test('publication is atomic across web workers and the editor can review a new t
     const wrongTarget = await bridge({ action: 'push', publish: true, review: { ...reviewed.review, server: servers[1] } });
     assert.equal(wrongTarget.ok, false);
     await assert.rejects(admin.collection('_tk_projects').getOne(app.project_id), e => e.status === 404);
-    const published = await bridge({ action: 'push', publish: true, review: reviewed.review });
-    assert.equal(published.ok, true, JSON.stringify(published)); assert.equal(published.publish.state, 'succeeded');
+    const firstPublication = await bridge({ action: 'push', publish: true, review: reviewed.review });
+    assert.equal(firstPublication.ok, true, JSON.stringify(firstPublication)); assert.equal(firstPublication.publish.state, 'succeeded');
     const created = await admin.collection('_tk_projects').getOne(app.project_id);
     assert.equal(created.visibility, 'private'); assert.equal(created.owner, auth.record.id); assert.deepEqual(created.data, {});
     const linked = await bridge({ action: 'review' }); assert.equal(linked.linked, true); assert.equal(linked.new_target, false);

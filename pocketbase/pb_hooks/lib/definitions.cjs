@@ -26,6 +26,19 @@ function sourceState(project) {
   if (project.source_bundle) state.source_bundle = project.source_bundle;
   return state;
 }
+function studioBuildState(record) {
+  return {
+    project_id: record.id,
+    inputs: {
+      name: record.getString('name'),
+      frontend_code: record.getString('frontend_code'),
+      content: JSON.parse(record.getString('content') || 'null') || [],
+      design: JSON.parse(record.getString('design') || 'null') || [],
+      data_collections: Object.keys(JSON.parse(record.getString('data') || 'null') || {}).sort()
+    },
+    published_html: record.getString('published_html')
+  };
+}
 function validate(value) {
   if (!object(value) || Object.keys(value).some(function(k) { return ['name','frontend_code','backend_code','custom_instructions','content','design','schema','assets'].indexOf(k) < 0; })) throw new Error('Only app definitions may be pushed. Records, seeds, settings, and uploads are not accepted.');
   ['name','frontend_code','backend_code','custom_instructions'].forEach(function(k) { if (typeof value[k] !== 'string') throw new Error('Invalid definition field: ' + k); });
@@ -69,4 +82,4 @@ function base64Bytes(value) {
   for (var i = 0; i < value.length && value[i] !== '='; i++) { buffer = (buffer << 6) | alphabet.indexOf(value[i]); bits += 6; if (bits >= 8) { bits -= 8; bytes.push((buffer >> bits) & 255); } }
   return bytes;
 }
-module.exports = { canonical: canonical, definition: definition, sourceState: sourceState, validate: validate, additiveSchema: additiveSchema, assetName: assetName, fromRecord: fromRecord, base64Bytes: base64Bytes };
+module.exports = { canonical: canonical, definition: definition, sourceState: sourceState, studioBuildState: studioBuildState, validate: validate, additiveSchema: additiveSchema, assetName: assetName, fromRecord: fromRecord, base64Bytes: base64Bytes };
