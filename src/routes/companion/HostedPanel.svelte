@@ -89,7 +89,6 @@
         if (stopped) return;
         server = connection.server; projectId = connection.project_id;
         if (server) await run('review');
-        else showConnection = true;
       } catch (error) { failure = error instanceof Error ? error.message : 'Could not read connection.'; }
       initializing = false;
       if (!stopped) schedule();
@@ -110,12 +109,13 @@
 </script>
 
 <section class="hosting" aria-label="Hosted publishing">
-  <div class="section-heading"><h2>Hosted app</h2><button class="text-button" onclick={() => { showConnection = !showConnection; password = ''; }} disabled={!!busy || initializing}>{showConnection ? 'Close' : review ? 'Connection' : 'Connect'}</button></div>
+  <div class="section-heading"><h2>Hosted app</h2><button class="text-button" onclick={() => { showConnection = !showConnection; password = ''; }} disabled={!!busy || initializing}>{showConnection ? 'Close' : review ? 'Connection' : 'Set up publishing'}</button></div>
   {#if initializing}<p class="hint" role="status">Connecting your app…</p>{/if}
-  {#if showConnection || (!review && !busy && !initializing)}
+  {#if !review && !initializing && !showConnection}<p class="hint">Connect a Tinykit server when you’re ready to publish.</p>{/if}
+  {#if showConnection}
     <form onsubmit={(event) => { event.preventDefault(); run('connect'); }}>
       <label>Server address<input type="url" bind:value={server} placeholder="https://tinykit.example.com" required disabled={!!busy} /></label>
-      <label>Project ID<input bind:value={projectId} minlength="15" maxlength="15" pattern="[a-z0-9]{15}" required disabled={!!busy} /></label>
+      <label>Project ID<input bind:value={projectId} minlength="15" maxlength="15" pattern={'[a-z0-9]{15}'} required disabled={!!busy} /></label>
       <label>Email<input type="email" autocomplete="username" bind:value={email} placeholder="Reuse saved login if empty" disabled={!!busy} /></label>
       {#if email}<label>Password<input type="password" autocomplete="current-password" bind:value={password} required disabled={!!busy} /></label>{/if}
       <button class="primary" type="submit" disabled={!!busy}>Connect to app</button>

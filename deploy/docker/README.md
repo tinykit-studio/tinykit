@@ -25,6 +25,7 @@ See [AI providers](../../docs/ai-providers.md) for DeepSeek, custom URLs, and re
 ```bash
 docker build -f deploy/docker/Dockerfile -t tinykit .
 docker run -d --name tinykit -p 3000:3000 \
+  -e ORIGIN=http://localhost:3000 \
   -v tinykit_data:/app/pocketbase/pb_data \
   tinykit
 ```
@@ -56,7 +57,7 @@ To make a consistent backup, stop Tinykit, archive the PocketBase volume, and re
 
 ## Hosting publicly
 
-Put a reverse proxy such as Caddy or nginx in front of port 3000 and configure HTTPS. Complete account setup before exposing a new installation publicly.
+Put a reverse proxy such as Caddy or nginx in front of port 3000 and configure HTTPS. Set `ORIGIN` to the browser-facing URL (for example, `https://tinykit.example.com`) in your Compose environment or pass it with `docker run -e`. Compose defaults to `http://localhost:3000`. Set `ORIGIN` to match when using a different host or port. Complete account setup before exposing a new installation publicly.
 
 ## Troubleshooting
 

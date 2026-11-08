@@ -29,6 +29,6 @@ export async function readStatus(root) {
   let check=null;
   try {check=JSON.parse(await readFile(join(root,'.tinykit/check.json'),'utf8'));}catch{}
   const headless_check=check ? (check.source_revision===workspace?.revision ? {state:check.ok?'success':'error',source_revision:check.source_revision,diagnostics:check.diagnostics} : {state:'stale',source_revision:check.source_revision}) : {state:'missing'};
-  return { ...source, running, url: (workspace?.config.local_first ? runtime?.preview_url || runtime?.url : runtime?.url) || null, editor_url:runtime?.url || null,
+  return { ...source, running, local_changes_pending: Boolean(workspace && workspace.revision !== source.source_revision), url: (workspace?.config.local_first ? runtime?.preview_url || runtime?.url : runtime?.url) || null, editor_url:runtime?.url || null,
     compile: source.session_id ? compileStatus(source, report) : {state:'not_started',requires_browser:true,message:'Start tinykit dev to open the app preview.'},headless_check };
 }
