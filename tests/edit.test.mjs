@@ -32,7 +32,9 @@ test('Studio command and edit arguments preserve identity and reject unsafe targ
 });
 test('Studio setup prompt uses the validated app target and stays in the current agent', () => {
   const prompt = localEditPrompt(id, server);
-  assert.ok(prompt.includes(localEditCommand(id, server, true) + ' --no-agent'));
+  assert.ok(prompt.includes(localEditCommand(id, server, true) + ' --directory "$APP_DIR" --no-agent'));
+  assert.match(prompt, /absolute path inside this chat’s writable workspace/);
+  assert.match(prompt, /tinykit\.json matches both the server and app ID/);
   assert.doesNotMatch(prompt, /staging build|feat\/local-editor-cli/);
   assert.match(prompt, /Never ask me to paste credentials into chat/);
   assert.match(prompt, /Wait for my instructions before editing app files or publishing/);

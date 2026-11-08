@@ -38,8 +38,9 @@ export function localEditPrompt(projectId, origin, previewBranch = '') {
       'Leave any existing checkout and local changes intact.'
     ] : [`Use a local checkout of ${repository}. Reuse a checkout if available.`]),
     'From the Tinykit checkout, run npm ci if dependencies are missing.',
-    'Reuse an existing app folder only if its tinykit.json matches both the server and app ID. Keep any local edits intact.',
-    `From the Tinykit checkout, run: ${command} --no-agent`,
+    'Set APP_DIR to an absolute path inside this chat’s writable workspace, outside the Tinykit checkout. Reuse an app folder there only if its tinykit.json matches both the server and app ID. Keep any local edits intact.',
+    `Otherwise, choose a new path such as tinykit-app-${projectId} under the workspace root. Let Tinykit create the app folder.`,
+    `From the Tinykit checkout, run: ${command} --directory "$APP_DIR" --no-agent`,
     `If Tinykit asks me to sign in, pause and give me this command to run in my terminal, replacing YOUR_EMAIL with my Tinykit email: npm run tinykit -- login --server ${server} --email YOUR_EMAIL`,
     'Let me enter my password in the terminal. Never ask me to paste credentials into chat. Wait for me to confirm sign-in, then retry the edit command.',
     'Once the local preview is ready, tell me its URL and the path to the app files. If you cannot start a local preview, give me the command to run myself.',
