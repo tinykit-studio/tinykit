@@ -43,6 +43,11 @@ also restrict direct access to private projects and their files. Browser session
 use a host-only, HttpOnly, SameSite cookie; HTTPS makes it Secure. Private
 responses disable caching. An expired login requires signing in again.
 
+Public app pages run in a browser sandbox so their scripts cannot use a
+signed-in visitor's Studio session. Public app data still works through
+Tinykit's data API. Browser storage such as `localStorage` is unavailable to
+these sandboxed pages.
+
 Uploaded files and build artifacts are now protected in PocketBase. Public apps
 continue serving these through Tinykit's existing asset and app routes. Previously
 copied direct PocketBase file URLs require an authenticated file token.

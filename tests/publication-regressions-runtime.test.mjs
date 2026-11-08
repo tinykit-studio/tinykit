@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import net from 'node:net';
+import { createServer, request } from 'node:http';
 import PocketBase from 'pocketbase';
 import { sourceHash } from '../scripts/static-project/source-tree.mjs';
 import { createProject } from '../scripts/create-project.mjs';
@@ -56,10 +57,25 @@ test('publication is atomic across web workers and the editor can review a new t
     const env = { ...process.env, POCKETBASE_URL: pbURL, POCKETBASE_ADMIN_EMAIL: email, POCKETBASE_ADMIN_PASSWORD: password, TINYKIT_SETUP_FILE: join(temporary, 'unused'), TINYKIT_CONFIG_DIR: join(temporary, 'config') };
     for (const key of ['TINYKIT_COMPANION_DIR', 'TINYKIT_COMPANION_ID', 'TINYKIT_COMPANION_ORIGIN', 'TINYKIT_TOKEN', 'TINYKIT_TOKEN_FILE']) delete env[key];
     const headers = { Authorization: `Bearer ${auth.token}`, 'Content-Type': 'application/json' };
+    let intercept;
+    const relay = createServer(async (incoming, outgoing) => {
+      if (await intercept?.(incoming, outgoing)) return;
+      const upstream = request(new URL(incoming.url, pbURL), {
+        method: incoming.method, headers: { ...incoming.headers, host: new URL(pbURL).host }
+      }, response => {
+        outgoing.writeHead(response.statusCode, response.headers);
+        response.pipe(outgoing);
+      });
+      upstream.on('error', () => outgoing.writeHead(502).end());
+      incoming.pipe(upstream);
+    });
+    await new Promise(resolve => relay.listen(0, '127.0.0.1', resolve));
+    t.after(() => { relay.close(); relay.closeAllConnections(); });
     const servers = [];
     for (let i = 0; i < 2; i++) {
       const webPort = await port(), server = `http://127.0.0.1:${webPort}`; servers.push(server);
-      track(spawn(process.execPath, ['scripts/companion/server.mjs', String(webPort)], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] }));
+      const workerEnv = i === 0 ? { ...env, POCKETBASE_URL: `http://127.0.0.1:${relay.address().port}` } : env;
+      track(spawn(process.execPath, ['scripts/companion/server.mjs', String(webPort)], { cwd: root, env: workerEnv, stdio: ['ignore', 'pipe', 'pipe'] }));
       await ready(async () => (await fetch(server + '/api/projects', { headers })).ok);
     }
     const bundle = source => ({ format_version: 1, files: Object.fromEntries(Object.entries({ 'src/App.svelte': source, 'package.json': '{}', 'index.html': '<!doctype html>' }).map(([name, text]) => [name, Buffer.from(text).toString('base64')])) });
@@ -88,6 +104,53 @@ test('publication is atomic across web workers and the editor can review a new t
       assert.equal((await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ ...payload, source_bundle: invalid }) })).status, 400);
       t.diagnostic(`${component ? 'component' : 'single-file'}: one winner, five conflicts across two web workers`);
     }
+    const legacy = '<h1>Original Studio source</h1>', next = '<h1>First CLI publication</h1>';
+    const transition = await owner.collection('_tk_projects').create({ name: 'First CLI publication race', kit: 'custom', visibility: 'private', frontend_code: legacy });
+    const buildPath = `/api/projects/${transition.id}/build`;
+    const previewPath = `/tinykit/preview/${transition.id}`;
+    const recordPath = `/api/collections/_tk_projects/records/${transition.id}`;
+    const postBuild = (worker, body) => fetch(servers[worker] + buildPath, { method: 'POST', headers, body: JSON.stringify(body) });
+    const studioBaseline = await postBuild(0, { html: legacy });
+    assert.equal(studioBaseline.status, 200, await studioBaseline.text());
+    let release, arrived;
+    const held = new Promise(resolve => { release = resolve; });
+    const studioWriteStarted = new Promise(resolve => { arrived = resolve; });
+    intercept = async incoming => {
+      const path = new URL(incoming.url, pbURL).pathname;
+      if ((incoming.method === 'POST' && path === `/api/tinykit/projects/${transition.id}/component-build`) ||
+          (incoming.method === 'PATCH' && path === recordPath)) {
+        arrived();
+        await held;
+      }
+      return false;
+    };
+    const studio = postBuild(0, { html: '<h1>Stale Studio artifact</h1>' });
+    try {
+      await Promise.race([studioWriteStarted, studio.then(response => assert.fail(`Studio finished before reaching PocketBase: ${response.status}`))]);
+      const cli = await postBuild(1, { html: next, frontend_code: next, source_bundle: bundle(next), expected_source_hash: sourceHash(legacy) });
+      assert.equal(cli.status, 200, await cli.text());
+    } finally {
+      release();
+    }
+    const staleStudio = await studio;
+    assert.equal(staleStudio.status, 409, await staleStudio.text());
+    const live = await fetch(servers[0] + previewPath, { headers });
+    assert.equal(await live.text(), next);
+    assert.equal((await fetch(servers[0] + previewPath, { redirect: 'manual' })).status, 303);
+    // Fail only the guard's first lookup; a subsequent database read can succeed.
+    let failedLookup = false;
+    intercept = (incoming, outgoing) => {
+      if (failedLookup || incoming.method !== 'GET' || new URL(incoming.url, pbURL).pathname !== recordPath) return false;
+      failedLookup = true;
+      outgoing.writeHead(503, { 'Content-Type': 'application/json' }).end('{"message":"Transient fixture error"}');
+      return true;
+    };
+    const unavailable = await fetch(servers[0] + previewPath, { redirect: 'manual' });
+    assert.equal(failedLookup, true);
+    assert.equal(unavailable.status, 503);
+    assert.match(unavailable.headers.get('cache-control'), /no-store/);
+    assert.doesNotMatch(await unavailable.text(), /First CLI publication/);
+    intercept = undefined;
     const app = await createProject({ directory: join(temporary, 'fresh-app'), template: 'blank', visibility: 'private' });
     async function bridge(payload) {
       const child = track(spawn(process.execPath, ['scripts/companion/interface.mjs'], { cwd: root, env: { ...env, TINYKIT_COMPANION_DIR: app.directory }, stdio: ['pipe', 'pipe', 'pipe'] }));

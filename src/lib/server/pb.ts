@@ -246,11 +246,12 @@ export async function listProjects(): Promise<Project[]> {
 /**
  * Get a project by ID
  */
-export async function getProject(id: string): Promise<Project | null> {
+export async function getProject(id: string, { strict = false } = {}): Promise<Project | null> {
 	if (!id) return null
 
 	const authed = await ensureAuth()
 	if (!authed) {
+		if (strict) throw new Error('PocketBase authentication is unavailable')
 		console.error(`[PB] Cannot get project ${id}: Server auth not available`)
 		return null
 	}
@@ -269,6 +270,7 @@ export async function getProject(id: string): Promise<Project | null> {
 		}
 		return project
 	} catch (err: any) {
+		if (strict && err?.status !== 404) throw err
 		console.error(`[PB] Failed to get project ${id}:`, err?.message || err)
 		return null
 	}
@@ -278,15 +280,18 @@ export async function getProject(id: string): Promise<Project | null> {
  * Get a project by domain
  * Returns null if no project matches the domain
  */
-export async function getProjectByDomain(domain: string): Promise<Project | null> {
+export async function getProjectByDomain(domain: string, { strict = false } = {}): Promise<Project | null> {
 	const authed = await ensureAuth()
-	if (!authed) return null
+	if (!authed) {
+		if (strict) throw new Error('PocketBase authentication is unavailable')
+		return null
+	}
 
 	try {
 		// Normalize domain (lowercase, no trailing slashes)
 		const normalized = domain.toLowerCase().replace(/\/$/, '')
 		const result = await pb.collection('_tk_projects').getFirstListItem(
-			`domain = "${normalized}"`
+			pb.filter('domain = {:domain}', { domain: normalized })
 		)
 		return result as unknown as Project
 	} catch (error: any) {
@@ -294,6 +299,7 @@ export async function getProjectByDomain(domain: string): Promise<Project | null
 		if (error?.status === 404) {
 			return null
 		}
+		if (strict) throw error
 		return null
 	}
 }

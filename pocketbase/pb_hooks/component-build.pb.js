@@ -4,9 +4,10 @@ routerAdd('POST', '/api/tinykit/projects/{id}/component-build', (e) => {
   const source = require(__hooks + '/lib/source.cjs');
   const definitions = require(__hooks + '/lib/definitions.cjs');
   const body = e.requestInfo().body;
+  const hasSource = Object.prototype.hasOwnProperty.call(body, 'frontend_code');
   if (typeof body.html !== 'string' || !body.html || body.html.length > 10 * 1024 * 1024 ||
-      typeof body.frontend_code !== 'string' || body.frontend_code.length > 10000000 ||
-      !/^[a-f0-9]{64}$/.test(body.expected_source_hash || '')) throw new BadRequestError('Source, HTML, and the expected source hash are required.');
+      (hasSource && (typeof body.frontend_code !== 'string' || body.frontend_code.length > 10000000)) ||
+      !/^[a-f0-9]{64}$/.test(body.expected_source_hash || '')) throw new BadRequestError('Valid HTML and its expected source hash are required.');
   let bundle;
   if (body.source_bundle !== undefined) {
     try {
@@ -27,11 +28,11 @@ routerAdd('POST', '/api/tinykit/projects/{id}/component-build', (e) => {
     if (bundle && !record.collection().fields.getByName('source_bundle')) throw new ApiError(409, 'Apply the source-bundle database migration before publishing.');
     const currentHash = $security.sha256(source.sourceText(record.getString('frontend_code'), currentBundle));
     if (currentHash !== body.expected_source_hash) throw new ApiError(409, 'Server source changed; reconcile before publishing.');
-    record.set('frontend_code', body.frontend_code);
+    if (hasSource) record.set('frontend_code', body.frontend_code);
     if (bundle) record.set('source_bundle', bundle);
     record.set('published_html', $filesystem.fileFromBytes(body.html, 'index.html'));
     app.save(record);
-    result = { success: true, source_hash: $security.sha256(source.sourceText(body.frontend_code, bundle)), size: body.html.length };
+    result = { success: true, ...(hasSource ? { source_hash: $security.sha256(source.sourceText(body.frontend_code, bundle)) } : {}), size: body.html.length };
   });
   return e.json(200, result);
 }, $apis.requireAuth('users'), $apis.bodyLimit(10000000));

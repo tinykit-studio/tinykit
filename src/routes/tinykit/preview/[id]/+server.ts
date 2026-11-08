@@ -1,6 +1,6 @@
 import { error, redirect } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import { getProject, pb } from '$lib/server/pb'
+import { pb } from '$lib/server/pb'
 
 // Escape HTML to prevent XSS
 function escape_html(str: string): string {
@@ -17,10 +17,10 @@ function escape_html(str: string): string {
  * Useful for projects without a domain assigned
  * URL: /tinykit/preview/[id]
  */
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
 	const { id } = params
 
-	const project = await getProject(id)
+	const project = locals.appProject
 
 	if (!project) {
 		throw error(404, 'Project not found')

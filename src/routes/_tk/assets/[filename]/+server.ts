@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import { getProject, getProjectByDomain, pb } from '$lib/server/pb'
+import { pb } from '$lib/server/pb'
 
 /**
  * Assets Proxy API - Serve project assets
@@ -47,9 +47,8 @@ const PLACEHOLDERS: Record<string, { svg: string; aspectRatio: string }> = {
 	}
 }
 
-export const GET: RequestHandler = async ({ params, url, request }) => {
+export const GET: RequestHandler = async ({ params, url, locals }) => {
 	const { filename } = params
-	const project_id = url.searchParams.get('project_id')
 	const thumb = url.searchParams.get('thumb')
 
 	// Handle built-in placeholders (no project needed)
@@ -65,16 +64,8 @@ export const GET: RequestHandler = async ({ params, url, request }) => {
 	}
 
 	try {
-		// Get project - either by explicit ID or by domain
-		let project
-		if (project_id) {
-			project = await getProject(project_id)
-		} else {
-			// Infer from domain
-			const host = request.headers.get('host') || 'localhost'
-			const domain = host.toLowerCase().replace(/:\d+$/, '').replace(/^www\./, '')
-			project = await getProjectByDomain(domain)
-		}
+		// The access guard resolved the explicit ID or the request domain.
+		const project = locals.appProject
 
 		if (!project) {
 			throw error(404, 'Project not found')

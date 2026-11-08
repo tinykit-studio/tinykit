@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
 import { getProject, pb, withProjectLock } from '$lib/server/pb'
+import { appProjectForRequest } from '$lib/server/private-apps'
 import { check_rate_limit, check_origin, get_client_ip } from '$lib/server/data-security'
 import { assert_unique_record, DataMutationError } from '$lib/server/data-mutations'
 import { validate_schema, generate_id } from '$lib/server/data-utils'
@@ -47,12 +48,12 @@ function get_records(collection_data: any): any[] {
 }
 
 // GET - List records
-export const GET: RequestHandler = async ({ params, url }) => {
+export const GET: RequestHandler = async ({ params, url, locals }) => {
 	const { project_id, collection } = params
 
 	try {
 		// Get project and validate collection exists
-		const project = await getProject(project_id)
+		const project = await appProjectForRequest(locals, project_id)
 		if (!project) throw error(404, 'Project not found')
 		const data = project.data || {}
 

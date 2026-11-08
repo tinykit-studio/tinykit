@@ -28,6 +28,12 @@ export function check_origin(request: Request, project_domain: string | undefine
 		return
 	}
 
+	// Public app documents run with an opaque origin and no referrer. The
+	// request hook confines these writes to the public data API.
+	if (origin === 'null') {
+		return
+	}
+
 	// Check if origin matches project domain
 	const allowed_origins = [
 		`https://${project_domain}`,

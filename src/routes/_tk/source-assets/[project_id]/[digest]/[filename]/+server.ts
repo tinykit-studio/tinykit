@@ -1,9 +1,9 @@
 import { error } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import { getProject, pb } from '$lib/server/pb'
+import { pb } from '$lib/server/pb'
 
-export const GET: RequestHandler = async ({ params }) => {
-  const project = await getProject(params.project_id)
+export const GET: RequestHandler = async ({ params, locals }) => {
+  const project = locals.appProject
   if (!project?.cli_publication) error(404, 'Published source asset not found')
   let record
   try {

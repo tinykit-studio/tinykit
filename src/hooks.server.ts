@@ -2,7 +2,7 @@ import type { Handle } from '@sveltejs/kit'
 import { env } from '$env/dynamic/private'
 import { getProjectByDomain, trackAvailableDomain } from '$lib/server/pb'
 import { companionEnabled, guardCompanion, companionAsset, companionPreviewRequest } from '$lib/server/companion'
-import { privateAppGuard } from '$lib/server/private-apps'
+import { isAppPage, privateAppGuard } from '$lib/server/private-apps'
 
 /**
  * Normalize a domain for matching
@@ -21,6 +21,15 @@ const cors_headers = {
 	'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
 	'Access-Control-Allow-Headers': 'Content-Type',
 	'Access-Control-Max-Age': '86400'
+}
+
+// Published public apps and uploaded documents are untrusted. An opaque
+// origin lets them run without sharing the Studio session or browser storage.
+function isolateAppContent(response: Response) {
+	const headers = new Headers(response.headers)
+	headers.append('Content-Security-Policy', 'sandbox allow-scripts allow-forms allow-popups allow-downloads allow-modals')
+	headers.set('X-Content-Type-Options', 'nosniff')
+	return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
@@ -59,8 +68,18 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	const access = await privateAppGuard(event)
 	if (access.response) return access.response
+	const route = event.route.id || ''
+	// The SvelteKit form exception for opaque origins is only for public app
+	// data uploads. Keep the same-origin requirement on every other surface.
+	if (event.request.headers.get('origin') === 'null' && !['GET', 'HEAD', 'OPTIONS'].includes(event.request.method)) {
+		if (access.private || !route.startsWith('/_tk/data/')) {
+			return new Response('Origin not allowed', { status: 403 })
+		}
+	}
+	const untrustedFile = route.startsWith('/_tk/assets/') || route.startsWith('/_tk/source-assets/') || route === '/api/proxy'
 	if (access.private) {
-		const response = await resolve(event)
+		const resolved = await resolve(event)
+		const response = untrustedFile ? isolateAppContent(resolved) : resolved
 		const headers = new Headers(response.headers)
 		headers.set('Cache-Control', 'private, no-store')
 		headers.set('Vary', 'Cookie, Authorization')
@@ -120,11 +139,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 			responseHeaders.delete('content-encoding')
 			responseHeaders.delete('content-length')
 
-			return new Response(response.body, {
+			const proxied = new Response(response.body, {
 				status: response.status,
 				statusText: response.statusText,
 				headers: responseHeaders
 			})
+			// The PocketBase API also serves uploaded files, including HTML and SVG.
+			return targetPath.startsWith('/_/') ? proxied : isolateAppContent(proxied)
 		} catch (error) {
 			console.error('Pocketbase proxy error:', error)
 			return new Response('Proxy error', { status: 500 })
@@ -133,7 +154,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	// Add CORS headers to /_tk/ responses
 	if (url.pathname.startsWith('/_tk/')) {
-		const response = await resolve(event)
+		const resolved = await resolve(event)
+		const response = untrustedFile ? isolateAppContent(resolved) : resolved
 		const headers = new Headers(response.headers)
 		headers.set('Access-Control-Allow-Origin', '*')
 		return new Response(response.body, {
@@ -143,5 +165,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 		})
 	}
 
-	return resolve(event)
+	const response = await resolve(event)
+	return untrustedFile || (isAppPage(route) && response.headers.get('Content-Type')?.startsWith('text/html'))
+		? isolateAppContent(response)
+		: response
 }

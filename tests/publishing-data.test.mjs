@@ -38,6 +38,7 @@ function fixture() {
       pb:{collection:() => ({update:async (_id,fields) => {await pause();if(fails)throw new Error('Offline');writes++;project={...project,...structuredClone(fields)};}})}
     },
     '$lib/server/data-security':{check_origin:() => {},check_rate_limit:() => {},get_client_ip:() => '127.0.0.1'},
+    '$lib/server/private-apps':{appProjectForRequest:() => structuredClone(project)},
     '$lib/server/data-utils':dataUtils,
     '$lib/server/data-mutations':mutations
   };

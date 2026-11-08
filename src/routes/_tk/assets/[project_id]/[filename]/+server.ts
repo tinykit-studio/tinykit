@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import { getProject, pb } from '$lib/server/pb'
+import { pb } from '$lib/server/pb'
+import { appProjectForRequest } from '$lib/server/private-apps'
 
 /**
  * Assets Proxy API - Serve project assets (path-based project_id)
@@ -46,7 +47,7 @@ const PLACEHOLDERS: Record<string, { svg: string; aspectRatio: string }> = {
 	}
 }
 
-export const GET: RequestHandler = async ({ params, url }) => {
+export const GET: RequestHandler = async ({ params, url, locals }) => {
 	const { project_id, filename } = params
 	const thumb = url.searchParams.get('thumb')
 
@@ -63,7 +64,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	}
 
 	try {
-		const project = await getProject(project_id)
+		const project = await appProjectForRequest(locals, project_id)
 
 		if (!project) {
 			throw error(404, 'Project not found')

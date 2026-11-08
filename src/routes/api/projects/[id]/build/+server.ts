@@ -35,31 +35,15 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			if (typeof frontend_code !== 'string' || frontend_code.length > 10000000 || !expected_source_hash) {
 				return json({ error: 'Source publishing requires source and its export hash.' }, { status: 400 })
 			}
-			const current_hash = sourceHash(project.frontend_code, project.source_bundle)
-			if (current_hash !== expected_source_hash) return json({ error: 'Server source changed; reconcile before publishing.' }, { status: 409 })
-			// PocketBase repeats this comparison inside the write transaction.
-			// A process-local lock cannot protect against another server or client.
-			return json(await client.send(`/api/tinykit/projects/${params.id}/component-build`, {
-				method: 'POST', body: { html, frontend_code, expected_source_hash, ...(bundle ? { source_bundle: bundle } : {}) }
-			}))
 		}
 
-		// Create a FormData with the HTML file
-		const form_data = new FormData()
-		const blob = new Blob([html], { type: 'text/html' })
-		form_data.append('published_html', blob, 'index.html')
-		// JSON preserves source line endings; plain multipart text normalizes LF
-		// to CRLF and would invalidate the next export hash after a publish.
-		if (frontend_code !== undefined) form_data.append('@jsonPayload', JSON.stringify({ frontend_code, ...(bundle ? { source_bundle: bundle } : {}) }))
-
-		// Only replace the code/artifact. Never overwrite live fields or records.
-		await client.collection('_tk_projects').update(params.id, form_data)
-
-		return json({
-			success: true,
-			source_hash: frontend_code !== undefined ? sourceHash(frontend_code, bundle) : undefined,
-			size: html.length
-		})
+		const current_hash = sourceHash(project.frontend_code, project.source_bundle)
+		if (frontend_code !== undefined && current_hash !== expected_source_hash) return json({ error: 'Server source changed; reconcile before publishing.' }, { status: 409 })
+		// Studio sends only HTML. Bind its write to the same source snapshot and
+		// transaction as CLI publication so it cannot overwrite a newer build.
+		return json(await client.send(`/api/tinykit/projects/${params.id}/component-build`, {
+			method: 'POST', body: { html, frontend_code, expected_source_hash: current_hash, ...(bundle ? { source_bundle: bundle } : {}) }
+		}))
 	} catch (error: any) {
 		if (error.status === 409) return json({ error: error.message }, { status: 409 })
 		if (error.status === 403) return json({ error: 'Not allowed to publish this project' }, { status: 403 })

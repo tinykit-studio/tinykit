@@ -47,7 +47,11 @@ test('private apps restrict pages, records, files, realtime, builder APIs, and d
     await admin.collection('_tk_projects').update(project.id,{cli_publication:{definition:{}}});
     const sourceForm = new FormData();for(const [k,v] of Object.entries({project:project.id,digest:'abc123',filename:'logo.svg',published:true})) sourceForm.append(k,String(v));sourceForm.append('file',new Blob(['<svg/>']),'logo.svg');
     const sourceAsset = await admin.collection('_tk_source_assets').create(sourceForm);
-    const publicProject = await owner.collection('_tk_projects').create({name:'Existing public app',kit:'custom',domain:'',data:{items:{schema:[],records:[{id:'public1'}]}}});
+    const publicProject = await other.collection('_tk_projects').create({name:'Existing public app',kit:'custom',domain:'public.fixture.test',data:{items:{schema:[],records:[{id:'public1'}]}}});
+    const publicForm = new FormData();
+    publicForm.append('published_html',new Blob(['<!doctype html><script>window.probe = true</script><h1>Public app</h1>'],{type:'text/html'}),'index.html');
+    publicForm.append('assets',new Blob(['<svg xmlns="http://www.w3.org/2000/svg"/>'],{type:'image/svg+xml'}),'public.svg');
+    const publicFiles = await other.collection('_tk_projects').update(publicProject.id,publicForm);
     track(spawn(process.execPath,['scripts/companion/server.mjs',String(webPort)],{cwd:root,env:{...process.env,POCKETBASE_URL:pbURL,POCKETBASE_ADMIN_EMAIL:email,POCKETBASE_ADMIN_PASSWORD:password,TINYKIT_SETUP_FILE:join(temporary,'unused'),TINYKIT_COMPANION_DIR:'',TINYKIT_COMPANION_ID:''},stdio:['ignore','pipe','pipe']}));
     await ready(async()=> (await fetch(`${server}/api/projects`,{headers:{Authorization:`Bearer ${auth.token}`}})).ok);
     const ownerHeaders={Authorization:`Bearer ${auth.token}`}, otherHeaders={Authorization:`Bearer ${other.authStore.token}`};
@@ -84,6 +88,34 @@ test('private apps restrict pages, records, files, realtime, builder APIs, and d
     const cookie=setCookie.split(';')[0];
     assert.equal((await fetch(server+`/tinykit/preview/${project.id}`,{headers:{Cookie:cookie}})).status,200);
     const dataURL=server+`/_tk/data/${project.id}/contacts`;
+    // A public app owned by someone else must have an opaque origin even when
+    // the viewer has a Studio session. Uploaded active documents need it too.
+    const publicPath=`/tinykit/preview/${publicProject.id}`;
+    const publicFile=`/_tk/assets/${publicProject.id}/${publicFiles.assets[0]}`;
+    const fileToken=await other.files.getToken();
+    const rawFile=new URL(other.files.getURL(publicFiles,publicFiles.assets[0],{token:fileToken}));
+    for (const path of [publicPath,publicPath+'/nested',publicFile,'/_pb'+rawFile.pathname+rawFile.search]) {
+      const response=await fetch(server+path,{headers:{Cookie:cookie}});
+      assert.equal(response.status,200,path.split('?')[0]);
+      const policy=response.headers.get('content-security-policy');
+      assert.match(policy,/\bsandbox\b/);
+      assert.doesNotMatch(policy,/allow-same-origin/);
+      await response.body?.cancel();
+    }
+    const publicData=server+`/_tk/data/${publicProject.id}/items`;
+    const opaqueHeaders={Origin:'null'};
+    const multipart=()=>{const body=new FormData();body.set('_data','{"name":"Opaque origin upload"}');return body;};
+    const publicRead=await fetch(publicData,{headers:opaqueHeaders});
+    assert.equal(publicRead.headers.get('access-control-allow-origin'),'*');
+    assert.equal((await publicRead.json()).totalItems,1);
+    assert.equal((await fetch(publicData,{method:'POST',headers:opaqueHeaders,body:multipart()})).status,201);
+    assert.equal((await fetch(publicData,{method:'POST',headers:{Origin:'https://unrelated.test','Content-Type':'application/json'},body:'{"name":"Unrelated origin"}'})).status,403);
+    assert.equal((await fetch(server+'/api/auth/session',{method:'POST',headers:opaqueHeaders,body:multipart()})).status,403);
+    const privateRead=await fetch(dataURL,{headers:{...opaqueHeaders,Cookie:cookie}});
+    assert.equal(privateRead.status,403);
+    assert.equal(privateRead.headers.get('access-control-allow-origin'),null);
+    await privateRead.body?.cancel();
+    assert.equal((await fetch(dataURL,{method:'POST',headers:{...opaqueHeaders,Cookie:cookie},body:multipart()})).status,403);
     assert.equal((await fetch(dataURL,{method:'POST',headers:{Cookie:cookie,Origin:'https://other.test','Content-Type':'application/json'},body:'{"name":"blocked"}'})).status,403);
     const created=await fetch(dataURL,{method:'POST',headers:{Cookie:cookie,Origin:server,'Content-Type':'application/json'},body:'{"name":"New contact"}'});assert.equal(created.status,201);
     const live=await created.json();

@@ -169,7 +169,7 @@ test('cold published requests wait for authentication and enforce private access
     '$env/dynamic/private': environment, '$lib/server/pb': server,
     '$lib/server/companion': { companionEnabled: () => false },
     '$lib/server/private-apps': privacy
-  }, { URL });
+  }, { URL, Headers, Response });
   const { GET } = loadTS('src/routes/tinykit/preview/[id]/+server.ts', {
     '@sveltejs/kit': { error: (status, message) => Object.assign(new Error(message), { status }) },
     '$lib/server/pb': server
@@ -177,9 +177,10 @@ test('cold published requests wait for authentication and enforce private access
 
   const preview = id => {
     const url = new URL('https://app.example/tinykit/preview/' + id);
+    const locals = {};
     return handle({
-      event: { url, request: new Request(url), locals: {}, cookies: { get: () => undefined } },
-      resolve: () => GET({ params: { id } })
+      event: { url, request: new Request(url), locals, route: { id: '/tinykit/preview/[id]' }, params: { id }, cookies: { get: () => undefined } },
+      resolve: () => GET({ params: { id }, locals })
     });
   };
   const responses = Promise.allSettled([preview(project.id), preview(privateProject.id)]);

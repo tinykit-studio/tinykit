@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import { getProjectByDomain, isSetupComplete, pb } from '$lib/server/pb'
+import { isSetupComplete, pb } from '$lib/server/pb'
 import { env } from '$env/dynamic/private'
 
 const PB_URL = env.POCKETBASE_URL || 'http://127.0.0.1:8091'
@@ -12,10 +12,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 		throw redirect(302, '/setup')
 	}
 
-	const domain = locals.domain
-
 	// Try to find a project for this domain
-	const project = await getProjectByDomain(domain)
+	const project = locals.appProject
 
 	if (project) {
 		// Serve the production app (compiled HTML from file attachment)
