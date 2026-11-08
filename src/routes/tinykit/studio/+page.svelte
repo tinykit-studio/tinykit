@@ -491,6 +491,7 @@
           timestamp: Date.now(),
         },
       ];
+      throw err;
     }
   }
 
@@ -523,17 +524,23 @@
       return;
     }
 
-    await do_deploy();
+    await deploy_with_alert();
+  }
+
+  async function deploy_with_alert() {
+    try {
+      await do_deploy();
+    } catch (err) {
+      alert(err instanceof Error ? `Deploy failed: ${err.message}` : "Deploy failed. Please try again.");
+    }
   }
 
   async function do_deploy() {
-    if (is_deploying) return;
+    if (is_deploying) throw new Error("A deploy is already in progress.");
     play_tap();
     is_deploying = true;
     try {
       await build_app();
-    } catch (err) {
-      console.error("Deploy failed:", err);
     } finally {
       is_deploying = false;
     }
@@ -545,12 +552,12 @@
     // Update project with the selected domain
     try {
       await store.update({ domain });
-      // Now deploy
-      await do_deploy();
     } catch (err) {
       console.error("Failed to assign domain:", err);
       alert("Failed to assign domain. See console for details.");
+      return;
     }
+    await deploy_with_alert();
   }
 
   async function handle_title_change(title: string) {
@@ -663,7 +670,6 @@
       <div class="hidden md:block">
         <Header
           project_title={project_title ?? ""}
-          project_id={store?.project?.id ?? ""}
           kit_id={store?.project?.kit}
           {vibe_zone_enabled}
           bind:preview_position
@@ -1010,7 +1016,6 @@
         <!-- Mobile Top Toolbar -->
         <Header
           project_title={project_title ?? ""}
-          project_id={store?.project?.id ?? ""}
           kit_id={store?.project?.kit}
           {vibe_zone_enabled}
           bind:preview_position

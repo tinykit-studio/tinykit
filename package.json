@@ -1,6 +1,6 @@
 {
   "name": "tinykit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Open-source AI development platform - build production apps in an afternoon",
   "private": true,
   "type": "module",
@@ -14,7 +14,8 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "pocketbase:download": "node scripts/download-pocketbase.js",
     "pocketbase:serve": "lsof -ti :8091 | xargs kill 2>/dev/null || true; ./pocketbase/pocketbase serve --http=127.0.0.1:8091",
-    "postinstall": "svelte-kit sync && node scripts/download-pocketbase.js"
+    "postinstall": "svelte-kit sync && node scripts/download-pocketbase.js",
+    "test": "node --test tests/*.test.mjs"
   },
   "devDependencies": {
     "@sveltejs/adapter-node": "^5.2.9",

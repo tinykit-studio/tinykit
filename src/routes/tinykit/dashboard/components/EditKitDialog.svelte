@@ -80,7 +80,7 @@
         >
         <!-- IconPicker might need internal updates or a wrapper class, assuming it uses inherited color -->
         <div class="text-[var(--builder-text-primary)]">
-          <IconPicker bind:value={icon} />
+          <IconPicker value={icon} onchange={(value) => icon = value} />
         </div>
       </div>
     </div>

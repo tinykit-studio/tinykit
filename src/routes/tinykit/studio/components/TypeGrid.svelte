@@ -1,10 +1,10 @@
-<script lang="ts">
-	import type { Component } from "svelte"
+<script lang="ts" generics="T extends string">
+	import type { Type } from "lucide-svelte"
 
 	type TypeOption = {
-		value: string
+		value: T
 		label: string
-		icon: Component<{ size?: number }>
+		icon: typeof Type
 	}
 
 	let {
@@ -13,8 +13,8 @@
 		onselect
 	}: {
 		types: TypeOption[]
-		selected: string
-		onselect: (value: string) => void
+		selected: T
+		onselect: (value: T) => void
 	} = $props()
 </script>
 

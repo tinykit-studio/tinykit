@@ -92,7 +92,7 @@
   // Using JSON comparison to avoid Svelte 5 proxy issues
   let last_data_hash = "";
   const send_data_update = debounce((data: any) => {
-    const data_hash = JSON.stringify(data);
+    const data_hash = JSON.stringify(data ?? {});
     if (data_hash === last_data_hash) return;
     last_data_hash = data_hash;
     post_to_iframe({

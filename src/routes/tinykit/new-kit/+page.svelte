@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { page } from "$app/stores";
   import { goto } from "$app/navigation";
   import { ArrowLeft, Loader2, Package, Pencil, Check, X, Eye } from "lucide-svelte";
   import Icon from "@iconify/svelte";
@@ -11,6 +12,7 @@
   import { processCode, dynamic_iframe_srcdoc, generate_design_css } from "$lib/compiler/init";
 
   const kits = get_featured_kits_with_templates();
+  let domain = $derived($page.url.searchParams.get("domain") || "");
   let is_creating = $state(false);
   let error_message = $state("");
   let show_custom_name_dialog = $state(false);
@@ -179,7 +181,7 @@
       // Users can deploy individual apps when ready
 
       // Redirect to dashboard with this kit selected
-      goto(`/tinykit?kit=${kit.id}`);
+      goto(domain ? "/tinykit/connect-domain" : `/tinykit?kit=${kit.id}`);
     } catch (err: any) {
       console.error("Failed to create kit:", err);
       const detail =
@@ -223,7 +225,7 @@
       });
 
       // Redirect to /new with the kit ID to add first app
-      goto(`/tinykit/new?kit=${kit.id}`);
+      goto(`/tinykit/new?kit=${kit.id}${domain ? `&domain=${encodeURIComponent(domain)}` : ""}`);
     } catch (err: any) {
       console.error("Failed to create custom kit:", err);
       const detail =
@@ -256,7 +258,7 @@
   <!-- Header -->
   <header class="border-b border-[var(--builder-border)] px-6 py-4">
     <a
-      href="/tinykit"
+      href="/tinykit?dashboard=1"
       class="inline-flex items-center gap-2 text-[var(--builder-text-secondary)] hover:text-[var(--builder-text-primary)] transition-colors"
     >
       <ArrowLeft class="w-4 h-4" />

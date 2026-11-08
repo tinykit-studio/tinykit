@@ -36,6 +36,6 @@ export const GET: RequestHandler = async ({ locals }) => {
 		throw redirect(302, '/tinykit/studio')
 	}
 
-	// No project for this domain - redirect to new project page
-	throw redirect(302, `/tinykit/new?domain=${encodeURIComponent(domain)}`)
+	// No project for this domain - redirect to connect domain page
+	throw redirect(302, '/tinykit/connect-domain')
 }

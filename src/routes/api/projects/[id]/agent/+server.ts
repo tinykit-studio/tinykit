@@ -1,38 +1,19 @@
 import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import { env } from '$env/dynamic/private'
-import { getProject, updateProject, createSnapshot, getLLMSettings, validateUserToken, unauthorizedResponse, type LLMSettings } from '$lib/server/pb'
+import { is_configured } from '$lib/ai/config'
+import { get_summary_model } from '$lib/ai/model'
+import { getProject, updateProject, createSnapshot, getLLMSettings, validateUserToken, unauthorizedResponse } from '$lib/server/pb'
 import { type LLMProvider, type AgentMessage } from '$lib/ai/sdk-agent'
 import { calculateCost } from '$lib/ai/types'
-
-// Env var fallbacks
-const ENV_LLM_PROVIDER = (env.LLM_PROVIDER as LLMProvider) || 'openai'
-const ENV_LLM_API_KEY = env.LLM_API_KEY || ''
-const ENV_LLM_MODEL = env.LLM_MODEL || 'gpt-4o'
-const ENV_LLM_BASE_URL = env.LLM_BASE_URL
 
 // Track running agents to prevent duplicate runs
 const runningAgents = new Map<string, boolean>()
 
-// Get LLM config from DB or fall back to env vars
+// getLLMSettings applies environment overrides before saved settings.
 async function getLLMConfig() {
-	const dbSettings = await getLLMSettings()
-
-	if (dbSettings && dbSettings.api_key) {
-		return {
-			provider: dbSettings.provider as LLMProvider,
-			apiKey: dbSettings.api_key,
-			model: dbSettings.model,
-			baseUrl: dbSettings.base_url
-		}
-	}
-
-	return {
-		provider: ENV_LLM_PROVIDER,
-		apiKey: ENV_LLM_API_KEY,
-		model: ENV_LLM_MODEL,
-		baseUrl: ENV_LLM_BASE_URL
-	}
+	const settings = await getLLMSettings()
+	if (!is_configured(settings) || !settings) return null
+	return { provider: settings.provider, apiKey: settings.api_key, model: settings.model, baseUrl: settings.base_url }
 }
 
 // Simple in-memory rate limiting
@@ -81,9 +62,6 @@ async function generateSummary(
 ): Promise<string> {
 	try {
 		const { generateText } = await import('ai')
-		const { createOpenAI } = await import('@ai-sdk/openai')
-		const { createAnthropic } = await import('@ai-sdk/anthropic')
-		const { createGoogleGenerativeAI } = await import('@ai-sdk/google')
 
 		// Build context about what happened
 		const toolSummary = toolCalls.length > 0
@@ -103,25 +81,7 @@ Examples of good summaries:
 
 One-line summary:`
 
-		// Use the cheapest available model for each provider
-		let model
-		if (llmConfig.provider === 'anthropic') {
-			const anthropic = createAnthropic({ apiKey: llmConfig.apiKey })
-			model = anthropic('claude-3-5-haiku-latest')
-		} else if (llmConfig.provider === 'gemini') {
-			const google = createGoogleGenerativeAI({ apiKey: llmConfig.apiKey })
-			model = google('gemini-2.0-flash-lite')
-		} else {
-			// OpenAI or OpenAI-compatible providers
-			const openai = createOpenAI({
-				apiKey: llmConfig.apiKey,
-				baseURL: llmConfig.baseUrl
-			})
-			// If using custom base URL, use the configured model (might be the only one available)
-			// Otherwise use gpt-4o-mini for OpenAI
-			const cheapModel = llmConfig.baseUrl ? llmConfig.model : 'gpt-4o-mini'
-			model = openai(cheapModel)
-		}
+		const model = get_summary_model(llmConfig)
 
 		const result = await generateText({
 			model,
@@ -214,8 +174,8 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 		}
 
 		const llmConfig = await getLLMConfig()
-		if (!llmConfig.apiKey) {
-			return json({ error: 'AI not configured. Add your API key in Settings.' }, { status: 500 })
+		if (!llmConfig) {
+			return json({ error: 'AI not configured. Choose a provider and model in Settings.' }, { status: 500 })
 		}
 
 		// Build conversation history (should include initial user message)

@@ -7,6 +7,8 @@
 import PocketBase from 'pocketbase'
 import { env } from '$env/dynamic/private'
 import * as fs from 'fs'
+import { settings_from_env, type LLMSettings } from '$lib/ai/config'
+export type { LLMSettings } from '$lib/ai/config'
 
 const PB_URL = env.POCKETBASE_URL || 'http://127.0.0.1:8091'
 const SETUP_FILE = './pocketbase/pb_data/.setup_complete'
@@ -20,6 +22,7 @@ pb.autoCancellation(false)
 // Initialize admin auth
 let isAuthenticated = false
 let lastCredentialsCheck = 0
+let authInFlight: Promise<boolean> | null = null
 
 // Get auth token from setup file or credentials from env vars
 function getAuthConfig(): { token: string } | { email: string; password: string } | null {
@@ -79,6 +82,9 @@ function getPasswordCredentials(): { email: string; password: string } | null {
 }
 
 export async function ensureAuth(): Promise<boolean> {
+	// The request hook can start authentication before the published route needs it.
+	if (authInFlight) return authInFlight
+
 	// If already authenticated with valid token, return true
 	if (isAuthenticated && pb.authStore.isValid) {
 		return true
@@ -93,11 +99,18 @@ export async function ensureAuth(): Promise<boolean> {
 
 	// Check for new config every 5 seconds if not authenticated
 	const now = Date.now()
-	if (!isAuthenticated && now - lastCredentialsCheck < 5000) {
+	if (now - lastCredentialsCheck < 5000) {
 		return false
 	}
 	lastCredentialsCheck = now
 
+	authInFlight = authenticate().finally(() => {
+		authInFlight = null
+	})
+	return authInFlight
+}
+
+async function authenticate(): Promise<boolean> {
 	const config = getAuthConfig()
 	if (!config) {
 		console.warn('[PB] No auth config available (server needs setup)')
@@ -453,16 +466,6 @@ export async function deleteSnapshot(projectId: string, snapshotId: string) {
 }
 
 /**
- * LLM configuration type
- */
-export interface LLMSettings {
-	provider: 'openai' | 'anthropic' | 'gemini'
-	api_key: string
-	model: string
-	base_url?: string
-}
-
-/**
  * Get LLM settings - checks env vars first, then falls back to database
  * Env vars: LLM_API_KEY, LLM_PROVIDER, LLM_MODEL, LLM_BASE_URL
  */
@@ -513,14 +516,8 @@ export function unauthorizedResponse(message = 'Unauthorized') {
  */
 export async function getLLMSettings(): Promise<LLMSettings | null> {
 	// Check env vars first (for users who prefer not to store keys in DB)
-	if (env.LLM_API_KEY) {
-		return {
-			provider: (env.LLM_PROVIDER as LLMSettings['provider']) || 'anthropic',
-			api_key: env.LLM_API_KEY,
-			model: env.LLM_MODEL || 'claude-sonnet-4-20250514',
-			base_url: env.LLM_BASE_URL || undefined
-		}
-	}
+	const env_settings = settings_from_env(env)
+	if (env_settings) return env_settings
 
 	// Fall back to database settings
 	const authed = await ensureAuth()

@@ -91,6 +91,7 @@ function create_collection(name) {
   const base_url = \`\${API_BASE}/\${PROJECT_ID}/\${name}\`
   let subscribers = []
   let cache = null
+  const update_queue = new Map()
   let last_params = null
   let mutation_cooldown = 0 // Timestamp until which we ignore external updates
   let notifying = false // Reentrancy guard to prevent infinite loops
@@ -197,21 +198,43 @@ function create_collection(name) {
     },
 
     async update(id, data) {
-      // Set cooldown to ignore echo from our own mutation
-      collection._set_cooldown(500)
-      // Optimistically update local cache first (before server roundtrip)
-      if (cache) {
-        const idx = cache.findIndex(r => r.id === id)
-        if (idx !== -1) {
-          cache = cache.map(r => r.id === id ? { ...r, ...data } : r)
+      // Serialize writes to a record so an older response cannot overwrite a later edit.
+      const previous_request = update_queue.get(id)
+      let release
+      const pending = new Promise(resolve => { release = resolve })
+      update_queue.set(id, pending)
+      if (previous_request) await previous_request
+      try {
+        collection._set_cooldown(500)
+        const previous = cache?.find(r => r.id === id)
+        const optimistic = previous ? { ...previous, ...data } : null
+        if (optimistic) {
+          cache = cache.map(r => r.id === id ? optimistic : r)
           collection._notify(cache, true)
         }
+        try {
+          const { body, headers } = prepareRequestBody(data)
+          const res = await fetch(\`\${base_url}/\${id}\`, { method: 'PATCH', headers, body })
+          if (!res.ok) throw new Error(await res.text())
+          const record = await res.json()
+          // Replace temporary File objects with the filenames returned by storage.
+          if (cache) {
+            cache = cache.map(r => r.id === id ? record : r)
+            collection._notify(cache, true)
+          }
+          return record
+        } catch (err) {
+          // Only roll back this mutation, preserving unrelated record changes.
+          if (cache && previous) {
+            cache = cache.map(r => r === optimistic ? previous : r)
+            collection._notify(cache, true)
+          }
+          throw err
+        }
+      } finally {
+        release()
+        if (update_queue.get(id) === pending) update_queue.delete(id)
       }
-      // Support FormData passthrough, File objects auto-detection, or plain JSON
-      const { body, headers } = prepareRequestBody(data)
-      const res = await fetch(\`\${base_url}/\${id}\`, { method: 'PATCH', headers, body })
-      if (!res.ok) throw new Error(await res.text())
-      return res.json()
     },
 
     async delete(id) {
@@ -289,6 +312,8 @@ if (typeof window !== 'undefined') {
     const sse = new EventSource('/_tk/realtime/' + PROJECT_ID)
 
     sse.addEventListener('data_updated', (e) => {
+      // Skip if no data or data is the literal string "undefined"
+      if (!e.data || e.data === 'undefined') return
       try {
         const data = JSON.parse(e.data)
         window.__tk_update_data(data)

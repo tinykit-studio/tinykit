@@ -51,15 +51,12 @@
 - **Design System**: Update colors, fonts, shadows from a visual editor.
 - **Time Travel**: Snapshots on every change. Undo anything.
 - **Image Uploads**: Built-in asset storage for images and files.
-- **Bring Your Own LLM**: OpenAI, Anthropic, or Gemini (more coming soon).
-- **Backend Functionality (soon)** — Background jobs, CRON, server-side routes
-- **Authentication (soon)** — Email and OAuth signup in your apps
-- **Showcase (soon)** — Browse and one-click install community apps
-- **LLM Functionality (soon)** — AI-powered features and agentic workflows in your apps
+- **Bring Your Own LLM**: OpenAI, Anthropic, Gemini, DeepSeek, or a compatible local/custom server.
+- **Use Without AI**: Start from a template, edit code and content, and run your apps without an LLM API key.
 
 **Run hundreds of apps on one server.** Point any domain → get a working app.
 
-> Tinykit is in early alpha and evolving every day. Your suggestions, ideas, and reported bugs help us immensely. Join the conversation on [Discord](https://discord.gg/NfMjt3yUtn) or raise a GitHub issue.
+> Tinykit is early alpha. This maintenance update improves Docker setup, custom AI endpoints, domain setup, Canvas uploads, and preview/publishing reliability. See [the changelog](./CHANGELOG.md) for changes and upgrade instructions. Feedback and bug reports are welcome on [GitHub](https://github.com/tinykit-studio/tinykit/issues) and [Discord](https://discord.gg/NfMjt3yUtn).
 
 ### Star the project to give the maintainers a dopamine hit ⭐
 
@@ -69,7 +66,7 @@ The easiest way to get started is with Railway. Otherwise, you can run it locall
 
 ## Quick Deploy
 
-One-click one-minute deploy on Railway, no config necessary. Configure your LLM from the app (or add key as ENV var).
+Deploy on Railway and complete the setup screen. Configure AI from Settings, or start with templates and manual editing.
 
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy/tinykit?referralCode=RCPU7k&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
@@ -84,16 +81,16 @@ The simplest way to run Tinykit locally:
 ```bash
 git clone https://github.com/tinykit-studio/tinykit.git
 cd tinykit/deploy/docker
-docker-compose up -d
+docker compose up -d --build
 ```
 
-This starts Tinykit on port 5173. Visit http://localhost:5173/setup to complete first-time setup.
+This starts Tinykit on port 3000. Visit http://localhost:3000/setup to create your account.
 
 See [deploy/docker/README.md](./deploy/docker/README.md) for more options.
 
 ### Node.js
 
-If you prefer running directly with Node:
+Use Node.js 22 or newer and npm:
 
 ```bash
 # Clone and install
@@ -101,11 +98,19 @@ git clone https://github.com/tinykit-studio/tinykit.git
 cd tinykit
 npm install
 
-# Start dev server (auto-downloads PocketBase)
+# Start dev server (PocketBase was downloaded during installation)
 npm run dev
 ```
 
 Visit http://localhost:5173/setup to complete setup.
+
+## AI providers and local models
+
+Open `/tinykit/settings` to choose a provider and enter its exact model ID. For a local server, choose **Custom / local (OpenAI-compatible)** and set the API base URL, for example `http://localhost:1234/v1` for LM Studio. An API key is optional when your server does not require one. Select a model that supports tool calling.
+
+Custom endpoints use Chat Completions for both the builder and history summaries. **Test** checks connectivity and authentication; it does not verify generation or tool support. [Provider setup and Docker networking](./docs/ai-providers.md) explain DeepSeek, local models, and environment configuration.
+
+Templates, content editing, and published apps can work without AI. This release connects to model APIs; local coding-agent and subscription-based integrations are not included.
 
 ## Usage
 
@@ -127,12 +132,12 @@ blog.myserver.com/tinykit/studio        → Edit blog app
 | -------------------- | ------------------------- |
 | `/`                  | Your production app       |
 | `/tinykit/studio`    | Edit current domain's app |
-| `/tinykit/dashboard` | See all apps              |
+| `/tinykit` | See all apps              |
 | `/tinykit/settings`  | LLM configuration         |
 
 ### Templates
 
-12+ starter templates to kickstart your apps:
+Starter templates to kickstart your apps:
 
 | Category         | Templates                          |
 | ---------------- | ---------------------------------- |

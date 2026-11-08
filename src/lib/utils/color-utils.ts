@@ -113,17 +113,6 @@ export function get_analogous(hex: string, count: number = 2): string[] {
 }
 
 /**
- * Generate triadic colors (120° apart)
- */
-export function get_triadic(hex: string): string[] {
-	const hsl = hex_to_hsl(hex)
-	return [
-		hsl_to_hex({ ...hsl, h: (hsl.h + 120) % 360 }),
-		hsl_to_hex({ ...hsl, h: (hsl.h + 240) % 360 })
-	]
-}
-
-/**
  * Generate split-complementary colors
  */
 export function get_split_complementary(hex: string): string[] {
