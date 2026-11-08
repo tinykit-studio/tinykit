@@ -89,6 +89,12 @@ before the first creation request. A lost response retries that same intent and
 never adopts another app with a colliding ID. Recovery returns the original
 creation baseline, so intervening source edits still trigger conflict checks.
 
+You can also connect from the editor's **Hosted app** panel. A new local app
+can be reviewed before it exists on the host. **Save draft** or **Review & publish**
+creates the target with the reviewed privacy setting; connecting alone does not.
+Edits or destination changes after review require a fresh review. A missing app
+that was previously linked is an error, not permission to create a replacement.
+
 **The hosted app starts with no records. Locally entered records and sample data
 stay local.** Source publication is not a data migration. Tell the user this
 before first publication; transferring local records is a separate explicit task.
@@ -123,6 +129,9 @@ in [Private CRM](private-crm.md); opening a local preview does not configure the
   republishes source plus an added field while comparing the hosted records.
 - Server tests cover idempotent recovery, concurrent retries, collisions,
   account boundaries, metadata protection, and existing collection rules.
+- `TINYKIT_TEST_PUBLICATION=1 node --test tests/publication-regressions-runtime.test.mjs`
+  checks first publication through the editor bridge, stale review refusal,
+  and concurrent source publication across two web workers.
 
 This does not finish standalone CLI distribution, hosting provisioning,
 multi-component authoring for newly created apps, or local-to-hosted record

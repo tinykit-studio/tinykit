@@ -29,6 +29,7 @@ try {
   } else {
     if (!['connect', 'review', 'link', 'push', 'publish'].includes(action)) throw new Error('Unknown companion action.');
     const options = { directory, server: saved?.server, project: saved?.project_id };
+    let connectedReview;
     if (action === 'connect') {
       options.server = serverOrigin(values.server);
       options.project = values.project_id;
@@ -39,14 +40,14 @@ try {
         options.password = values.password;
       }
       await hostedCommand('login', options);
-      await hostedCommand('remote-status', options);
+      connectedReview = await hostedCommand('review', options);
       await writeAtomic(join(directory, '.tinykit/connection.json'), { server: options.server, project_id: options.project });
     } else if (['link', 'push', 'publish'].includes(action)) {
       if (!values.review || typeof values.review.local_revision !== 'string' || typeof values.review.base_revision !== 'string') throw new Error('Review the current changes first.');
       options.review = values.review;
       options.publish = action === 'push' && values.publish === true;
     }
-    const result = await hostedCommand(action === 'connect' ? 'review' : action, options);
+    const result = connectedReview || await hostedCommand(action, options);
     console.log(JSON.stringify(result));
   }
 } catch (error) {

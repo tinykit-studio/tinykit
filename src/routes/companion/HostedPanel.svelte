@@ -21,7 +21,7 @@
   const changedFiles = $derived(review?.changes?.filter((file: any) => file.local !== file.hosted) || []);
   const unpublishedFiles = $derived(review?.changes?.filter((file: any) => file.hosted !== file.published) || []);
   const stale = $derived(Boolean(review && source_revision && review.review.local_revision !== source_revision));
-  const canAct = $derived(available && reviewValid && review?.linked && !review?.conflict && !stale && !busy && !import_error);
+  const canAct = $derived(available && reviewValid && (review?.linked || review?.new_target) && !review?.conflict && !stale && !busy && !import_error);
 
   async function request(action: string, values: any = {}) {
     const response = await fetch('/companion/hosted', {
@@ -76,7 +76,7 @@
     } finally { busy = ''; }
   }
   async function reviewChanges() { await run('review'); if (reviewValid) showChanges = true; }
-  async function preparePublish() { await run('review'); if (reviewValid) { if (review.conflict || !review.linked) showChanges = true; else showPublishReview = true; } }
+  async function preparePublish() { await run('review'); if (reviewValid) { if (review.conflict || (!review.linked && !review.new_target)) showChanges = true; else showPublishReview = true; } }
   watch(() => source_revision, () => {
     if (available && !busy && !showChanges && !showConnection && !showPublishReview) refresh().catch(error => failure = error.message);
   });
@@ -130,7 +130,9 @@
       <div><span class="dot live"></span><div><strong>Live app</strong><small>{review.published_at ? `Published ${new Date(review.published_at).toLocaleDateString()}` : 'Not published yet'}</small></div>{#if review.published_revision}<a href={review.public_url} target="_blank" rel="noreferrer">Open ↗</a>{/if}</div>
     </div>
     <div class="review-actions"><button onclick={reviewChanges} disabled={!!busy}>Review changes</button><button class="text-button" onclick={() => run('review')} disabled={!!busy}>Refresh</button></div>
-    {#if review.conflict || !review.linked}
+    {#if review.new_target}
+      <p class="notice">Saving a draft or publishing creates a new {review.visibility} app on this server. Local records stay in this preview.</p>
+    {:else if review.conflict || !review.linked}
       <div class="notice"><strong>{review.conflict ? 'Hosted changes need review' : 'Review before your first push'}</strong><p>Compare the versions, then accept them to allow your local files to replace the hosted draft.</p><button onclick={reviewChanges} disabled={!!busy}>Compare versions</button></div>
     {:else if stale}<p class="notice">Files changed. Refresh the review before publishing.</p>{/if}
     <div class="publish-actions">
@@ -176,7 +178,7 @@
       </div>
       <footer>
         <p>Only app definitions are pushed. Live data stays on the server.</p>
-        {#if review.conflict || !review.linked}<button class="primary" disabled={!!busy || stale || !reviewValid} onclick={async () => { await run('link'); if (reviewValid && !review?.conflict) showChanges = false; }}>Accept reviewed versions</button>{:else}<button class="primary" onclick={() => showChanges = false}>Done reviewing</button>{/if}
+        {#if review.conflict || (!review.linked && !review.new_target)}<button class="primary" disabled={!!busy || stale || !reviewValid} onclick={async () => { await run('link'); if (reviewValid && !review?.conflict) showChanges = false; }}>Accept reviewed versions</button>{:else}<button class="primary" onclick={() => showChanges = false}>Done reviewing</button>{/if}
       </footer>
   </dialog>
 {/if}

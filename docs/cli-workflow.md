@@ -84,6 +84,12 @@ Direct server export creates a normal Svelte/Vite project. Component bundles in 
 
 See the [source-tree contract](static-svelte-roundtrip.md) for included files, limits, and server upgrades. Runtime uploaded-file export remains limited to the older companion workflow. The standalone `npm run publish` adapter still supports explicit token environment variables; the CLI uses shared sign-in.
 
+Component publication compares the expected source hash and replaces source plus
+published HTML in one PocketBase transaction. Concurrent publications from the
+same baseline cannot silently replace each other: stale writers receive HTTP
+409 and must reconcile. Deploy the complete `pocketbase/pb_hooks/` directory
+with the server, including when building a Docker image.
+
 ## Verification
 
 ```sh

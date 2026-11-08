@@ -187,15 +187,19 @@ test('publish preserves exact source bytes across repeated uploads and rejects u
       authStore = { save(token) { assert.equal(token, 'test-token'); } };
       collection() { return {
         getOne: async () => { if (denied) throw { status: 403 }; return record; },
-        update: async (_id, data) => {
-          // Exercise real multipart encoding: ordinary text values would
-          // normalize LF to CRLF, breaking the next revision comparison.
-          const decoded = await new Request('http://localhost', { method: 'POST', body: data }).formData();
-          assert.deepEqual([...decoded.keys()].sort(), ['@jsonPayload', 'published_html']);
-          Object.assign(record, JSON.parse(decoded.get('@jsonPayload')));
-          writes++;
-        }
+        update: async () => assert.fail('Source publication must use the transactional endpoint')
       }; }
+      async send(path, { method, body }) {
+        assert.equal(path, `/api/tinykit/projects/${project.id}/component-build`);
+        assert.equal(method, 'POST');
+        // Decode the real JSON transport, preserving LF/CRLF and Unicode.
+        const payload = await new Request('http://localhost', { method, body: JSON.stringify(body) }).json();
+        assert.equal(payload.expected_source_hash, sourceHash(record.frontend_code, record.source_bundle));
+        record.frontend_code = payload.frontend_code;
+        if (payload.source_bundle) record.source_bundle = payload.source_bundle;
+        writes++;
+        return { success: true, source_hash: sourceHash(record.frontend_code, record.source_bundle) };
+      }
     } }
   };
   const exports = {};

@@ -37,6 +37,11 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			}
 			const current_hash = sourceHash(project.frontend_code, project.source_bundle)
 			if (current_hash !== expected_source_hash) return json({ error: 'Server source changed; reconcile before publishing.' }, { status: 409 })
+			// PocketBase repeats this comparison inside the write transaction.
+			// A process-local lock cannot protect against another server or client.
+			return json(await client.send(`/api/tinykit/projects/${params.id}/component-build`, {
+				method: 'POST', body: { html, frontend_code, expected_source_hash, ...(bundle ? { source_bundle: bundle } : {}) }
+			}))
 		}
 
 		// Create a FormData with the HTML file
@@ -56,6 +61,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			size: html.length
 		})
 	} catch (error: any) {
+		if (error.status === 409) return json({ error: error.message }, { status: 409 })
 		if (error.status === 403) return json({ error: 'Not allowed to publish this project' }, { status: 403 })
 		if (error.status === 404) {
 			return json({ error: 'Project not found' }, { status: 404 })

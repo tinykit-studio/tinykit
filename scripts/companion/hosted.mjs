@@ -75,7 +75,15 @@ export async function hostedCommand(command, options) {
     return { ok: true, server, project_id: projectId, base_revision: remote.base_revision, draft_revision: remote.draft?.revision || null, published_revision: remote.publication?.revision || null, published_at: remote.publication?.published_at || null, public_url: server + remote.public_path };
   }
   if (command === 'review') {
-    const remote = await status();
+    let remote, newTarget = false;
+    try { remote = await status(); }
+    catch (error) {
+      // A new local app has no hosted record until the reviewed save/publish.
+      // Never treat a missing linked app, another ID, or an auth error as new.
+      if (error.status !== 404 || baseline || !config.local_first || projectId !== config.project_id) throw error;
+      newTarget = true;
+      remote = { base_revision: '', visibility: config.visibility, public_path: `/tinykit/preview/${projectId}` };
+    }
     // Only counts cross into the review UI; row contents stay on the host.
     let live_data_summary = null;
     try {
@@ -102,7 +110,7 @@ export async function hostedCommand(command, options) {
     const changes = Object.entries(files).map(([file, field]) => ({ file, local: text(local, field), hosted: text(remote.draft?.definition || remote.definition, field), source: text(remote.definition, field), published: text(remote.publication?.definition, field) }));
     const linked = Boolean(baseline?.server === server && baseline?.project_id === projectId && baseline?.base_revision);
     const conflict = linked && (baseline.base_revision !== remote.base_revision || (baseline.draft_revision || null) !== (remote.draft?.revision || null));
-    return { ok: true, server, project_id: projectId, linked, conflict, visibility: remote.visibility || 'public', live_data_summary, review: { local_revision: workspace.revision, base_revision: remote.base_revision, draft_revision: remote.draft?.revision || null }, changes,
+    return { ok: true, server, project_id: projectId, linked, conflict, new_target: newTarget, visibility: remote.visibility || 'public', live_data_summary: newTarget ? { collections: [], total: 0 } : live_data_summary, review: { local_revision: workspace.revision, base_revision: remote.base_revision, draft_revision: remote.draft?.revision || null, ...(newTarget ? { new_target: true, server, project_id: projectId } : {}) }, changes,
       draft_revision: remote.draft?.revision || null, published_revision: remote.publication?.revision || null,
       draft_stale: Boolean(remote.draft && remote.draft.base_revision !== remote.base_revision && remote.publication?.revision !== remote.draft.revision),
       published_at: remote.publication?.published_at || null, public_url: server + remote.public_path };
@@ -110,6 +118,13 @@ export async function hostedCommand(command, options) {
   const release = await claimWorkspace(runtime, 'hosted.lock');
   let pushResult, publishResult, publishAttempted = false;
   try {
+    const firstReview = options.review?.new_target === true;
+    if (firstReview && (baseline || !config.local_first || command !== 'push' || projectId !== config.project_id ||
+        options.review.server !== server || options.review.project_id !== projectId ||
+        options.review.base_revision !== '' || options.review.draft_revision !== null ||
+        (await readWorkspace(root)).revision !== options.review.local_revision)) {
+      throw new Error('Files or publication destination changed since your review. Refresh before continuing.');
+    }
     if(!baseline && config.local_first && command==='push') {
       if(projectId!==config.project_id)throw new Error('First publication must use this local app’s own project ID.');
       baseline=await bootstrapHostedApp(root,config,server,request);
@@ -118,7 +133,8 @@ export async function hostedCommand(command, options) {
     }
     if (options.review) {
       const current = await status();
-      if (current.base_revision !== options.review.base_revision || (current.draft?.revision || null) !== options.review.draft_revision || (await readWorkspace(root)).revision !== options.review.local_revision) throw new Error('Files or hosted source changed since your review. Refresh the review before continuing.');
+      const expectedBase = firstReview ? baseline.base_revision : options.review.base_revision;
+      if (current.base_revision !== expectedBase || (current.draft?.revision || null) !== options.review.draft_revision || (await readWorkspace(root)).revision !== options.review.local_revision) throw new Error('Files or hosted source changed since your review. Refresh the review before continuing.');
     }
     if (command === 'link') {
       const remote = await status();
