@@ -163,6 +163,62 @@ test('first publication requires an explicit destination without contacting a de
   );
   assert.equal(called, false);
 });
+test('first-publication review binds visibility to its revision when configuration changes during the request', async (t) => {
+  const root = await temporary(t), previousFetch = globalThis.fetch, previousToken = process.env.TINYKIT_TOKEN;
+  process.env.TINYKIT_TOKEN = 'fixture-token';
+  t.after(() => {
+    globalThis.fetch = previousFetch;
+    if (previousToken === undefined) delete process.env.TINYKIT_TOKEN;
+    else process.env.TINYKIT_TOKEN = previousToken;
+  });
+  for (const visibility of ['public', 'private']) {
+    const directory = join(root, visibility), original = visibility === 'public' ? 'private' : 'public';
+    const app = await createProject({ directory, template: 'blank', visibility: original });
+    const configPath = join(directory, 'tinykit.json');
+    const setVisibility = async value => {
+      const config = JSON.parse(await readFile(configPath, 'utf8'));
+      await writeAtomic(configPath, { ...config, visibility: value });
+    };
+    const server = 'https://tinykit.example', base = 'b'.repeat(64);
+    let changed = false, created = null;
+    globalThis.fetch = async (url, options) => {
+      const path = new URL(url).pathname;
+      if (path.endsWith('/hosted')) {
+        if (!changed) {
+          // The request is in flight after hostedCommand's initial config read.
+          await setVisibility(visibility);
+          changed = true;
+        }
+        return created ? Response.json({ protocol: 1, base_revision: base, draft: null })
+          : Response.json({ error: 'Not found' }, { status: 404 });
+      }
+      if (path.endsWith('/create')) {
+        created = JSON.parse(options.body);
+        return Response.json({ protocol: 1, project_id: app.project_id, creation_id: created.creation_id,
+          visibility: created.visibility, base_revision: base, draft_revision: null });
+      }
+      if (path.endsWith('/draft')) {
+        return Response.json({ draft: { revision: 'd'.repeat(64), base_revision: base } });
+      }
+      assert.ok(path.startsWith('/_pb/api/collections/_tk_projects/records/'));
+      return Response.json({}, { status: 404 });
+    };
+    const reviewed = await hostedCommand('review', { directory, server });
+    assert.equal(reviewed.visibility, visibility, 'the confirmation must display the revision’s visibility');
+    assert.equal(reviewed.review.visibility, visibility);
+    assert.equal(reviewed.review.local_revision, (await readWorkspace(directory)).revision);
+    await assert.rejects(hostedCommand('push', { directory, server,
+      review: { ...reviewed.review, visibility: original } }), /changed since your review/);
+    assert.equal(created, null, 'mismatched approval must not create an app');
+    await setVisibility(original);
+    await assert.rejects(hostedCommand('push', { directory, server, review: reviewed.review }), /changed since your review/);
+    assert.equal(created, null, 'edits after review must not create an app');
+    await setVisibility(visibility);
+    const result = await hostedCommand('push', { directory, server, review: reviewed.review });
+    assert.equal(result.push.state, 'succeeded');
+    assert.equal(created.visibility, reviewed.visibility, 'creation must honor the displayed visibility');
+  }
+});
 test('the editor publish action activates saved draft A while newer local source B stays unpublished', async (t) => {
   const root=await temporary(t),directory=join(root,'app');
   const app=await createProject(parseCreateArgs([directory]));

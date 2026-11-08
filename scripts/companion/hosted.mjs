@@ -82,7 +82,7 @@ export async function hostedCommand(command, options) {
       // Never treat a missing linked app, another ID, or an auth error as new.
       if (error.status !== 404 || baseline || !config.local_first || projectId !== config.project_id) throw error;
       newTarget = true;
-      remote = { base_revision: '', visibility: config.visibility, public_path: `/tinykit/preview/${projectId}` };
+      remote = { base_revision: '', public_path: `/tinykit/preview/${projectId}` };
     }
     // Only counts cross into the review UI; row contents stay on the host.
     let live_data_summary = null;
@@ -95,6 +95,14 @@ export async function hostedCommand(command, options) {
       }
     } catch { /* Older or restricted hosts can still publish without a count. */ }
     const workspace = await readWorkspace(root);
+    if (newTarget) {
+      // Display and approve the same configuration that the revision covers.
+      if (!workspace.config.local_first || workspace.config.hosted || workspace.config.project_id !== projectId ||
+          !['private', 'public'].includes(workspace.config.visibility)) {
+        throw new Error('Publication destination changed during review. Refresh before continuing.');
+      }
+      remote.visibility = workspace.config.visibility;
+    }
     const assets = {};
     for (const name of (await readdir(join(root, 'assets'))).filter(name => !name.startsWith('.'))) {
       const bytes = await readWorkspaceFile(root, join('assets', name));
@@ -110,7 +118,7 @@ export async function hostedCommand(command, options) {
     const changes = Object.entries(files).map(([file, field]) => ({ file, local: text(local, field), hosted: text(remote.draft?.definition || remote.definition, field), source: text(remote.definition, field), published: text(remote.publication?.definition, field) }));
     const linked = Boolean(baseline?.server === server && baseline?.project_id === projectId && baseline?.base_revision);
     const conflict = linked && (baseline.base_revision !== remote.base_revision || (baseline.draft_revision || null) !== (remote.draft?.revision || null));
-    return { ok: true, server, project_id: projectId, linked, conflict, new_target: newTarget, visibility: remote.visibility || 'public', live_data_summary: newTarget ? { collections: [], total: 0 } : live_data_summary, review: { local_revision: workspace.revision, base_revision: remote.base_revision, draft_revision: remote.draft?.revision || null, ...(newTarget ? { new_target: true, server, project_id: projectId } : {}) }, changes,
+    return { ok: true, server, project_id: projectId, linked, conflict, new_target: newTarget, visibility: remote.visibility || 'public', live_data_summary: newTarget ? { collections: [], total: 0 } : live_data_summary, review: { local_revision: workspace.revision, base_revision: remote.base_revision, draft_revision: remote.draft?.revision || null, ...(newTarget ? { new_target: true, server, project_id: projectId, visibility: workspace.config.visibility } : {}) }, changes,
       draft_revision: remote.draft?.revision || null, published_revision: remote.publication?.revision || null,
       draft_stale: Boolean(remote.draft && remote.draft.base_revision !== remote.base_revision && remote.publication?.revision !== remote.draft.revision),
       published_at: remote.publication?.published_at || null, public_url: server + remote.public_path };
@@ -119,15 +127,18 @@ export async function hostedCommand(command, options) {
   let pushResult, publishResult, publishAttempted = false;
   try {
     const firstReview = options.review?.new_target === true;
-    if (firstReview && (baseline || !config.local_first || command !== 'push' || projectId !== config.project_id ||
+    const reviewedWorkspace = firstReview ? await readWorkspace(root) : null;
+    const creationConfig = reviewedWorkspace?.config || config;
+    if (firstReview && (baseline || creationConfig.hosted || !creationConfig.local_first || command !== 'push' || projectId !== creationConfig.project_id ||
         options.review.server !== server || options.review.project_id !== projectId ||
+        options.review.visibility !== creationConfig.visibility || !['private', 'public'].includes(creationConfig.visibility) ||
         options.review.base_revision !== '' || options.review.draft_revision !== null ||
-        (await readWorkspace(root)).revision !== options.review.local_revision)) {
+        reviewedWorkspace.revision !== options.review.local_revision)) {
       throw new Error('Files or publication destination changed since your review. Refresh before continuing.');
     }
-    if(!baseline && config.local_first && command==='push') {
-      if(projectId!==config.project_id)throw new Error('First publication must use this local app’s own project ID.');
-      baseline=await bootstrapHostedApp(root,config,server,request);
+    if(!baseline && creationConfig.local_first && command==='push') {
+      if(projectId!==creationConfig.project_id)throw new Error('First publication must use this local app’s own project ID.');
+      baseline=await bootstrapHostedApp(root,creationConfig,server,request);
       await writeAtomic(statePath,baseline);
       console.error('First publication starts with empty hosted records. Local records and samples stay in this workspace.');
     }
