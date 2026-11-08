@@ -63,13 +63,18 @@ function passwordPrompt() {
   if (!process.stdin.isTTY) throw new Error('Interactive login needs a terminal. Automation can use TINYKIT_TOKEN or TINYKIT_TOKEN_FILE.');
   return new Promise((resolvePassword, reject) => {
     let password = '', done = false;
-    const raw = process.stdin.isRaw, paused = process.stdin.isPaused();
+    const raw = process.stdin.isRaw, wasFlowing = process.stdin.readableFlowing === true;
     const finish = error => {
       if (done) return;
       done = true;
       process.stdin.off('data', input);
       process.stdin.setRawMode(Boolean(raw));
-      if (paused) process.stdin.pause();
+      // A fresh stdin starts with readableFlowing === null, not "paused".
+      // Stop reading when the prompt is done so it doesn't keep the CLI alive.
+      if (!wasFlowing) {
+        process.stdin.pause();
+        process.stdin.unref();
+      }
       process.stdout.write('\n');
       if (error) reject(error); else resolvePassword(password);
     };

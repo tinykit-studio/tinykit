@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { mkdtemp, readFile, writeFile, stat, mkdir, symlink, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -46,6 +48,38 @@ test('sign-in is private, shared across project folders, and bound to each serve
   await logout('https://second.example');
   assert.equal(await defaultServer(), server);
   await assert.rejects(getToken('https://second.example'), /Sign in/);
+});
+
+test('interactive login returns to the shell with the input stream still open', { timeout: 5000 }, async t => {
+  await fixture(t);
+  const script = `
+    import assert from 'node:assert/strict';
+    import { login } from ${JSON.stringify(new URL('../scripts/companion/auth.mjs', import.meta.url).href)};
+    process.stdin.isTTY = true;
+    process.stdin.setRawMode = raw => { process.stdin.isRaw = raw; };
+    globalThis.fetch = async (_url, options) => {
+      assert.equal(JSON.parse(options.body).password, 'test-password');
+      return Response.json({ token: 'test-token' });
+    };
+    const result = await login({ server: ${JSON.stringify(server)}, email: 'test@example.com' });
+    assert.equal(process.stdin.isRaw, false);
+    console.log(result.message);
+  `;
+  const child = spawn(process.execPath, ['--input-type=module', '-e', script], { signal: t.signal });
+  t.after(() => child.kill());
+  let output = '', sent = false, errors = '';
+  child.stdout.setEncoding('utf8').on('data', chunk => {
+    output += chunk;
+    if (!sent && output.includes('Password: ')) {
+      sent = true;
+      // Leave stdin open, as a real terminal does after the password is entered.
+      child.stdin.write('test-password\n');
+    }
+  });
+  child.stderr.setEncoding('utf8').on('data', chunk => { errors += chunk; });
+  assert.deepEqual(await once(child, 'close'), [0, null], errors);
+  assert.match(output, /Signed in to/);
+  assert.doesNotMatch(output, /test-password/);
 });
 
 test('environment tokens and older app-local credentials remain supported without crossing server bindings', async t => {

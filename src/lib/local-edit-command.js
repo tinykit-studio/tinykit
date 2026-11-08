@@ -19,21 +19,29 @@ export function localEditLink(projectId, origin) {
   return link.href;
 }
 
-/** @param {string} projectId @param {string} origin */
-export function localEditPrompt(projectId, origin) {
+/** @param {string} projectId @param {string} origin @param {string} [previewBranch] */
+export function localEditPrompt(projectId, origin, previewBranch = '') {
   const command = localEditCommand(projectId, origin, true);
   const server = new URL(origin).origin;
+  const repository = 'https://github.com/tinykit-studio/tinykit';
+  const branch = /^[a-zA-Z0-9][a-zA-Z0-9._/-]*$/.test(previewBranch) ? previewBranch : '';
   return [
     'Set up this Tinykit app for local editing in this chat.',
     '',
     `Tinykit server: ${server}`,
     `App ID: ${projectId}`,
     '',
-    'Use Node 22+ and a local checkout of https://github.com/tinykit-studio/tinykit. Reuse a checkout if available. Run npm ci if its dependencies are missing.',
+    'Use Node 22+.',
+    ...(branch ? [
+      `This staging build needs an up-to-date checkout of the Tinykit ${branch} branch. Reuse a checkout only if it is already on that branch and up to date.`,
+      `Otherwise, from a writable folder, clone it into a new directory: git clone --branch ${branch} --single-branch ${repository}.git`,
+      'Leave any existing checkout and local changes intact.'
+    ] : [`Use a local checkout of ${repository}. Reuse a checkout if available.`]),
+    'From the Tinykit checkout, run npm ci if dependencies are missing.',
     'Reuse an existing app folder only if its tinykit.json matches both the server and app ID. Keep any local edits intact.',
     `From the Tinykit checkout, run: ${command} --no-agent`,
     `If Tinykit asks me to sign in, pause and give me this command to run in my terminal, replacing YOUR_EMAIL with my Tinykit email: npm run tinykit -- login --server ${server} --email YOUR_EMAIL`,
-    'Let me enter my password in the terminal. Never ask me to paste credentials into chat.',
+    'Let me enter my password in the terminal. Never ask me to paste credentials into chat. Wait for me to confirm sign-in, then retry the edit command.',
     'Once the local preview is ready, tell me its URL and the path to the app files. If you cannot start a local preview, give me the command to run myself.',
     'Wait for my instructions before editing app files or publishing.'
   ].join('\n');

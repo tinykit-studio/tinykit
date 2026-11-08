@@ -33,10 +33,19 @@ test('Studio command and edit arguments preserve identity and reject unsafe targ
 test('Studio setup prompt uses the validated app target and stays in the current agent', () => {
   const prompt = localEditPrompt(id, server);
   assert.ok(prompt.includes(localEditCommand(id, server, true) + ' --no-agent'));
+  assert.doesNotMatch(prompt, /staging build|feat\/local-editor-cli/);
   assert.match(prompt, /Never ask me to paste credentials into chat/);
   assert.match(prompt, /Wait for my instructions before editing app files or publishing/);
   assert.throws(() => localEditPrompt(id, 'https://user:password@example.com'));
   assert.throws(() => localEditPrompt('$(bad)', server));
+});
+test('a staging prompt sends agents to the matching branch without switching an existing checkout', () => {
+  const branch = 'feat/local-editor-cli';
+  const prompt = localEditPrompt(id, server, branch);
+  assert.match(prompt, /up-to-date checkout of the Tinykit feat\/local-editor-cli branch/);
+  assert.match(prompt, /git clone --branch feat\/local-editor-cli --single-branch https:\/\/github\.com\/tinykit-studio\/tinykit\.git/);
+  assert.match(prompt, /Leave any existing checkout and local changes intact/);
+  assert.equal(localEditPrompt(id, server, 'feature; whoami'), localEditPrompt(id, server));
 });
 test('native links accept only server/project identity and round-trip Studio links', () => {
   const link = localEditLink(id, server), options = parseLocalEditLink(link);

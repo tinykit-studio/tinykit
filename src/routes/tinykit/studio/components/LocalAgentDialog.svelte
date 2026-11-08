@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { env } from '$env/dynamic/public';
   import * as Dialog from '$lib/components/ui/dialog';
   import * as Tabs from '$lib/components/ui/tabs';
   import { Button } from '$lib/components/ui/button';
@@ -17,7 +18,7 @@
   let setupError = $state('');
   const cli = $derived(fromCheckout ? 'npm run tinykit --' : 'tinykit');
   const command = $derived(link ? localEditCommand(project_id, origin, fromCheckout) : '');
-  const prompt = $derived(link ? localEditPrompt(project_id, origin) : '');
+  const prompt = $derived(link ? localEditPrompt(project_id, origin, env.PUBLIC_TINYKIT_LOCAL_EDIT_BRANCH) : '');
   const isPrompt = $derived(tab === 'prompt');
   const copyText = $derived(isPrompt ? prompt : command);
   const activeCopyResult = $derived(copyResult?.text === copyText ? copyResult : null);
