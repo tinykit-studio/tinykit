@@ -1,7 +1,6 @@
 // @ts-nocheck
 import * as _ from 'lodash-es'
 import PromiseWorker from 'promise-worker'
-import { render } from 'svelte/server'
 
 let postcss_worker
 let rollup_worker
@@ -140,8 +139,6 @@ export async function html({ component, head, buildStatic = true, css = 'externa
 	} else if (buildStatic) {
 		const blob = new Blob([res.ssr], { type: 'text/javascript' })
 		const url = URL.createObjectURL(blob)
-		const { default: App } = await import(/* @vite-ignore */ url)
-		URL.revokeObjectURL(url)
 
 		let component_data
 		if (compile_page) {
@@ -163,6 +160,7 @@ export async function html({ component, head, buildStatic = true, css = 'externa
 		}
 
 		try {
+			const { default: App, render } = await import(/* @vite-ignore */ url)
 			const rendered = render(App, { props: component_data })
 			payload = {
 				head: rendered.head,
@@ -178,6 +176,8 @@ export async function html({ component, head, buildStatic = true, css = 'externa
 				js: '',
 				error: `Render error: ${error_msg}`
 			}
+		} finally {
+			URL.revokeObjectURL(url)
 		}
 	} else {
 		payload = {

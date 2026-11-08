@@ -339,7 +339,7 @@ export async function build_app(project_id: string): Promise<any> {
 	}
 
 	if (!source_code) {
-		return ``
+		throw new Error("Add app code before deploying.")
 	}
 
 	// Check if component has any JS (scripts)
