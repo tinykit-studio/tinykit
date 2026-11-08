@@ -145,7 +145,8 @@ for (const provider of ['codex', 'claude']) {
     assert.equal(fresh.desktop_opened, false);
     await openInAgent(f.root, 'Desktop owns this conversation [busy]', options);
     const busy = await wait(f.root, job => !job.active);
-    assert.equal(busy.state, 'failed'); assert.match(busy.message, /open or working/);
+    assert.equal(busy.state, 'failed');
+    assert.match(busy.message, provider === 'codex' ? /close that chat and retry here/ : /open or working/);
     assert.equal((await agentSessions(f.root))[provider].thread_id, fresh.thread_id);
     // A failed resume never launches a replacement or loses the last valid binding.
     await openInAgent(f.root, 'This saved CLI chat is missing [missing]', options);

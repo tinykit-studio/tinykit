@@ -41,7 +41,9 @@ function classifyFailure(value) {
   if (typeof value !== 'string') return;
   if (/unexpected argument|unrecognized subcommand|unknown option/i.test(value)) launchFailure = 'Update your coding agent to a version that supports saved-chat continuation, then retry.';
   else if (/no (?:saved )?session found|session.*(?:not found|does not exist)|cannot find.*session|failed to load.*(?:session|thread)|failed to resume/i.test(value)) launchFailure = 'The saved chat is unavailable in your coding agent. Choose Start new chat to continue with your existing app.';
-  else if (/session.*already in use|session.*locked|already has an active writer/i.test(value)) launchFailure = 'This chat is open or working in your coding agent. Let it finish or close its native window, then retry here.';
+  else if (/session.*already in use|session.*locked|already has an active writer/i.test(value)) launchFailure = provider === 'codex'
+    ? 'This Codex chat is already in use. If it’s open in Codex Desktop, continue there or close that chat and retry here. Your request is still in the editor.'
+    : 'This chat is open or working in your coding agent. Let it finish or close its native window, then retry here.';
   else if (/operation not permitted|permission denied/i.test(value)) launchFailure = 'Your coding agent could not access its saved chat. Check its local permissions, then retry.';
   else if (/not trusted|untrusted/i.test(value)) launchFailure = 'Open this app folder in your coding agent and trust it before continuing.';
   else if (/config/i.test(value)) launchFailure = 'Your coding agent could not load its configuration. Check its settings before retrying.';

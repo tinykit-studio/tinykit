@@ -13,7 +13,7 @@ export async function handoffCodex(job, { released, app, save, openThread = open
     await openThread(app, job.thread_id);
     job.desktop_opened = true;
     job.desktop_handoff = 'opened';
-    job.message = 'Codex finished and its saved chat has been opened. You can continue there, or review and publish here.';
+    job.message = 'Opened the saved chat in Codex Desktop. Continue there, or close that chat before sending another request here. You can still review and publish here.';
   } catch {
     job.desktop_opened = false;
     job.desktop_handoff = 'failed';

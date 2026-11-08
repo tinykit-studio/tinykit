@@ -23,6 +23,7 @@ async function fixture(t) {
 }
 test('Studio command and edit arguments preserve identity and reject unsafe targets', () => {
   assert.equal(localEditCommand(id, server), `tinykit edit ${id} --server '${server}'`);
+  assert.equal(localEditCommand(id, server, true), `npm run tinykit -- edit ${id} --server '${server}'`);
   for (const origin of ['http://remote.example', 'https://user:password@example.com', 'https://example.com/path', 'javascript:alert(1)']) assert.throws(() => localEditCommand(id, origin));
   assert.throws(() => localEditCommand('$(bad)', server));
   const options = parseEditArgs([id, '--server', server, '--directory', './new-app', '--no-agent', '--json']);

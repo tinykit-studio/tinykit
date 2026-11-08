@@ -82,15 +82,18 @@
   <p class="intro">{name} edits your local project. The preview updates as files change.</p>
   <label for="customization">{continuing ? 'What would you like to refine next?' : 'What would you like to change?'}</label>
   <textarea id="customization" bind:value={request} placeholder={continuing ? 'Describe the next change.' : 'For example, add a filter for overdue follow-ups.'} maxlength="6000" rows="4" disabled={working}></textarea>
-  
-  {#if provider === 'codex'}<label class="handoff"><input type="checkbox" bind:checked={openWhenFinished} disabled={working} />Open chat when finished</label>{/if}
+
+  {#if provider === 'codex'}
+    <label class="handoff"><input type="checkbox" bind:checked={openWhenFinished} disabled={working} aria-describedby="desktop-handoff-help" />Open chat in Codex Desktop when finished</label>
+    <p class="hint handoff-help" id="desktop-handoff-help">Leave this off to keep refining here. While the chat is open in Desktop, continue there. Close that chat in Desktop before sending another request here.</p>
+  {/if}
   <button class="open" onclick={() => act('open')} disabled={loading || !providers[provider].available || working || !request.trim()}>{busy ? `Connecting to ${name}…` : job?.active ? `${label(job.provider)} is working…` : `Make change with ${name}`}</button>
   {#if session}<button class="new-chat" onclick={() => { newChat = !newChat; failure = ''; message = ''; }} disabled={working}>{newChat ? 'Keep using the saved chat' : 'Start new chat'}</button>{/if}
   {#if !loading && !providers[provider].available}<p class="hint">{providers[provider].message}</p>
   {:else}<p class="hint">{continuing ? 'Continues this app’s conversation, including your earlier requests.' : `Uses your ${provider === 'claude' ? 'Claude subscription' : 'Codex sign-in'}.`} Each agent keeps its own chat. Changes appear in the preview. Review before publishing.</p>{/if}
   {#if canView || job?.active}
     <div class="task-actions">
-      {#if canView}<button onclick={() => act('focus')} disabled={busy}>Open chat ↗</button>{/if}
+      {#if canView}<button onclick={() => act('focus')} disabled={busy}>{provider === 'codex' ? 'Open in Codex Desktop ↗' : 'Open chat ↗'}</button>{/if}
       {#if job?.active && job.state !== 'handing_off'}<button onclick={() => act('stop')} disabled={busy || job.state === 'stopping'}>Stop</button>{/if}
     </div>
   {/if}
@@ -105,5 +108,5 @@
   .codex{margin:23px 0 27px;padding-bottom:25px;border-bottom:1px solid #dce2df}h2{font-size:17px;font-weight:600;letter-spacing:-.4px;margin:0 0 20px}label{display:block;font-size:11px;color:#475569}textarea{display:block;width:100%;resize:vertical;min-height:75px;border:1px solid #cbd5e1;border-radius:7px;padding:11px;margin:8px 0 11px;background:#ffffff;color:#1f2937;font:12px/1.65 system-ui,sans-serif}.open{display:flex;align-items:center;justify-content:space-between;width:100%;border-radius:7px;padding:12px 13px;background:#334155;color:white;border:1px solid #334155;font-size:12px;cursor:pointer}.intro{font-size:12px;line-height:1.6;color:#475569;margin:0 0 14px}.open:disabled,button:disabled{opacity:.5;cursor:default}.hint,.message,.failure{font-size:11px;line-height:1.7}.hint{color:#64748b;margin-top:12px}.message{color:#47714c}.failure{color:#a14e2c}button:focus-visible,textarea:focus-visible{outline:2px solid #57764a;outline-offset:3px}
   .task-actions{display:flex;gap:12px;margin:12px 0}.task-actions button{border:0;background:none;padding:0;color:#47684d;font-size:11px;cursor:pointer}details{font-size:11px;color:#475569;margin-top:10px}summary{cursor:pointer}.agent-summary{white-space:pre-wrap;line-height:1.6;max-height:190px;overflow:auto}
   .provider{margin-bottom:15px}select{display:block;width:100%;margin:7px 0 0;padding:9px;border:1px solid #cbd5e1;border-radius:7px;background:#ffffff;color:#1f2937;font:12px system-ui,sans-serif}.attention{color:#a14e2c}select:focus-visible{outline:2px solid #57764a;outline-offset:3px}
-  .chat-context{font-size:11px;line-height:1.7;color:#47714c;margin:-3px 0 12px}.new-chat{background:none;border:0;color:#475569;font-size:11px;padding:9px 0 0;cursor:pointer}.history{margin-top:13px}.turn{border-left:2px solid #dce4d6;padding-left:10px;margin:12px 0}.turn-request{white-space:pre-wrap;line-height:1.6;color:#1f2937;font-weight:500}.handoff{display:flex;align-items:center;gap:7px;margin:0 0 14px;font-size:11px;line-height:1.5}.handoff input{accent-color:#334155}
+  .chat-context{font-size:11px;line-height:1.7;color:#47714c;margin:-3px 0 12px}.new-chat{background:none;border:0;color:#475569;font-size:11px;padding:9px 0 0;cursor:pointer}.history{margin-top:13px}.turn{border-left:2px solid #dce4d6;padding-left:10px;margin:12px 0}.turn-request{white-space:pre-wrap;line-height:1.6;color:#1f2937;font-weight:500}.handoff{display:flex;align-items:center;gap:7px;margin:0 0 14px;font-size:11px;line-height:1.5}.handoff input{accent-color:#334155}.handoff-help{margin:-9px 0 12px}
 </style>
