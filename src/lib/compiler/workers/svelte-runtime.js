@@ -1,3 +1,14 @@
+/**
+ * The server renderer and the component must share the same bundled Svelte context.
+ * @param {string[]} runtime
+ */
+export function compiler_entry(runtime, server = false) {
+	let code = "export { default } from './App.svelte';\n"
+	if (server) code += "export { render } from 'svelte/server';\n"
+	else if (runtime.length) code += `export { ${runtime.join(', ')} } from 'svelte';\n`
+	return code
+}
+
 // Resolve Svelte's public exports and relative runtime imports to bundled sources.
 // The compiler and runtime always come from the same installed package.
 /**

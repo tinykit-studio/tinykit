@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import { dirname, join, relative } from 'node:path';
 import { rollup } from 'rollup';
 import { compile } from 'svelte/compiler';
-import { create_svelte_runtime } from '../src/lib/compiler/workers/svelte-runtime.js';
+import { compiler_entry, create_svelte_runtime } from '../src/lib/compiler/workers/svelte-runtime.js';
 
 const require = createRequire(import.meta.url);
 const root = dirname(require.resolve('svelte/package.json'));
@@ -35,37 +35,56 @@ test('Svelte runtime selects browser/server exports and resolves internal aliase
 
 const canvas=JSON.parse(readFileSync(new URL('../src/lib/templates/canvas.json',import.meta.url))).frontend_code;
 const icon=readFileSync(new URL('../src/lib/compiler/shims/IconifyIcon.svelte',import.meta.url),'utf8');
+async function bundle_app(source, generate) {
+  const server=generate==='server';
+  const bundle=await rollup({
+    input:'./entry.js',
+    external: id => ['$content','$data','$tinykit'].includes(id),
+    onwarn: warning => { if(warning.code!=='CIRCULAR_DEPENDENCY') throw new Error(warning.message); },
+    plugins:[{
+      name:'local-runtime-test',
+      resolveId(id,importer) {
+        if(id==='./entry.js'||id==='./App.svelte'||id==='esm-env') return id;
+        if(id==='@iconify/svelte') return 'Icon.svelte';
+        const resolved=runtime.resolve(id,importer,server);
+        assert.ok(resolved, 'Unexpected remote or unresolved dependency: ' + id);
+        return resolved;
+      },
+      load(id) {
+        if(id==='./entry.js') return compiler_entry(['hydrate'],server);
+        if(id==='./App.svelte') return compile(source,{generate,filename:id}).js.code;
+        if(id==='Icon.svelte') return compile(icon,{generate,filename:id}).js.code;
+        if(id==='esm-env') return 'export const DEV=false; export const PROD=true; export const BROWSER=' + !server + ';';
+        return runtime.load(id);
+      }
+    }]
+  });
+  try {
+    const output=await bundle.generate({format:'esm'});
+    return output.output[0];
+  } finally { await bundle.close(); }
+}
+
 for(const generate of ['client','server']) {
-  test(`Canvas ${generate} bundles with the installed Svelte runtime and no CDN requests`, async () => {
-    const server=generate==='server';
-    const bundle=await rollup({
-      input:'App.svelte',
-      external: id => ['$content','$data','$tinykit'].includes(id),
-      onwarn: warning => { if(warning.code!=='CIRCULAR_DEPENDENCY') throw new Error(warning.message); },
-      plugins:[{
-        name:'local-runtime-test',
-        resolveId(id,importer) {
-          if(id==='App.svelte'||id==='esm-env') return id;
-          if(id==='@iconify/svelte') return 'Icon.svelte';
-          const resolved=runtime.resolve(id,importer,server);
-          assert.ok(resolved, `Unexpected remote or unresolved dependency: ${id}`);
-          return resolved;
-        },
-        load(id) {
-          if(id==='App.svelte') return compile(canvas,{generate,filename:id}).js.code;
-          if(id==='Icon.svelte') return compile(icon,{generate,filename:id}).js.code;
-          if(id==='esm-env') return `export const DEV=false; export const PROD=true; export const BROWSER=${!server};`;
-          return runtime.load(id);
-        }
-      }]
-    });
-    try {
-      const output=await bundle.generate({format:'esm'});
-      assert.ok(output.output[0].code.length>1000);
-      assert.ok(!output.output[0].code.includes('https://esm.sh/svelte'));
-    } finally { await bundle.close(); }
+  test('Canvas ' + generate + ' bundles with the installed Svelte runtime and no CDN requests', async () => {
+    const {code, exports}=await bundle_app(canvas,generate);
+    assert.ok(code.length>1000);
+    assert.ok(!code.includes('https://esm.sh/svelte'));
+    assert.deepEqual(exports.sort(), ['default',generate==='server'?'render':'hydrate']);
   });
 }
+
+test('Studio publishing renders an app that registers lifecycle cleanup', async () => {
+  const {code}=await bundle_app(
+    '<script>import { onDestroy } from "svelte"; let { cleanup } = $props(); onDestroy(cleanup);</script><h1>CRM</h1>',
+    'server'
+  );
+  const {default:App,render}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+  let cleaned=0;
+  const {body}=render(App,{props:{cleanup:()=>cleaned++}});
+  assert.match(body,/<h1>CRM<\/h1>/);
+  assert.equal(cleaned,1);
+});
 
 test('CDN-built Svelte 5 components use the same runtime as the app', () => {
   const client = runtime.resolve('svelte/internal/client', null);

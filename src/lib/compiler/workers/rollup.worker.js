@@ -7,6 +7,7 @@ import commonjs from './plugins/commonjs'
 import json from './plugins/json'
 import glsl from './plugins/glsl'
 import { svelte_runtime } from './svelte-runtime-sources.js'
+import { compiler_entry } from './svelte-runtime.js'
 import { create_module_loader } from './module-loader.js'
 import IconifyShim from '../shims/IconifyIcon.svelte?raw'
 
@@ -86,12 +87,6 @@ async function rollup_worker({ component, head = { code: '', data: {} }, hydrate
           ${css ? `<style>${css}</style>` : ``}`
 	}
 
-	const Entrypoint = () => {
-		let code = `export { default } from './App.svelte';\n`
-		if (runtime.length > 0) code += `export { ${runtime.join(', ')} } from 'svelte'\n`
-		return code
-	}
-
 	function generate_lookup(component, head) {
 		if (Array.isArray(component)) {
 			// build page (sections as components)
@@ -100,12 +95,10 @@ async function rollup_worker({ component, head = { code: '', data: {} }, hydrate
 				component_lookup.set(`./Component_${i}.svelte`, code)
 			})
 			component_lookup.set(`./App.svelte`, App_Wrapper(component, head))
-			component_lookup.set(`./entry.js`, Entrypoint())
 		} else {
 			// build individual component
 			const appCode = Component(component)
 			component_lookup.set(`./App.svelte`, appCode)
-			component_lookup.set(`./entry.js`, Entrypoint())
 		}
 	}
 
@@ -161,6 +154,7 @@ async function rollup_worker({ component, head = { code: '', data: {} }, hydrate
 
 	async function compile(svelteOptions = {}) {
 		const isSSR = svelteOptions.generate === 'server'
+		component_lookup.set('./entry.js', compiler_entry(runtime, isSSR))
 
 		try {
 			return await rollup({

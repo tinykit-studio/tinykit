@@ -78,12 +78,13 @@
 	async function handle_quick_deploy() {
 		if (is_deploying) return
 		is_deploying = true
+		error = ""
 		try {
 			await on_deploy()
 			deploy_success = true
 		} catch (err) {
 			console.error("Deploy failed:", err)
-			error = "Deploy failed. Please try again."
+			error = err instanceof Error ? `Deploy failed: ${err.message}` : "Deploy failed. Please try again."
 		} finally {
 			is_deploying = false
 		}
@@ -251,7 +252,7 @@
 				{/if}
 
 				{#if error}
-					<p class="text-sm text-red-400">{error}</p>
+					<p role="alert" class="text-sm text-red-400">{error}</p>
 				{/if}
 			{/if}
 		</div>
