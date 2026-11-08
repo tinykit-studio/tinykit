@@ -1,10 +1,13 @@
-FROM node:20-alpine
+FROM node:22-alpine
+
+RUN apk add --no-cache bash curl
 
 WORKDIR /app
 
 # Install dependencies
 COPY package*.json ./
-RUN npm ci --production=false
+COPY scripts ./scripts
+RUN npm ci --include=dev
 
 # Copy app
 COPY . .

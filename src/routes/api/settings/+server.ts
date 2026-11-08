@@ -1,14 +1,16 @@
 import { json } from '@sveltejs/kit'
+import { env } from '$env/dynamic/private'
 import type { RequestHandler } from './$types'
 import { pb, ensureAuth } from '$lib/server/pb'
 import PocketBase from 'pocketbase'
+import { merge_settings, type LLMSettings } from '$lib/ai/config'
 
-const PB_URL = 'http://127.0.0.1:8091'
+const PB_URL = env.POCKETBASE_URL || 'http://127.0.0.1:8091'
 
 /**
- * Mask an API key, showing only the last 4 characters
- * Returns empty string if no key provided
- */
+	* Mask an API key, showing only the last 4 characters
+	* Returns empty string if no key provided
+	*/
 function mask_api_key(key: string | undefined): string {
 	if (!key || key.length < 8) return ''
 	return '•'.repeat(Math.min(key.length - 4, 20)) + key.slice(-4)
@@ -106,16 +108,13 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		let final_value = value
 
-		// For LLM settings, merge with existing to preserve api_key if not provided
-		if (key === 'llm' && value && typeof value === 'object') {
-			try {
-				const existing = await pb.collection('_tk_settings').getOne(key)
-				if (existing?.value && !value.api_key) {
-					// Preserve existing api_key
-					final_value = { ...value, api_key: existing.value.api_key }
-				}
-			} catch {
-				// No existing record, use value as-is
+		if (key === 'llm') {
+			let existing: LLMSettings | undefined
+			try { existing = (await pb.collection('_tk_settings').getOne(key)).value } catch (err: any) {
+				if (err.status !== 404) throw err
+			}
+			try { final_value = merge_settings(value, existing) } catch (err: any) {
+				return json({ error: err.message }, { status: 400 })
 			}
 		}
 

@@ -1,7 +1,4 @@
 import { streamText, tool, type CoreMessage } from 'ai'
-import { createOpenAI } from '@ai-sdk/openai'
-import { createAnthropic } from '@ai-sdk/anthropic'
-import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { z } from 'zod'
 import {
 	getProject,
@@ -12,14 +9,9 @@ import {
 	insertDataRecords
 } from '$lib/server/pb'
 
-export type LLMProvider = 'openai' | 'anthropic' | 'gemini'
-
-export interface AgentConfig {
-	provider: LLMProvider
-	apiKey: string
-	model: string
-	baseUrl?: string
-}
+import { get_model, type AgentConfig } from './model'
+export type { AgentConfig } from './model'
+export type { LLMProvider } from './config'
 
 export interface AgentMessage {
 	role: 'user' | 'assistant'
@@ -270,27 +262,6 @@ Any npm package works with bare imports - auto-resolved via esm.sh:
 import dayjs from 'dayjs'
 import confetti from 'canvas-confetti'
 \`\`\``
-
-function get_model(config: AgentConfig) {
-	switch (config.provider) {
-		case 'openai': {
-			const openai = createOpenAI({
-				apiKey: config.apiKey
-			})
-			return openai(config.model)
-		}
-		case 'anthropic': {
-			const anthropic = createAnthropic({ apiKey: config.apiKey })
-			return anthropic(config.model)
-		}
-		case 'gemini': {
-			const google = createGoogleGenerativeAI({ apiKey: config.apiKey })
-			return google(config.model)
-		}
-		default:
-			throw new Error(`Unknown provider: ${config.provider}`)
-	}
-}
 
 function create_tools(project_id: string, project_name: string) {
 	const tools: any = {

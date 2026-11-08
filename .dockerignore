@@ -1,0 +1,17 @@
+.git
+.env
+.env.*
+node_modules
+.svelte-kit
+build
+workspace
+local-notes
+.claude
+.playwright-mcp
+pocketbase/*
+!pocketbase/pb_migrations
+!pocketbase/pb_migrations/**
+!pocketbase/pb_hooks
+!pocketbase/pb_hooks/**
+*.log
+.DS_Store
