@@ -143,7 +143,7 @@
 
 			// Setup complete, auto-login with the same credentials
 			await auth.login(email, password);
-			goto("/tinykit");
+			goto("/tinykit?dashboard=1");
 		} catch (err: any) {
 			error = err.message || "Setup failed. Please try again.";
 		} finally {
@@ -374,7 +374,7 @@
 				<button
 					type="submit"
 					disabled={is_submitting}
-					class="w-full py-2.5 bg-[var(--builder-accent)] text-white rounded-lg hover:bg-[var(--builder-accent-hover)] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-6"
+					class="w-full py-2.5 bg-[var(--builder-accent)] text-[var(--builder-accent-text)] rounded-lg hover:bg-[var(--builder-accent-hover)] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-6"
 				>
 					{#if is_submitting}
 						<Loader2 class="w-4 h-4 animate-spin" />

@@ -1,16 +1,16 @@
 import { error, redirect } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import { getProject, pb } from '$lib/server/pb'
+import { pb } from '$lib/server/pb'
 
 /**
  * Catch-all route for preview - serves the same HTML for any sub-path
  * This allows client-side routing to work within previewed apps
  * URL: /tinykit/preview/[id]/*
  */
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
 	const { id } = params
 
-	const project = await getProject(id)
+	const project = locals.appProject
 
 	if (!project) {
 		throw error(404, 'Project not found')
@@ -18,7 +18,7 @@ export const GET: RequestHandler = async ({ params }) => {
 
 	// Serve the production app (compiled HTML from file attachment)
 	if (project.published_html) {
-		const file_url = pb.files.getURL(project, project.published_html)
+		const file_url = pb.files.getURL(project, project.published_html, { token: await pb.files.getToken() })
 		const response = await fetch(file_url)
 		if (response.ok) {
 			const html = await response.text()

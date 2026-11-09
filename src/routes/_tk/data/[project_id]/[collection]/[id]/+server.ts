@@ -1,6 +1,8 @@
 import { json, error } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import { getProject, pb } from '$lib/server/pb'
+import { getProject, withProjectLock } from '$lib/server/pb'
+import { appProjectForRequest } from '$lib/server/private-apps'
+import { commitAppData, readAppDataInput } from '$lib/server/app-data-write'
 import { check_rate_limit, check_origin, get_client_ip } from '$lib/server/data-security'
 import { validate_schema } from '$lib/server/data-utils'
 
@@ -47,15 +49,15 @@ function set_records(collection_data: any, records: any[]): any {
 }
 
 // GET - Get single record
-export const GET: RequestHandler = async ({ params, url }) => {
+export const GET: RequestHandler = async ({ params, url, locals }) => {
 	const { project_id, collection, id } = params
 
 	try {
-		const project = await getProject(project_id)
+		const project = await appProjectForRequest(locals, project_id)
 		if (!project) throw error(404, 'Project not found')
 		const data = project.data || {}
 
-		if (!(collection in data)) {
+		if (!Object.hasOwn(data, collection)) {
 			throw error(404, 'Collection not found')
 		}
 
@@ -81,70 +83,59 @@ export const GET: RequestHandler = async ({ params, url }) => {
 }
 
 // PATCH - Update record
-export const PATCH: RequestHandler = async ({ params, request }) => {
+export const PATCH: RequestHandler = async (event) => {
+	const { params, request } = event
 	const { project_id, collection, id } = params
 
 	try {
-		const project = await getProject(project_id)
-		if (!project) throw error(404, 'Project not found')
+		return await withProjectLock(project_id, async () => {
+			const project = await getProject(project_id)
+			if (!project) throw error(404, 'Project not found')
 
-		// Security checks
-		check_origin(request, project.domain)
-		check_rate_limit(get_client_ip(request))
+			// Security checks
+			check_origin(request, project.domain)
+			check_rate_limit(get_client_ip(request))
 
-		// Parse request body - handle both JSON and FormData
-		let updates: Record<string, any>
-		const content_type = request.headers.get('content-type') || ''
+			const { fields: updates, files } = await readAppDataInput(request)
 
-		if (content_type.includes('multipart/form-data')) {
-			updates = await parse_form_data_with_files(request, project_id)
-		} else if (content_type.includes('application/json')) {
-			updates = await request.json()
-		} else {
-			try {
-				updates = await request.json()
-			} catch {
-				updates = await parse_form_data_with_files(request, project_id)
+			const data = project.data || {}
+
+			if (!Object.hasOwn(data, collection)) {
+				throw error(404, 'Collection not found')
 			}
-		}
 
-		const data = project.data || {}
+			const collection_data = data[collection]
+			const records = get_records(collection_data)
+			// Use loose comparison to handle numeric IDs from legacy data
+			const index = records.findIndex((r: any) => String(r.id) === String(id))
+			if (index === -1) {
+				throw error(404, 'Record not found')
+			}
 
-		if (!(collection in data)) {
-			throw error(404, 'Collection not found')
-		}
+			// Validate fields against schema
+			const { warnings } = validate_schema(collection_data, { ...updates, ...Object.fromEntries([...files.keys()].map(key => [key, null])) })
 
-		const collection_data = data[collection]
-		const records = get_records(collection_data)
-		// Use loose comparison to handle numeric IDs from legacy data
-		const index = records.findIndex((r: any) => String(r.id) === String(id))
-		if (index === -1) {
-			throw error(404, 'Record not found')
-		}
+			// Update record, preserving id
+			const existing = records[index]
+			const updated = {
+				...existing,
+				...updates,
+				id: existing.id
+			}
 
-		// Validate fields against schema
-		const { warnings } = validate_schema(collection_data, updates)
+			records[index] = updated
+			data[collection] = set_records(collection_data, records)
 
-		// Update record, preserving id
-		const existing = records[index]
-		const updated = {
-			...existing,
-			...updates,
-			id: existing.id
-		}
+			// Save back to project
+			Object.assign(updated, await commitAppData(event, project_id, data, { collection, index, files }))
 
-		records[index] = updated
-		data[collection] = set_records(collection_data, records)
+			// Include warnings in response if any
+			const response_body = warnings.length > 0
+				? { ...updated, _warnings: warnings }
+				: updated
 
-		// Save back to project
-		await pb.collection('_tk_projects').update(project_id, { data })
-
-		// Include warnings in response if any
-		const response_body = warnings.length > 0
-			? { ...updated, _warnings: warnings }
-			: updated
-
-		return json(response_body)
+			return json(response_body)
+		})
 	} catch (err: any) {
 		if (err.status) throw err
 		console.error('[Data API] Update error:', err)
@@ -152,124 +143,42 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 	}
 }
 
-/**
- * Parse FormData with file upload support
- */
-async function parse_form_data_with_files(
-	request: Request,
-	project_id: string
-): Promise<Record<string, any>> {
-	const form = await request.formData()
-	const result: Record<string, any> = {}
-	const file_fields: Map<string, File[]> = new Map()
-
-	for (const [key, value] of form.entries()) {
-		if (key === '_data') {
-			try {
-				Object.assign(result, JSON.parse(value as string))
-			} catch {
-				// Ignore parse errors
-			}
-		} else if (key.startsWith('_file:')) {
-			const field_name = key.slice(6)
-			if (typeof value !== 'string') {
-				if (!file_fields.has(field_name)) {
-					file_fields.set(field_name, [])
-				}
-				file_fields.get(field_name)!.push(value)
-			}
-		} else if (typeof value !== 'string') {
-			if (!file_fields.has(key)) {
-				file_fields.set(key, [])
-			}
-			file_fields.get(key)!.push(value)
-		} else {
-			try {
-				result[key] = JSON.parse(value as string)
-			} catch {
-				result[key] = value
-			}
-		}
-	}
-
-	if (file_fields.size > 0) {
-		const uploaded = await upload_files_to_assets(project_id, file_fields)
-		Object.assign(result, uploaded)
-	}
-
-	return result
-}
-
-/**
- * Upload files to project.assets and return field->filename mapping
- */
-async function upload_files_to_assets(
-	project_id: string,
-	file_fields: Map<string, File[]>
-): Promise<Record<string, string | string[]>> {
-	const result: Record<string, string | string[]> = {}
-
-	const upload_form = new FormData()
-	const field_indices: Map<string, number[]> = new Map()
-	let file_index = 0
-
-	for (const [field_name, files] of file_fields) {
-		field_indices.set(field_name, [])
-		for (const file of files) {
-			// Use 'assets+' to append to existing files (Pocketbase convention)
-			upload_form.append('assets+', file)
-			field_indices.get(field_name)!.push(file_index++)
-		}
-	}
-
-	const project = await pb.collection('_tk_projects').getOne(project_id)
-	const before_count = (project.assets as string[] || []).length
-
-	const updated = await pb.collection('_tk_projects').update(project_id, upload_form)
-	const new_assets = (updated.assets as string[] || []).slice(before_count)
-
-	let new_index = 0
-	for (const [field_name, indices] of field_indices) {
-		const filenames = indices.map(() => new_assets[new_index++])
-		result[field_name] = filenames.length === 1 ? filenames[0] : filenames
-	}
-
-	return result
-}
-
 // DELETE - Delete record
-export const DELETE: RequestHandler = async ({ params, request }) => {
+export const DELETE: RequestHandler = async (event) => {
+	const { params, request } = event
 	const { project_id, collection, id } = params
 
 	try {
-		const project = await getProject(project_id)
-		if (!project) throw error(404, 'Project not found')
+		return await withProjectLock(project_id, async () => {
+			const project = await getProject(project_id)
+			if (!project) throw error(404, 'Project not found')
 
-		// Security checks
-		check_origin(request, project.domain)
-		check_rate_limit(get_client_ip(request))
+			// Security checks
+			check_origin(request, project.domain)
+			check_rate_limit(get_client_ip(request))
 
-		const data = project.data || {}
+			const data = project.data || {}
 
-		if (!(collection in data)) {
-			throw error(404, 'Collection not found')
-		}
+			if (!Object.hasOwn(data, collection)) {
+				throw error(404, 'Collection not found')
+			}
 
-		const records = get_records(data[collection])
-		// Use loose comparison to handle numeric IDs from legacy data
-		const index = records.findIndex((r: any) => String(r.id) === String(id))
-		if (index === -1) {
-			throw error(404, 'Record not found')
-		}
+			const records = get_records(data[collection])
+			// Use loose comparison to handle numeric IDs from legacy data
+			const index = records.findIndex((r: any) => String(r.id) === String(id))
+			if (index === -1) {
+				throw error(404, 'Record not found')
+			}
 
-		// Remove record
-		records.splice(index, 1)
-		data[collection] = set_records(data[collection], records)
+			// Remove record
+			records.splice(index, 1)
+			data[collection] = set_records(data[collection], records)
 
-		// Save back to project
-		await pb.collection('_tk_projects').update(project_id, { data })
+			// Save back to project
+			await commitAppData(event, project_id, data)
 
-		return new Response(null, { status: 204 })
+			return new Response(null, { status: 204 })
+		})
 	} catch (err: any) {
 		if (err.status) throw err
 		console.error('[Data API] Delete error:', err)

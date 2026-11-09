@@ -1,245 +1,251 @@
 {
-	"id": "expense",
-	"name": "Expense Tracker",
-	"description": "Track spending and income with persistent data",
-	"preview": "lucide:wallet",
-	"tags": [
-		"finance",
-		"intermediate",
-		"data"
-	],
-	"kits": ["business", "freelance"],
-	"frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet transactions = $state([])\n\tlet new_text = $state('')\n\tlet new_amount = $state('')\n\tlet loading = $state(true)\n\n\tdata.transactions.subscribe(items => {\n\t\t\ttransactions = [...items].sort((a, b) => \n\t\t\tnew Date(b.created || 0).getTime() - new Date(a.created || 0).getTime()\n\t\t)\n\t\tloading = false\n\t});\n\n\tlet balance = $derived.by(() =>\n\t\ttransactions.reduce((acc, t) => acc + t.amount, 0)\n\t)\n\n\tlet income = $derived.by(() =>\n\t\ttransactions.filter(t => t.amount > 0).reduce((acc, t) => acc + t.amount, 0)\n\t)\n\n\tlet expense = $derived.by(() =>\n\t\tMath.abs(transactions.filter(t => t.amount < 0).reduce((acc, t) => acc + t.amount, 0))\n\t)\n\n\tasync function add_transaction() {\n\t\tif (!new_text.trim() || !new_amount) return\n\t\tawait data.transactions.create({\n\t\t\ttext: new_text.trim(),\n\t\t\tamount: parseFloat(new_amount),\n\t\t\tcreated: new Date().toISOString()\n\t\t})\n\t\tnew_text = ''\n\t\tnew_amount = ''\n\t}\n\n\tfunction handle_amount_keydown(e) {\n\t\tif (e.key === 'Enter') {\n\t\t\te.preventDefault()\n\t\t\tadd_transaction()\n\t\t}\n\t}\n\n\tasync function delete_transaction(id) {\n\t\tawait data.transactions.delete(id)\n\t}\n\n\tfunction format_currency(amount) {\n\t\treturn new Intl.NumberFormat('en-US', {\n\t\t\tstyle: 'currency',\n\t\t\tcurrency: 'USD'\n\t\t}).format(amount)\n\t}\n\n\tfunction format_date(iso_string) {\n\t\tif (!iso_string) return ''\n\t\tconst d = new Date(iso_string)\n\t\treturn `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`\n\t}\n\n\tfunction download_csv() {\n\t\tconst headers = ['Date', 'Description', 'Amount']\n\t\tconst rows = transactions.map(t => [\n\t\t\tformat_date(t.created),\n\t\t\tt.text.replace(/,/g, ''),\n\t\t\tt.amount\n\t\t])\n\t\tconst csv = [headers, ...rows].map(row => row.join(',')).join('\\n')\n\t\tconst blob = new Blob([csv], { type: 'text/csv' })\n\t\tconst url = URL.createObjectURL(blob)\n\t\tconst a = document.createElement('a')\n\t\ta.href = url\n\t\ta.download = 'expenses.csv'\n\t\ta.click()\n\t\tURL.revokeObjectURL(url)\n\t}\n</script>\n\n<div class=\"page\">\n\t<div class=\"container\">\n\t\t<h1>{content.app_title}</h1>\n\n\t\t<div class=\"balance-card\">\n\t\t\t<p class=\"label\">{content.balance_label}</p>\n\t\t\t<h2 class:negative={balance < 0}>{format_currency(balance)}</h2>\n\t\t</div>\n\n\t\t<div class=\"summary\">\n\t\t\t<div class=\"income-card\">\n\t\t\t\t<p>{content.income_label}</p>\n\t\t\t\t<span>+{format_currency(income)}</span>\n\t\t\t</div>\n\t\t\t<div class=\"expense-card\">\n\t\t\t\t<p>{content.expense_label}</p>\n\t\t\t\t<span>-{format_currency(expense)}</span>\n\t\t\t</div>\n\t\t</div>\n\n\t\t<div class=\"form\">\n\t\t\t<h3>{content.add_transaction_title}</h3>\n\t\t\t<input\n\t\t\t\ttype=\"text\"\n\t\t\t\tbind:value={new_text}\n\t\t\t\tplaceholder={content.description_placeholder}\n\t\t\t/>\n\t\t\t<input\n\t\t\t\ttype=\"number\"\n\t\t\t\tbind:value={new_amount}\n\t\t\t\tplaceholder={content.amount_placeholder}\n\t\t\t\tonkeydown={handle_amount_keydown}\n\t\t\t/>\n\t\t\t<button onclick={add_transaction}>{content.add_button}</button>\n\t\t</div>\n\n\t\t<div class=\"history\">\n\t\t\t<div class=\"history-header\">\n\t\t\t\t<h3>{content.history_title}</h3>\n\t\t\t\t{#if transactions.length > 0}\n\t\t\t\t\t<button class=\"download-btn\" onclick={download_csv}><Icon icon=\"lucide:download\" size={16} /></button>\n\t\t\t\t{/if}\n\t\t\t</div>\n\t\t\t{#if loading}\n\t\t\t\t<p class=\"empty\">{content.loading_message}</p>\n\t\t\t{:else if transactions.length === 0}\n\t\t\t\t<p class=\"empty\">{content.empty_state}</p>\n\t\t\t{:else}\n\t\t\t\t{#each transactions as t (t.id)}\n\t\t\t\t\t<div class=\"transaction\" class:income={t.amount > 0} class:expense={t.amount < 0}>\n\t\t\t\t\t\t<span>{t.text}</span>\n\t\t\t\t\t\t<div class=\"right\">\n\t\t\t\t\t\t\t{#if t.created}<span class=\"date\">{format_date(t.created)}</span>{/if}\n\t\t\t\t\t\t\t<span class=\"amount\">{t.amount > 0 ? '+' : ''}{format_currency(t.amount)}</span>\n\t\t\t\t\t\t\t<button onclick={() => delete_transaction(t.id)}><Icon icon=\"lucide:x\" size={16} /></button>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t{/each}\n\t\t\t{/if}\n\t\t</div>\n\t</div>\n\t<footer class=\"footer\">built with <a href=\"https://tinykit.studio\" target=\"_blank\">tinykit.studio</a></footer>\n</div>\n\n<style>\n\t.page {\n\t\tbackground: var(--page-background, #f5f5f5);\n\t\tmin-height: 100vh;\n\t\tpadding: 2rem;\n\t\tfont-family: var(--body-font, system-ui, sans-serif);\n\t}\n\n\t.container {\n\t\tmax-width: 420px;\n\t\tmargin: 0 auto;\n\t}\n\n\th1 {\n\t\ttext-align: center;\n\t\tcolor: var(--heading-text-color, #1a1a1a);\n\t\tmargin-bottom: 1.5rem;\n\t\tfont-size: 1.5rem;\n\t\tfont-weight: 600;\n\t}\n\n\th3 {\n\t\tcolor: var(--heading-text-color, #1a1a1a);\n\t\tmargin: 0 0 1rem 0;\n\t\tfont-size: 1rem;\n\t\tfont-weight: 600;\n\t}\n\n\t.balance-card {\n\t\tbackground: var(--card-background, #ffffff);\n\t\tpadding: 1.5rem;\n\t\tborder-radius: var(--card-radius, 12px);\n\t\ttext-align: center;\n\t\tmargin-bottom: 1rem;\n\t\tborder: 1px solid var(--border-color, #e5e5e5);\n\t}\n\n\t.balance-card .label {\n\t\tcolor: var(--secondary-text-color, #6b7280);\n\t\tmargin-bottom: 0.5rem;\n\t\tfont-size: 0.875rem;\n\t}\n\n\t.balance-card h2 {\n\t\tcolor: var(--positive-color, #10b981);\n\t\tfont-size: 2rem;\n\t\tmargin: 0;\n\t\tfont-weight: 700;\n\t}\n\n\t.balance-card h2.negative {\n\t\tcolor: var(--negative-color, #dc2626);\n\t}\n\n\t.summary {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: 1fr 1fr;\n\t\tgap: 1rem;\n\t\tmargin-bottom: 1.5rem;\n\t}\n\n\t.summary > div {\n\t\tbackground: var(--card-background, #ffffff);\n\t\tpadding: 1rem;\n\t\tborder-radius: var(--card-radius, 12px);\n\t\ttext-align: center;\n\t\tborder: 1px solid var(--border-color, #e5e5e5);\n\t}\n\n\t.summary p {\n\t\tcolor: var(--secondary-text-color, #6b7280);\n\t\tmargin: 0 0 0.5rem 0;\n\t\tfont-size: 0.875rem;\n\t}\n\n\t.income-card span {\n\t\tcolor: var(--positive-color, #10b981);\n\t\tfont-weight: 600;\n\t}\n\n\t.expense-card span {\n\t\tcolor: var(--negative-color, #dc2626);\n\t\tfont-weight: 600;\n\t}\n\n\t.form {\n\t\tbackground: var(--card-background, #ffffff);\n\t\tpadding: 1.5rem;\n\t\tborder-radius: var(--card-radius, 12px);\n\t\tmargin-bottom: 1.5rem;\n\t\tborder: 1px solid var(--border-color, #e5e5e5);\n\t}\n\n\t.form input {\n\t\twidth: 100%;\n\t\tpadding: 10px 14px;\n\t\tmargin-bottom: 10px;\n\t\tborder: 1px solid var(--border-color, #e5e5e5);\n\t\tborder-radius: var(--input-radius, 8px);\n\t\tbackground: var(--input-background, #ffffff);\n\t\tcolor: var(--body-text-color, #1a1a1a);\n\t\tfont-size: 0.95rem;\n\t}\n\n\t.form input:focus {\n\t\toutline: none;\n\t\tborder-color: var(--accent-color, #3b82f6);\n\t}\n\n\t.form input::placeholder {\n\t\tcolor: var(--placeholder-color, #9ca3af);\n\t}\n\n\t.form button {\n\t\twidth: 100%;\n\t\tpadding: 10px;\n\t\tbackground: var(--button-background, #3b82f6);\n\t\tcolor: #ffffff;\n\t\tborder: none;\n\t\tborder-radius: var(--button-radius, 8px);\n\t\tcursor: pointer;\n\t\tfont-weight: 500;\n\t\ttransition: opacity 0.15s;\n\t}\n\n\t.form button:hover {\n\t\topacity: 0.9;\n\t}\n\n\t.transaction {\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: center;\n\t\tbackground: var(--card-background, #ffffff);\n\t\tpadding: 1rem;\n\t\tborder-radius: var(--item-radius, 8px);\n\t\tmargin-bottom: 8px;\n\t\tborder: 1px solid var(--border-color, #e5e5e5);\n\t\tborder-left: 3px solid transparent;\n\t}\n\n\t.transaction.income {\n\t\tborder-left-color: var(--positive-color, #10b981);\n\t}\n\n\t.transaction.expense {\n\t\tborder-left-color: var(--negative-color, #dc2626);\n\t}\n\n\t.transaction span {\n\t\tcolor: var(--body-text-color, #1a1a1a);\n\t}\n\n\t.transaction .right {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 10px;\n\t}\n\n\t.transaction .amount {\n\t\tfont-weight: 600;\n\t}\n\n\t.transaction.income .amount {\n\t\tcolor: var(--positive-color, #10b981);\n\t}\n\n\t.transaction.expense .amount {\n\t\tcolor: var(--negative-color, #dc2626);\n\t}\n\n\t.transaction button {\n\t\tbackground: transparent;\n\t\tborder: none;\n\t\tcolor: var(--secondary-text-color, #9ca3af);\n\t\tfont-size: 1.25rem;\n\t\tcursor: pointer;\n\t\tpadding: 0 4px;\n\t}\n\n\t.transaction button:hover {\n\t\tcolor: var(--negative-color, #dc2626);\n\t}\n\n\t.transaction .date {\n\t\tcolor: var(--secondary-text-color, #9ca3af);\n\t\tfont-size: 0.8rem;\n\t\tfont-weight: 400;\n\t}\n\n\t.history-header {\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: center;\n\t\tmargin-bottom: 1rem;\n\t}\n\n\t.history-header h3 {\n\t\tmargin: 0;\n\t}\n\n\t.download-btn {\n\t\tbackground: transparent;\n\t\tborder: none;\n\t\tcolor: var(--secondary-text-color, #9ca3af);\n\t\tcursor: pointer;\n\t\tpadding: 4px;\n\t\tborder-radius: 4px;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t}\n\n\t.download-btn:hover {\n\t\tcolor: var(--body-text-color, #1a1a1a);\n\t\tbackground: var(--border-color, #e5e5e5);\n\t}\n\n\t.empty {\n\t\tcolor: var(--secondary-text-color, #6b7280);\n\t\ttext-align: center;\n\t\tpadding: 1rem;\n\t\tfont-size: 0.9rem;\n\t}\n\n\t.footer {\n\t\tmargin-top: 2rem;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--secondary-text-color, #9ca3af);\n\t\ttext-align: center;\n\t}\n\n\t.footer a {\n\t\tcolor: inherit;\n\t\ttext-decoration: none;\n\t}\n\n\t.footer a:hover {\n\t\ttext-decoration: underline;\n\t}\n</style>",
-	"design": [
-		{
-			"id": "body-font",
-			"name": "Body Font",
-			"css_var": "--body-font",
-			"value": "system-ui, sans-serif",
-			"type": "font",
-			"description": "Main font for all text"
-		},
-		{
-			"id": "page-background",
-			"name": "Page Background",
-			"css_var": "--page-background",
-			"value": "#f5f5f5",
-			"type": "color",
-			"description": "Overall page background"
-		},
-		{
-			"id": "card-background",
-			"name": "Card Background",
-			"css_var": "--card-background",
-			"value": "#ffffff",
-			"type": "color",
-			"description": "Card and container background"
-		},
-		{
-			"id": "border-color",
-			"name": "Border Color",
-			"css_var": "--border-color",
-			"value": "#e5e5e5",
-			"type": "color",
-			"description": "Border and divider color"
-		},
-		{
-			"id": "heading-text-color",
-			"name": "Heading Text Color",
-			"css_var": "--heading-text-color",
-			"value": "#1a1a1a",
-			"type": "color",
-			"description": "Color for headings"
-		},
-		{
-			"id": "body-text-color",
-			"name": "Body Text Color",
-			"css_var": "--body-text-color",
-			"value": "#1a1a1a",
-			"type": "color",
-			"description": "Color for body text"
-		},
-		{
-			"id": "secondary-text-color",
-			"name": "Secondary Text Color",
-			"css_var": "--secondary-text-color",
-			"value": "#6b7280",
-			"type": "color",
-			"description": "Color for muted text"
-		},
-		{
-			"id": "positive-color",
-			"name": "Positive Color",
-			"css_var": "--positive-color",
-			"value": "#10b981",
-			"type": "color",
-			"description": "Color for income/positive amounts"
-		},
-		{
-			"id": "negative-color",
-			"name": "Negative Color",
-			"css_var": "--negative-color",
-			"value": "#dc2626",
-			"type": "color",
-			"description": "Color for expense/negative amounts"
-		},
-		{
-			"id": "button-background",
-			"name": "Button Background",
-			"css_var": "--button-background",
-			"value": "#3b82f6",
-			"type": "color",
-			"description": "Primary button color"
-		},
-		{
-			"id": "card-radius",
-			"name": "Card Radius",
-			"css_var": "--card-radius",
-			"value": "12px",
-			"type": "radius",
-			"description": "Roundness of cards"
-		},
-		{
-			"id": "button-radius",
-			"name": "Button Radius",
-			"css_var": "--button-radius",
-			"value": "8px",
-			"type": "radius",
-			"description": "Roundness of buttons"
-		}
-	],
-	"content": [
-		{
-			"id": "app_title",
-			"name": "App Title",
-			"type": "text",
-			"value": "Expense Tracker",
-			"description": "Main heading"
-		},
-		{
-			"id": "balance_label",
-			"name": "Balance Label",
-			"type": "text",
-			"value": "Your Balance",
-			"description": "Label above balance amount"
-		},
-		{
-			"id": "income_label",
-			"name": "Income Label",
-			"type": "text",
-			"value": "Income",
-			"description": "Label for income card"
-		},
-		{
-			"id": "expense_label",
-			"name": "Expense Label",
-			"type": "text",
-			"value": "Expense",
-			"description": "Label for expense card"
-		},
-		{
-			"id": "add_transaction_title",
-			"name": "Add Transaction Title",
-			"type": "text",
-			"value": "Add Transaction",
-			"description": "Form section heading"
-		},
-		{
-			"id": "description_placeholder",
-			"name": "Description Placeholder",
-			"type": "text",
-			"value": "Description",
-			"description": "Placeholder for description input"
-		},
-		{
-			"id": "amount_placeholder",
-			"name": "Amount Placeholder",
-			"type": "text",
-			"value": "Amount (use - for expense)",
-			"description": "Placeholder for amount input"
-		},
-		{
-			"id": "add_button",
-			"name": "Add Button",
-			"type": "text",
-			"value": "Add Transaction",
-			"description": "Add button label"
-		},
-		{
-			"id": "history_title",
-			"name": "History Title",
-			"type": "text",
-			"value": "History",
-			"description": "Transaction history heading"
-		},
-		{
-			"id": "loading_message",
-			"name": "Loading Message",
-			"type": "text",
-			"value": "Loading...",
-			"description": "Shown while loading"
-		},
-		{
-			"id": "empty_state",
-			"name": "Empty State",
-			"type": "text",
-			"value": "No transactions yet",
-			"description": "Message when no transactions"
-		}
-	],
-	"data": {
-		"transactions": {
-			"schema": [
-				{
-					"name": "id",
-					"type": "text"
-				},
-				{
-					"name": "text",
-					"type": "text"
-				},
-				{
-					"name": "amount",
-					"type": "number"
-				},
-				{
-					"name": "created",
-					"type": "text"
-				}
-			],
-			"records": [
-				{
-					"id": "f7n3q",
-					"text": "Salary",
-					"amount": 3500,
-					"created": "2024-12-01T10:00:00.000Z"
-				},
-				{
-					"id": "j2w8k",
-					"text": "Rent",
-					"amount": -1200,
-					"created": "2024-12-02T14:30:00.000Z"
-				},
-				{
-					"id": "v5m1p",
-					"text": "Groceries",
-					"amount": -150,
-					"created": "2024-12-05T09:15:00.000Z"
-				},
-				{
-					"id": "x9c4h",
-					"text": "Freelance project",
-					"amount": 800,
-					"created": "2024-12-07T16:45:00.000Z"
-				},
-				{
-					"id": "r6y2t",
-					"text": "Utilities",
-					"amount": -95,
-					"created": "2024-12-09T11:20:00.000Z"
-				}
-			],
-			"icon": "lucide:dollar-sign"
-		}
-	}
+  "id": "expense",
+  "name": "Expenses",
+  "description": "Record income and expenses.",
+  "preview": "lucide:wallet",
+  "tags": [
+    "finance",
+    "intermediate",
+    "data"
+  ],
+  "kits": [
+    "business",
+    "freelance"
+  ],
+  "frontend_code": "<script>\n  import { onDestroy } from 'svelte'\n  import Icon from '@iconify/svelte'\n  import content from '$content'\n  import data from '$data'\n\tconst list_params = { all: true }\n\n  let transactions = $state([])\n  let new_text = $state('')\n  let new_amount = $state('')\n  let loading = $state(true)\n  let load_error = $state('')\n  let retrying = $state(false)\n  let disposed = false\n  let load_version = 0\n  let saving = $state(false)\n  let deleting_id = $state(null)\n  let confirm_delete = $state(null)\n  let form_error = $state('')\n  let history_error = $state('')\n\n  function transaction_date(value) {\n    if (/^\\d{4}-\\d{2}-\\d{2}$/.test(value || '')) {\n      const [year, month, day] = value.split('-').map(Number)\n      if (year < 1) return null\n      const date = new Date(0)\n      date.setFullYear(year, month - 1, day)\n      date.setHours(0, 0, 0, 0)\n      return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date : null\n    }\n    const date = new Date(value || '')\n    return Number.isFinite(date.getTime()) ? date : null\n  }\n  function date_value(value) { return transaction_date(value)?.getTime() ?? null }\n\n  function sort_transactions(items) {\n    return [...items].sort((a, b) => (date_value(b.created) ?? -Infinity) - (date_value(a.created) ?? -Infinity))\n  }\n\n  function receive_items(items) {\n    if (disposed) return\n    load_version++\n    transactions = sort_transactions(items)\n    loading = false\n    load_error = ''\n  }\n\n  function load_failed() {\n    if (disposed) return\n    loading = false\n    load_error = 'Transactions could not be loaded.'\n  }\n\n  const unsubscribe = data.transactions.subscribe(receive_items, list_params, load_failed)\n\n  async function retry_load() {\n    if (retrying || disposed) return\n    retrying = true\n    const version = ++load_version\n    try {\n      const items = await data.transactions.list(list_params)\n      if (!disposed && version === load_version) receive_items(items)\n    } catch {\n      if (!disposed && version === load_version) load_failed()\n    } finally {\n      if (!disposed) retrying = false\n    }\n  }\n  onDestroy(() => { disposed = true; load_version++; unsubscribe() })\n\n  function amount_cents(value) {\n    const amount = Number(value)\n    if (!Number.isFinite(amount)) return 0\n    const cents = Math.sign(amount) * Math.round((Math.abs(amount) + Number.EPSILON) * 100)\n    return Number.isSafeInteger(cents) ? cents : 0\n  }\n\n  function parse_amount(value) {\n    const match = String(value).trim().match(/^([+-]?)(?:(\\d+)(?:\\.(\\d{1,2}))?|\\.(\\d{1,2}))$/)\n    if (!match) return null\n    const cents = (Number(match[2] || 0) * 100 + Number((match[3] || match[4] || '').padEnd(2, '0'))) * (match[1] === '-' ? -1 : 1)\n    return Number.isSafeInteger(cents) && cents !== 0 && amount_cents(cents / 100) === cents ? cents : null\n  }\n\n  let balance = $derived.by(() => transactions.reduce((total, transaction) => total + amount_cents(transaction.amount), 0) / 100)\n  let income = $derived.by(() => transactions.reduce((total, transaction) => total + Math.max(0, amount_cents(transaction.amount)), 0) / 100)\n  let expense = $derived.by(() => transactions.reduce((total, transaction) => total + Math.max(0, -amount_cents(transaction.amount)), 0) / 100)\n\n  async function add_transaction() {\n    if (saving) return\n    form_error = ''\n    const text = new_text.trim()\n    const cents = parse_amount(new_amount)\n    if (!text) { form_error = 'Enter a description.'; return }\n    if (cents === null) { form_error = 'Enter a non-zero amount with up to two decimal places. Use a minus sign for expenses.'; return }\n    saving = true\n    try {\n      await data.transactions.create({ text, amount: cents / 100, created: new Date().toISOString() })\n      new_text = ''\n      new_amount = ''\n    } catch {\n      form_error = 'Transaction could not be saved. Your entry is still here; try again.'\n    } finally {\n      saving = false\n    }\n  }\n\n  async function delete_transaction(id) {\n    if (deleting_id !== null) return\n    const original = transactions.find(transaction => transaction.id === id)\n    if (!original) return\n    deleting_id = id\n    history_error = ''\n    try {\n      await data.transactions.delete(id)\n      confirm_delete = null\n    } catch {\n      // Keep the entry visible even if a data adapter updates optimistically.\n      if (!transactions.some(transaction => transaction.id === id)) transactions = sort_transactions([...transactions, original])\n      history_error = 'Transaction could not be deleted. Try again.'\n    } finally {\n      deleting_id = null\n    }\n  }\n\n  function format_currency(amount) {\n    const value = Number(amount)\n    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number.isFinite(value) ? value : 0)\n  }\n\n  function format_date(value) {\n    if (date_value(value) === null) return ''\n    return transaction_date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })\n  }\n\n  function export_date(value) {\n    if (date_value(value) === null) return ''\n    const date = transaction_date(value)\n    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`\n  }\n\n  function csv_cell(value, protect_formula = false) {\n    let text = String(value ?? '')\n    if (protect_formula && /^[\\s]*[=+\\-@]/.test(text)) text = \"'\" + text\n    return '\"' + text.replace(/\"/g, '\"\"') + '\"'\n  }\n\n  function export_csv() {\n    return ['Date,Description,Amount', ...transactions.map(transaction => [\n      csv_cell(export_date(transaction.created)),\n      csv_cell(transaction.text, true),\n      (amount_cents(transaction.amount) / 100).toFixed(2)\n    ].join(','))].join('\\r\\n')\n  }\n\n  function download_csv() {\n    const url = URL.createObjectURL(new Blob([export_csv()], { type: 'text/csv;charset=utf-8' }))\n    const anchor = document.createElement('a')\n    anchor.href = url\n    anchor.download = 'expenses.csv'\n    anchor.click()\n    setTimeout(() => URL.revokeObjectURL(url), 0)\n  }\n</script>\n\n<main class=\"page\">\n  <div class=\"container\">\n    <h1>{content.app_title}</h1>\n    <section class=\"summary\" aria-label=\"Transaction totals\">\n      <div class=\"balance\"><span>{content.balance_label}</span><strong>{format_currency(balance)}</strong></div>\n      <div><span>{content.income_label}</span><strong>{format_currency(income)}</strong></div>\n      <div><span>{content.expense_label}</span><strong>{format_currency(expense)}</strong></div>\n    </section>\n\n    <form onsubmit={event => { event.preventDefault(); void add_transaction() }} novalidate aria-labelledby=\"add-title\">\n      <h2 id=\"add-title\">{content.add_transaction_title}</h2>\n      <label for=\"description\">Description</label>\n      <input id=\"description\" type=\"text\" bind:value={new_text} placeholder={content.description_placeholder} disabled={saving} maxlength=\"240\" autocomplete=\"off\" aria-describedby={form_error ? 'entry-error' : undefined} />\n      <div class=\"amount-row\">\n        <div><label for=\"amount\">Amount (USD)</label><input id=\"amount\" type=\"text\" inputmode=\"decimal\" bind:value={new_amount} placeholder={content.amount_placeholder} disabled={saving} aria-describedby={form_error ? 'amount-hint entry-error' : 'amount-hint'} /></div>\n        <button class=\"primary\" type=\"submit\" disabled={saving}>{saving ? 'Saving…' : content.add_button}</button>\n      </div>\n      <p id=\"amount-hint\" class=\"hint\">Negative for expenses, positive for income.</p>\n      {#if form_error}<p class=\"error\" id=\"entry-error\" role=\"alert\">{form_error}</p>{/if}\n    </form>\n\n    <section class=\"history\" aria-labelledby=\"history-title\">\n      <div class=\"history-header\"><h2 id=\"history-title\">{content.history_title}</h2>{#if transactions.length > 0}<button class=\"download\" onclick={download_csv} aria-label=\"Export transactions as CSV\"><Icon icon=\"lucide:download\" width={15} /> Export</button>{/if}</div>\n      {#if history_error}<p class=\"error\" role=\"alert\">{history_error}</p>{/if}\n      {#if load_error}<div class=\"load-error\" role=\"alert\"><p>{load_error}</p><button onclick={retry_load} disabled={retrying}>{retrying ? 'Retrying…' : 'Retry loading'}</button></div>{/if}\n      {#if loading && !transactions.length}<p class=\"empty\" role=\"status\">{content.loading_message}</p>\n      {:else if transactions.length === 0 && !load_error}<p class=\"empty\">{content.empty_state}</p>\n      {:else}\n        <ul>\n          {#each transactions as transaction (transaction.id)}\n            <li>\n              <div class=\"transaction\">\n                <div class=\"description\"><span>{transaction.text}</span>{#if format_date(transaction.created)}<time datetime={transaction.created}>{format_date(transaction.created)}</time>{/if}</div>\n                <span class=\"amount\" class:income={transaction.amount > 0}>{transaction.amount > 0 ? '+' : ''}{format_currency(transaction.amount)}</span>\n                <button class=\"delete\" onclick={() => { confirm_delete = confirm_delete === transaction.id ? null : transaction.id }} aria-label={`Delete ${transaction.text}`} aria-expanded={confirm_delete === transaction.id} disabled={deleting_id !== null}><Icon icon=\"lucide:trash-2\" width={15} /></button>\n              </div>\n              {#if confirm_delete === transaction.id}\n                <div class=\"confirm\"><span>Delete this transaction?</span><button onclick={() => { confirm_delete = null }} disabled={deleting_id !== null}>Cancel</button><button class=\"danger\" onclick={() => delete_transaction(transaction.id)} disabled={deleting_id !== null}>{deleting_id === transaction.id ? 'Deleting…' : 'Delete'}</button></div>\n              {/if}\n            </li>\n          {/each}\n        </ul>\n      {/if}\n    </section>\n  </div>\n</main>\n\n<style>\n  :global(*) { box-sizing: border-box; }\n  .page { min-height: 100vh; padding: 2rem 1.25rem; background: var(--page-background, #fafafa); color: var(--body-text-color, #202020); font-family: var(--body-font, system-ui, sans-serif); }\n  .container { max-width: 560px; margin: 0 auto; }\n  h1 { font-size: 1.25rem; font-weight: 600; letter-spacing: -.025em; margin: 0 0 1.5rem; color: var(--heading-text-color, #202020); }\n  h2 { margin: 0; font-size: .9375rem; font-weight: 600; color: var(--heading-text-color, #202020); }\n  .summary { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 1rem; border-bottom: 1px solid var(--border-color, #e5e5e5); padding-bottom: 1.5rem; margin-bottom: 1.5rem; }\n  .summary > div { min-width: 0; display: flex; flex-direction: column; gap: .4rem; }\n  .summary span { color: var(--secondary-text-color, #737373); font-size: .8125rem; }\n  .summary strong { font-size: 1.125rem; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }\n  .balance strong { font-weight: 600; }\n  form { padding: 1.25rem; background: var(--card-background, #fff); border: 1px solid var(--border-color, #e5e5e5); border-radius: var(--card-radius, 6px); }\n  form h2 { margin-bottom: 1rem; }\n  label { display: block; margin: 0 0 .4rem; font-size: .8125rem; }\n  input { width: 100%; min-height: 40px; border: 1px solid var(--border-color, #e5e5e5); border-radius: 5px; background: transparent; color: inherit; font: inherit; font-size: .9375rem; padding: .55rem .7rem; }\n  input::placeholder { color: var(--secondary-text-color, #737373); }\n  .amount-row { display: flex; gap: .75rem; align-items: end; margin-top: .875rem; }\n  .amount-row > div { flex: 1; min-width: 0; }\n  button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 36px; padding: .45rem .7rem; border: 1px solid var(--border-color, #e5e5e5); border-radius: var(--button-radius, 5px); background: var(--card-background, #fff); color: inherit; cursor: pointer; font: inherit; font-size: .8125rem; white-space: nowrap; }\n  button.primary { min-height: 40px; background: var(--button-background, #262626); border-color: var(--button-background, #262626); color: #fff; }\n  button:hover { opacity: .8; }\n  button:disabled { opacity: .55; cursor: wait; }\n  .hint { margin: .65rem 0 0; color: var(--secondary-text-color, #737373); font-size: .75rem; line-height: 1.5; }\n  .error, .load-error { margin: .75rem 0 0; font-size: .8125rem; line-height: 1.5; color: var(--negative-color, #b91c1c); }\n  .load-error p { margin: 0 0 .5rem; }\n  .history { margin-top: 1.75rem; }\n  .history-header { display: flex; justify-content: space-between; gap: .75rem; align-items: center; padding-bottom: .625rem; border-bottom: 1px solid var(--border-color, #e5e5e5); }\n  .download { border-color: transparent; padding: .35rem .1rem .35rem .5rem; color: var(--secondary-text-color, #737373); }\n  ul { margin: 0; padding: 0; list-style: none; }\n  li { border-bottom: 1px solid var(--border-color, #e5e5e5); }\n  .transaction { display: flex; gap: .75rem; align-items: center; padding: .875rem 0; }\n  .description { flex: 1; min-width: 0; display: grid; gap: .25rem; font-size: .875rem; overflow-wrap: anywhere; }\n  time { font-size: .75rem; color: var(--secondary-text-color, #737373); }\n  .amount { font-variant-numeric: tabular-nums; font-size: .875rem; white-space: nowrap; }\n  .amount.income { color: var(--positive-color, #047857); }\n  .delete { width: 36px; padding: .5rem; flex-shrink: 0; border-color: transparent; color: var(--secondary-text-color, #737373); }\n  .confirm { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: 0 0 .875rem; font-size: .8125rem; }\n  .confirm > span { flex: 1; }\n  button.danger { color: var(--negative-color, #b91c1c); }\n  .empty { margin: 0; padding: 1.25rem 0; color: var(--secondary-text-color, #737373); font-size: .875rem; }\n  button:focus-visible, input:focus-visible { outline: 2px solid var(--button-background, #262626); outline-offset: 3px; }\n  @media (max-width: 400px) { .page { padding: 1.25rem .875rem; } .summary { gap: .65rem; } .summary strong { font-size: 1rem; } form { padding: 1rem; } .amount-row { flex-direction: column; align-items: stretch; } .transaction { gap: .45rem; } .confirm > span { flex-basis: 100%; } }\n</style>\n",
+  "design": [
+    {
+      "id": "body-font",
+      "name": "Body Font",
+      "css_var": "--body-font",
+      "value": "system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+      "type": "font",
+      "description": "Main font for all text"
+    },
+    {
+      "id": "page-background",
+      "name": "Page Background",
+      "css_var": "--page-background",
+      "value": "#fafafa",
+      "type": "color",
+      "description": "Overall page background"
+    },
+    {
+      "id": "card-background",
+      "name": "Card Background",
+      "css_var": "--card-background",
+      "value": "#ffffff",
+      "type": "color",
+      "description": "Card and container background"
+    },
+    {
+      "id": "border-color",
+      "name": "Border Color",
+      "css_var": "--border-color",
+      "value": "#e5e5e5",
+      "type": "color",
+      "description": "Border and divider color"
+    },
+    {
+      "id": "heading-text-color",
+      "name": "Heading Text Color",
+      "css_var": "--heading-text-color",
+      "value": "#202020",
+      "type": "color",
+      "description": "Color for headings"
+    },
+    {
+      "id": "body-text-color",
+      "name": "Body Text Color",
+      "css_var": "--body-text-color",
+      "value": "#202020",
+      "type": "color",
+      "description": "Color for body text"
+    },
+    {
+      "id": "secondary-text-color",
+      "name": "Secondary Text Color",
+      "css_var": "--secondary-text-color",
+      "value": "#737373",
+      "type": "color",
+      "description": "Color for muted text"
+    },
+    {
+      "id": "positive-color",
+      "name": "Positive Color",
+      "css_var": "--positive-color",
+      "value": "#047857",
+      "type": "color",
+      "description": "Color for income/positive amounts"
+    },
+    {
+      "id": "negative-color",
+      "name": "Negative Color",
+      "css_var": "--negative-color",
+      "value": "#dc2626",
+      "type": "color",
+      "description": "Color for expense/negative amounts"
+    },
+    {
+      "id": "button-background",
+      "name": "Button Background",
+      "css_var": "--button-background",
+      "value": "#262626",
+      "type": "color",
+      "description": "Primary button color"
+    },
+    {
+      "id": "card-radius",
+      "name": "Card Radius",
+      "css_var": "--card-radius",
+      "value": "6px",
+      "type": "radius",
+      "description": "Roundness of cards"
+    },
+    {
+      "id": "button-radius",
+      "name": "Button Radius",
+      "css_var": "--button-radius",
+      "value": "5px",
+      "type": "radius",
+      "description": "Roundness of buttons"
+    }
+  ],
+  "content": [
+    {
+      "id": "app_title",
+      "name": "App Title",
+      "type": "text",
+      "value": "Expenses",
+      "description": "Main heading"
+    },
+    {
+      "id": "balance_label",
+      "name": "Balance Label",
+      "type": "text",
+      "value": "Balance",
+      "description": "Label above balance amount"
+    },
+    {
+      "id": "income_label",
+      "name": "Income Label",
+      "type": "text",
+      "value": "Income",
+      "description": "Label for income card"
+    },
+    {
+      "id": "expense_label",
+      "name": "Expense Label",
+      "type": "text",
+      "value": "Expenses",
+      "description": "Label for expense card"
+    },
+    {
+      "id": "add_transaction_title",
+      "name": "Add Transaction Title",
+      "type": "text",
+      "value": "Add transaction",
+      "description": "Form section heading"
+    },
+    {
+      "id": "description_placeholder",
+      "name": "Description Placeholder",
+      "type": "text",
+      "value": "Description",
+      "description": "Placeholder for description input"
+    },
+    {
+      "id": "amount_placeholder",
+      "name": "Amount Placeholder",
+      "type": "text",
+      "value": "Amount (use - for expense)",
+      "description": "Placeholder for amount input"
+    },
+    {
+      "id": "add_button",
+      "name": "Add Button",
+      "type": "text",
+      "value": "Add transaction",
+      "description": "Add button label"
+    },
+    {
+      "id": "history_title",
+      "name": "History Title",
+      "type": "text",
+      "value": "Transactions",
+      "description": "Transaction history heading"
+    },
+    {
+      "id": "loading_message",
+      "name": "Loading Message",
+      "type": "text",
+      "value": "Loading...",
+      "description": "Shown while loading"
+    },
+    {
+      "id": "empty_state",
+      "name": "Empty State",
+      "type": "text",
+      "value": "No transactions yet",
+      "description": "Message when no transactions"
+    }
+  ],
+  "data": {
+    "transactions": {
+      "schema": [
+        {
+          "name": "id",
+          "type": "text"
+        },
+        {
+          "name": "text",
+          "type": "text"
+        },
+        {
+          "name": "amount",
+          "type": "number"
+        },
+        {
+          "name": "created",
+          "type": "text"
+        }
+      ],
+      "records": [],
+      "icon": "lucide:dollar-sign"
+    }
+  },
+  "preview_records": {
+    "transactions": [
+      {
+        "id": "f7n3q",
+        "text": "Salary",
+        "amount": 3500,
+        "created": "2024-12-01T10:00:00.000Z"
+      },
+      {
+        "id": "j2w8k",
+        "text": "Rent",
+        "amount": -1200,
+        "created": "2024-12-02T14:30:00.000Z"
+      },
+      {
+        "id": "v5m1p",
+        "text": "Groceries",
+        "amount": -150,
+        "created": "2024-12-05T09:15:00.000Z"
+      },
+      {
+        "id": "x9c4h",
+        "text": "Freelance project",
+        "amount": 800,
+        "created": "2024-12-07T16:45:00.000Z"
+      },
+      {
+        "id": "r6y2t",
+        "text": "Utilities",
+        "amount": -95,
+        "created": "2024-12-09T11:20:00.000Z"
+      }
+    ]
+  }
 }

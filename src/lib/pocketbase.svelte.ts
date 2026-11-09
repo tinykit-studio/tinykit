@@ -30,6 +30,11 @@ const PB_URL = typeof window !== 'undefined' ? '/_pb' : 'http://127.0.0.1:8091'
 // Singleton PocketBase client
 export const pb = new PocketBase(PB_URL)
 
+async function syncPrivateSession(token: string): Promise<void> {
+	const response = await fetch('/api/auth/session', { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+	if (!response.ok) throw new Error('Could not establish your private app session. Please sign in again.')
+}
+
 // Disable auto cancellation for concurrent requests
 pb.autoCancellation(false)
 
@@ -56,6 +61,8 @@ class AuthStore {
 				pb.collection('users').authRefresh()
 					.then((auth_data) => {
 						this.user = auth_data.record
+						return syncPrivateSession(auth_data.token)
+					}).then(() => {
 						this.is_loading = false
 					})
 					.catch(() => {
@@ -87,6 +94,7 @@ class AuthStore {
 
 		try {
 			const auth_data = await pb.collection('users').authWithPassword(email, password)
+			await syncPrivateSession(auth_data.token)
 			this.user = auth_data.record
 			return auth_data.record
 		} catch (err: any) {
@@ -121,6 +129,7 @@ class AuthStore {
 	}
 
 	logout(): void {
+		fetch('/api/auth/session', { method: 'DELETE' }).catch(() => {})
 		pb.authStore.clear()
 		this.user = null
 		this.error = null
@@ -132,6 +141,7 @@ class AuthStore {
 
 		try {
 			const auth_data = await pb.collection('users').authRefresh()
+			await syncPrivateSession(auth_data.token)
 			this.user = auth_data.record
 		} catch {
 			// Token expired or invalid, clear auth

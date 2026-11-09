@@ -1,279 +1,279 @@
 {
-	"id": "homepage",
-	"name": "Homepage",
-	"description": "Personal homepage with bio, projects, and contact form",
-	"preview": "lucide:home",
-	"tags": [
-		"personal-site",
-		"personal",
-		"beginner"
-	],
-	"kits": [
-		"personal-site"
-	],
-	"frontend_code": "<script>\n\timport { fade, fly } from 'svelte/transition'\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet projects = $state([])\n\tdata.projects.subscribe(items => projects = items)\n\n\tlet name = $state('')\n\tlet email = $state('')\n\tlet message = $state('')\n\tlet sending = $state(false)\n\tlet sent = $state(false)\n\tlet error = $state('')\n\n\tasync function handle_submit(e) {\n\t\te.preventDefault()\n\t\tif (!name || !email || !message) return\n\n\t\tsending = true\n\t\terror = ''\n\n\t\ttry {\n\t\t\tawait data.messages.create({\n\t\t\t\tname,\n\t\t\t\temail,\n\t\t\t\tmessage,\n\t\t\t\tcreated_at: new Date().toISOString()\n\t\t\t})\n\t\t\tsent = true\n\t\t\tname = ''\n\t\t\temail = ''\n\t\t\tmessage = ''\n\t\t} catch (err) {\n\t\t\terror = content.error_message\n\t\t} finally {\n\t\t\tsending = false\n\t\t}\n\t}\n</script>\n\n<div class=\"page\">\n\t<header class=\"hero\">\n\t\t{#if content.photo_url}\n\t\t\t<img class=\"photo\" src={content.photo_url} alt={content.name} />\n\t\t{/if}\n\t\t<h1>{content.name}</h1>\n\t\t<p class=\"headline\">{content.headline}</p>\n\t\t\n\t\t<div class=\"socials\">\n\t\t\t{#if content.twitter_url}\n\t\t\t\t<a href={content.twitter_url} target=\"_blank\" rel=\"noopener\" aria-label=\"Twitter\">\n\t\t\t\t\t<Icon icon=\"lucide:twitter\" width={20} />\n\t\t\t\t</a>\n\t\t\t{/if}\n\t\t\t{#if content.github_url}\n\t\t\t\t<a href={content.github_url} target=\"_blank\" rel=\"noopener\" aria-label=\"GitHub\">\n\t\t\t\t\t<Icon icon=\"lucide:github\" width={20} />\n\t\t\t\t</a>\n\t\t\t{/if}\n\t\t\t{#if content.linkedin_url}\n\t\t\t\t<a href={content.linkedin_url} target=\"_blank\" rel=\"noopener\" aria-label=\"LinkedIn\">\n\t\t\t\t\t<Icon icon=\"lucide:linkedin\" width={20} />\n\t\t\t\t</a>\n\t\t\t{/if}\n\t\t\t{#if content.email}\n\t\t\t\t<a href=\"mailto:{content.email}\" aria-label=\"Email\">\n\t\t\t\t\t<Icon icon=\"lucide:mail\" width={20} />\n\t\t\t\t</a>\n\t\t\t{/if}\n\t\t</div>\n\t</header>\n\n\t<section class=\"about\">\n\t\t<h2>{content.about_title}</h2>\n\t\t<p>{content.bio}</p>\n\t</section>\n\n\t{#if projects.length > 0}\n\t\t<section class=\"projects\">\n\t\t\t<h2>{content.projects_title}</h2>\n\t\t\t<div class=\"project-grid\">\n\t\t\t\t{#each projects as project (project.id)}\n\t\t\t\t\t<a href={project.url} target=\"_blank\" rel=\"noopener\" class=\"project-card\">\n\t\t\t\t\t\t<h3>{project.name}</h3>\n\t\t\t\t\t\t<p>{project.description}</p>\n\t\t\t\t\t\t<span class=\"link\">\n\t\t\t\t\t\t\t{content.view_project}\n\t\t\t\t\t\t\t<Icon icon=\"lucide:arrow-right\" width={14} />\n\t\t\t\t\t\t</span>\n\t\t\t\t\t</a>\n\t\t\t\t{/each}\n\t\t\t</div>\n\t\t</section>\n\t{/if}\n\n\t<section class=\"contact\">\n\t\t<h2>{content.contact_title}</h2>\n\t\t{#if sent}\n\t\t\t<div class=\"success\" transition:fade>\n\t\t\t\t<Icon icon=\"lucide:check-circle\" width={24} />\n\t\t\t\t<p>{content.success_message}</p>\n\t\t\t\t<button class=\"btn-secondary\" onclick={() => sent = false}>\n\t\t\t\t\t{content.send_another}\n\t\t\t\t</button>\n\t\t\t</div>\n\t\t{:else}\n\t\t\t<form onsubmit={handle_submit}>\n\t\t\t\t<div class=\"form-row\">\n\t\t\t\t\t<input type=\"text\" placeholder={content.name_placeholder} bind:value={name} required />\n\t\t\t\t\t<input type=\"email\" placeholder={content.email_placeholder} bind:value={email} required />\n\t\t\t\t</div>\n\t\t\t\t<textarea placeholder={content.message_placeholder} bind:value={message} rows=\"4\" required></textarea>\n\t\t\t\t{#if error}\n\t\t\t\t\t<p class=\"error\">{error}</p>\n\t\t\t\t{/if}\n\t\t\t\t<button type=\"submit\" class=\"btn-primary\" disabled={sending}>\n\t\t\t\t\t{#if sending}\n\t\t\t\t\t\t<Icon icon=\"lucide:loader-2\" width={18} class=\"spin\" />\n\t\t\t\t\t{:else}\n\t\t\t\t\t\t{content.send_button}\n\t\t\t\t\t{/if}\n\t\t\t\t</button>\n\t\t\t</form>\n\t\t{/if}\n\t</section>\n</div>\n\n<style>\n\t.page {\n\t\tmin-height: 100vh;\n\t\tbackground: var(--bg-color, #fafafa);\n\t\tpadding: 4rem 1.5rem;\n\t\tfont-family: var(--font, system-ui, sans-serif);\n\t}\n\n\t.hero {\n\t\tmax-width: 600px;\n\t\tmargin: 0 auto 4rem;\n\t\ttext-align: center;\n\t}\n\n\t.photo {\n\t\twidth: 120px;\n\t\theight: 120px;\n\t\tborder-radius: 50%;\n\t\tobject-fit: cover;\n\t\tmargin-bottom: 1.5rem;\n\t\tborder: 3px solid var(--accent-color, #3b82f6);\n\t}\n\n\t.hero h1 {\n\t\tfont-size: 2.5rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--heading-color, #0f172a);\n\t\tmargin: 0 0 0.5rem;\n\t\tletter-spacing: -0.02em;\n\t}\n\n\t.headline {\n\t\tfont-size: 1.25rem;\n\t\tcolor: var(--text-color, #64748b);\n\t\tmargin: 0 0 1.5rem;\n\t}\n\n\t.socials {\n\t\tdisplay: flex;\n\t\tjustify-content: center;\n\t\tgap: 1rem;\n\t}\n\n\t.socials a {\n\t\tcolor: var(--text-color, #64748b);\n\t\tpadding: 0.5rem;\n\t\tborder-radius: var(--radius, 8px);\n\t\ttransition: all 0.2s;\n\t}\n\n\t.socials a:hover {\n\t\tcolor: var(--accent-color, #3b82f6);\n\t\tbackground: var(--hover-bg, #f1f5f9);\n\t}\n\n\tsection {\n\t\tmax-width: 600px;\n\t\tmargin: 0 auto 4rem;\n\t}\n\n\tsection h2 {\n\t\tfont-size: 1.25rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #0f172a);\n\t\tmargin: 0 0 1rem;\n\t\tpadding-bottom: 0.75rem;\n\t\tborder-bottom: 1px solid var(--border-color, #e2e8f0);\n\t}\n\n\t.about p {\n\t\tcolor: var(--text-color, #64748b);\n\t\tline-height: 1.7;\n\t\tmargin: 0;\n\t}\n\n\t.project-grid {\n\t\tdisplay: grid;\n\t\tgap: 1rem;\n\t}\n\n\t.project-card {\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: var(--radius, 8px);\n\t\tpadding: 1.25rem;\n\t\ttext-decoration: none;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.project-card:hover {\n\t\tborder-color: var(--accent-color, #3b82f6);\n\t\ttransform: translateY(-2px);\n\t\tbox-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);\n\t}\n\n\t.project-card h3 {\n\t\tfont-size: 1rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #0f172a);\n\t\tmargin: 0 0 0.375rem;\n\t}\n\n\t.project-card p {\n\t\tcolor: var(--text-color, #64748b);\n\t\tfont-size: 0.875rem;\n\t\tmargin: 0 0 0.75rem;\n\t\tline-height: 1.5;\n\t}\n\n\t.project-card .link {\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tgap: 0.25rem;\n\t\tcolor: var(--accent-color, #3b82f6);\n\t\tfont-size: 0.875rem;\n\t\tfont-weight: 500;\n\t}\n\n\t.contact form {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tgap: 0.75rem;\n\t}\n\n\t.form-row {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: 1fr 1fr;\n\t\tgap: 0.75rem;\n\t}\n\n\t.contact input,\n\t.contact textarea {\n\t\twidth: 100%;\n\t\tpadding: 0.75rem 1rem;\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: var(--radius, 8px);\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tcolor: var(--heading-color, #0f172a);\n\t\tfont-size: 0.9375rem;\n\t\tresize: vertical;\n\t}\n\n\t.contact input:focus,\n\t.contact textarea:focus {\n\t\toutline: none;\n\t\tborder-color: var(--accent-color, #3b82f6);\n\t}\n\n\t.btn-primary {\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tgap: 0.5rem;\n\t\tpadding: 0.75rem 1.5rem;\n\t\tbackground: var(--accent-color, #3b82f6);\n\t\tcolor: white;\n\t\tborder: none;\n\t\tborder-radius: var(--radius, 8px);\n\t\tfont-size: 0.9375rem;\n\t\tfont-weight: 600;\n\t\tcursor: pointer;\n\t\ttransition: all 0.2s;\n\t\talign-self: flex-start;\n\t}\n\n\t.btn-primary:hover:not(:disabled) {\n\t\tfilter: brightness(1.1);\n\t}\n\n\t.btn-primary:disabled {\n\t\topacity: 0.7;\n\t\tcursor: not-allowed;\n\t}\n\n\t.btn-secondary {\n\t\tpadding: 0.625rem 1rem;\n\t\tbackground: transparent;\n\t\tcolor: var(--text-color, #64748b);\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: var(--radius, 8px);\n\t\tfont-size: 0.875rem;\n\t\tcursor: pointer;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.btn-secondary:hover {\n\t\tborder-color: var(--accent-color, #3b82f6);\n\t\tcolor: var(--accent-color, #3b82f6);\n\t}\n\n\t.success {\n\t\ttext-align: center;\n\t\tpadding: 2rem;\n\t\tbackground: var(--card-bg, #ffffff);\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: var(--radius, 8px);\n\t\tcolor: #22c55e;\n\t}\n\n\t.success p {\n\t\tcolor: var(--text-color, #64748b);\n\t\tmargin: 0.75rem 0 1rem;\n\t}\n\n\t.error {\n\t\tcolor: #ef4444;\n\t\tfont-size: 0.875rem;\n\t\tmargin: 0;\n\t}\n\n\t:global(.spin) {\n\t\tanimation: spin 1s linear infinite;\n\t}\n\n\t@keyframes spin {\n\t\tfrom { transform: rotate(0deg); }\n\t\tto { transform: rotate(360deg); }\n\t}\n\n\t@media (max-width: 500px) {\n\t\t.form-row {\n\t\t\tgrid-template-columns: 1fr;\n\t\t}\n\n\t\t.hero h1 {\n\t\t\tfont-size: 2rem;\n\t\t}\n\t}\n</style>",
-	"design": [
-		{
-			"id": "bg-color",
-			"name": "Background",
-			"css_var": "--bg-color",
-			"value": "#fafafa",
-			"type": "color",
-			"description": "Page background color"
-		},
-		{
-			"id": "card-bg",
-			"name": "Card Background",
-			"css_var": "--card-bg",
-			"value": "#ffffff",
-			"type": "color",
-			"description": "Background for cards and inputs"
-		},
-		{
-			"id": "hover-bg",
-			"name": "Hover Background",
-			"css_var": "--hover-bg",
-			"value": "#f1f5f9",
-			"type": "color",
-			"description": "Background on hover"
-		},
-		{
-			"id": "accent-color",
-			"name": "Accent Color",
-			"css_var": "--accent-color",
-			"value": "#3b82f6",
-			"type": "color",
-			"description": "Primary accent color"
-		},
-		{
-			"id": "heading-color",
-			"name": "Heading Color",
-			"css_var": "--heading-color",
-			"value": "#0f172a",
-			"type": "color",
-			"description": "Color for headings"
-		},
-		{
-			"id": "text-color",
-			"name": "Text Color",
-			"css_var": "--text-color",
-			"value": "#64748b",
-			"type": "color",
-			"description": "Color for body text"
-		},
-		{
-			"id": "border-color",
-			"name": "Border Color",
-			"css_var": "--border-color",
-			"value": "#e2e8f0",
-			"type": "color",
-			"description": "Color for borders"
-		},
-		{
-			"id": "font",
-			"name": "Font",
-			"css_var": "--font",
-			"value": "system-ui, sans-serif",
-			"type": "font",
-			"description": "Main font family"
-		},
-		{
-			"id": "radius",
-			"name": "Border Radius",
-			"css_var": "--radius",
-			"value": "8px",
-			"type": "radius",
-			"description": "Roundness of corners"
-		}
-	],
-	"content": [
-		{
-			"id": "photo_url",
-			"name": "Photo URL",
-			"type": "image",
-			"value": "https://placehold.co/200x200/6366f1/ffffff?text=AJ",
-			"description": "Your profile photo"
-		},
-		{
-			"id": "name",
-			"name": "Name",
-			"type": "text",
-			"value": "Alex Johnson",
-			"description": "Your name"
-		},
-		{
-			"id": "headline",
-			"name": "Headline",
-			"type": "text",
-			"value": "Designer & Developer building things on the internet",
-			"description": "Short tagline about you"
-		},
-		{
-			"id": "about_title",
-			"name": "About Title",
-			"type": "text",
-			"value": "About",
-			"description": "Title for about section"
-		},
-		{
-			"id": "bio",
-			"name": "Bio",
-			"type": "textarea",
-			"value": "I'm a designer and developer based in San Francisco. I love building products that solve real problems and help people do their best work. When I'm not coding, you'll find me hiking, reading, or experimenting with new recipes.",
-			"description": "Your bio"
-		},
-		{
-			"id": "projects_title",
-			"name": "Projects Title",
-			"type": "text",
-			"value": "Projects",
-			"description": "Title for projects section"
-		},
-		{
-			"id": "view_project",
-			"name": "View Project Text",
-			"type": "text",
-			"value": "View project",
-			"description": "Link text on project cards"
-		},
-		{
-			"id": "contact_title",
-			"name": "Contact Title",
-			"type": "text",
-			"value": "Get in touch",
-			"description": "Title for contact section"
-		},
-		{
-			"id": "name_placeholder",
-			"name": "Name Placeholder",
-			"type": "text",
-			"value": "Your name",
-			"description": "Placeholder for name input"
-		},
-		{
-			"id": "email_placeholder",
-			"name": "Email Placeholder",
-			"type": "text",
-			"value": "Your email",
-			"description": "Placeholder for email input"
-		},
-		{
-			"id": "message_placeholder",
-			"name": "Message Placeholder",
-			"type": "text",
-			"value": "Your message...",
-			"description": "Placeholder for message input"
-		},
-		{
-			"id": "send_button",
-			"name": "Send Button",
-			"type": "text",
-			"value": "Send message",
-			"description": "Submit button text"
-		},
-		{
-			"id": "success_message",
-			"name": "Success Message",
-			"type": "text",
-			"value": "Thanks for reaching out! I'll get back to you soon.",
-			"description": "Message after successful submission"
-		},
-		{
-			"id": "send_another",
-			"name": "Send Another",
-			"type": "text",
-			"value": "Send another message",
-			"description": "Button to send another message"
-		},
-		{
-			"id": "error_message",
-			"name": "Error Message",
-			"type": "text",
-			"value": "Something went wrong. Please try again.",
-			"description": "Error message"
-		},
-		{
-			"id": "twitter_url",
-			"name": "Twitter URL",
-			"type": "text",
-			"value": "https://twitter.com",
-			"description": "Twitter profile URL (leave empty to hide)"
-		},
-		{
-			"id": "github_url",
-			"name": "GitHub URL",
-			"type": "text",
-			"value": "https://github.com",
-			"description": "GitHub profile URL (leave empty to hide)"
-		},
-		{
-			"id": "linkedin_url",
-			"name": "LinkedIn URL",
-			"type": "text",
-			"value": "",
-			"description": "LinkedIn profile URL (leave empty to hide)"
-		},
-		{
-			"id": "email",
-			"name": "Email",
-			"type": "text",
-			"value": "hello@example.com",
-			"description": "Email address (leave empty to hide)"
-		}
-	],
-	"data": {
-		"projects": {
-			"schema": [
-				{
-					"name": "name",
-					"type": "text"
-				},
-				{
-					"name": "description",
-					"type": "text"
-				},
-				{
-					"name": "url",
-					"type": "text"
-				}
-			],
-			"records": [
-				{
-					"id": "p1",
-					"name": "Project Alpha",
-					"description": "A tool for managing your daily tasks with a beautiful interface",
-					"url": "https://example.com"
-				},
-				{
-					"id": "p2",
-					"name": "Design System",
-					"description": "Open-source component library for building modern web apps",
-					"url": "https://example.com"
-				}
-			],
-			"icon": "lucide:briefcase"
-		},
-		"messages": {
-			"schema": [
-				{
-					"name": "name",
-					"type": "text"
-				},
-				{
-					"name": "email",
-					"type": "text"
-				},
-				{
-					"name": "message",
-					"type": "text"
-				},
-				{
-					"name": "created_at",
-					"type": "text"
-				}
-			],
-			"records": [],
-			"icon": "lucide:message-square"
-		}
-	}
+  "id": "homepage",
+  "name": "Homepage",
+  "description": "A personal page with projects and contact details.",
+  "preview": "lucide:home",
+  "tags": [
+    "personal-site",
+    "personal",
+    "beginner"
+  ],
+  "kits": [
+    "personal-site"
+  ],
+  "frontend_code": "<script>\n\timport { onDestroy } from 'svelte'\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet projects = $state([])\n\tlet loading = $state(true)\n\tlet load_error = $state('')\n\tlet retrying_load = $state(false)\n\tlet disposed = false\n\tlet load_revision = 0\n\tlet failed_photo_url = $state('')\n\tlet name = $state('')\n\tlet email = $state('')\n\tlet message = $state('')\n\tlet sending = $state(false)\n\tlet sent = $state(false)\n\tlet error = $state('')\n\n\tfunction safe_url(value) {\n\t\tconst raw = String(value ?? '').trim()\n\t\tif (!raw || /[\\u0000-\\u001f\\u007f]/.test(raw)) return ''\n\t\ttry {\n\t\t\tconst url = new URL(raw)\n\t\t\treturn ['https:', 'http:'].includes(url.protocol) ? url.href : ''\n\t\t} catch { return '' }\n\t}\n\n\tfunction photo_url(value) {\n\t\tconst raw = String(value ?? '').trim()\n\t\treturn raw.startsWith('/') && !raw.startsWith('//') && !/[\\\\\\u0000-\\u001f\\u007f]/.test(raw) ? raw : safe_url(raw)\n\t}\n\n\tfunction email_link(value) {\n\t\tconst address = String(value ?? '').trim()\n\t\treturn /^[^\\s@?&#]+@[^\\s@?&#]+$/.test(address) ? `mailto:${address}` : ''\n\t}\n\n\tfunction initials(value) {\n\t\treturn String(value ?? '').trim().split(/\\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'A'\n\t}\n\n\tfunction receive_projects(items) {\n\t\tif (disposed) return\n\t\tload_revision += 1\n\t\tprojects = [...new Map((Array.isArray(items) ? items : []).filter(item => item?.id).map(item => [item.id, { ...item }])).values()]\n\t\tloading = false\n\t\tload_error = ''\n\t}\n\n\tfunction fail_projects() {\n\t\tif (disposed) return\n\t\tload_revision += 1\n\t\tloading = false\n\t\tload_error = 'Could not load projects. Please try again.'\n\t}\n\n\tconst unsubscribe = data.projects.subscribe(receive_projects, { all: true }, fail_projects)\n\n\tasync function retry_load() {\n\t\tif (retrying_load || disposed) return\n\t\tretrying_load = true\n\t\tconst revision = load_revision\n\t\ttry {\n\t\t\tconst items = await data.projects.list({ all: true })\n\t\t\tif (!disposed && revision === load_revision) receive_projects(items)\n\t\t} catch {\n\t\t\tif (!disposed && revision === load_revision) fail_projects()\n\t\t} finally {\n\t\t\tif (!disposed) retrying_load = false\n\t\t}\n\t}\n\n\tlet socials = $derived.by(() => [\n\t\t{ name: 'Twitter', icon: 'lucide:twitter', href: safe_url(content.twitter_url) },\n\t\t{ name: 'GitHub', icon: 'lucide:github', href: safe_url(content.github_url) },\n\t\t{ name: 'LinkedIn', icon: 'lucide:linkedin', href: safe_url(content.linkedin_url) },\n\t\t{ name: 'Email', icon: 'lucide:mail', href: email_link(content.email) }\n\t].filter(social => social.href))\n\n\tasync function handle_submit(event) {\n\t\tevent.preventDefault()\n\t\tif (sending || disposed) return\n\t\tconst fields = { name: name.trim(), email: email.trim(), message: message.trim() }\n\t\terror = ''\n\t\tif (!fields.name || !fields.email || !fields.message) {\n\t\t\terror = 'Enter your name, email, and message.'\n\t\t\treturn\n\t\t}\n\t\tif (!/^[^\\s@]+@[^\\s@]+$/.test(fields.email)) {\n\t\t\terror = 'Enter a valid email address.'\n\t\t\treturn\n\t\t}\n\t\tsending = true\n\t\ttry {\n\t\t\tawait data.messages.create({ ...fields, created_at: new Date().toISOString() })\n\t\t\tif (disposed) return\n\t\t\tif (name.trim() === fields.name && email.trim() === fields.email && message.trim() === fields.message) {\n\t\t\t\tsent = true\n\t\t\t\tname = ''\n\t\t\t\temail = ''\n\t\t\t\tmessage = ''\n\t\t\t}\n\t\t} catch {\n\t\t\tif (!disposed) error = content.error_message || 'Could not send your message. Please try again.'\n\t\t} finally {\n\t\t\tif (!disposed) sending = false\n\t\t}\n\t}\n\n\tonDestroy(() => { disposed = true; unsubscribe() })\n</script>\n\n<main class=\"page\">\n\t<div class=\"container\">\n\t\t<header class=\"hero\">\n\t\t\t{#if photo_url(content.photo_url) && failed_photo_url !== photo_url(content.photo_url)}\n\t\t\t\t<img class=\"photo\" src={photo_url(content.photo_url)} alt=\"\" width=\"64\" height=\"64\" onerror={() => failed_photo_url = photo_url(content.photo_url)} />\n\t\t\t{:else}\n\t\t\t\t<span class=\"photo initials\" aria-hidden=\"true\">{initials(content.name)}</span>\n\t\t\t{/if}\n\t\t\t<div class=\"identity\">\n\t\t\t\t<h1>{content.name}</h1>\n\t\t\t\t<p class=\"headline\">{content.headline}</p>\n\t\t\t</div>\n\t\t</header>\n\n\t\t{#if socials.length}\n\t\t\t<nav class=\"socials\" aria-label=\"Profiles and contact\">\n\t\t\t\t{#each socials as social (social.name)}\n\t\t\t\t\t<a href={social.href} target={social.name === 'Email' ? undefined : '_blank'} rel=\"noopener noreferrer\" aria-label={social.name}>\n\t\t\t\t\t\t<Icon icon={social.icon} width={18} />\n\t\t\t\t\t\t<span>{social.name}</span>\n\t\t\t\t\t</a>\n\t\t\t\t{/each}\n\t\t\t</nav>\n\t\t{/if}\n\n\t\t<section class=\"about\" aria-labelledby=\"about-title\">\n\t\t\t<h2 id=\"about-title\">{content.about_title}</h2>\n\t\t\t<p>{content.bio}</p>\n\t\t</section>\n\n\t\t<section class=\"projects\" aria-labelledby=\"projects-title\" aria-busy={loading || retrying_load}>\n\t\t\t<h2 id=\"projects-title\">{content.projects_title}</h2>\n\t\t\t{#if load_error}\n\t\t\t\t<div class=\"load-error\" role=\"alert\">\n\t\t\t\t\t<p>{load_error}</p>\n\t\t\t\t\t<button type=\"button\" class=\"btn-secondary\" onclick={retry_load} disabled={retrying_load}>{retrying_load ? 'Retrying…' : 'Retry'}</button>\n\t\t\t\t</div>\n\t\t\t{/if}\n\t\t\t{#if loading && !projects.length}\n\t\t\t\t<p class=\"muted\" role=\"status\">Loading projects…</p>\n\t\t\t{:else if !projects.length && !load_error}\n\t\t\t\t<p class=\"muted\">No projects published yet.</p>\n\t\t\t{:else}\n\t\t\t\t<div class=\"project-list\">\n\t\t\t\t\t{#each projects as project (project.id)}\n\t\t\t\t\t\t<article class=\"project\">\n\t\t\t\t\t\t\t{#if safe_url(project.url)}\n\t\t\t\t\t\t\t\t<a href={safe_url(project.url)} target=\"_blank\" rel=\"noopener noreferrer\" aria-label={`${content.view_project || 'View project'}: ${project.name || 'Untitled project'}`}>\n\t\t\t\t\t\t\t\t\t<div><h3>{project.name || 'Untitled project'}</h3>{#if project.description}<p>{project.description}</p>{/if}</div>\n\t\t\t\t\t\t\t\t\t<Icon icon=\"lucide:arrow-up-right\" width={18} />\n\t\t\t\t\t\t\t\t</a>\n\t\t\t\t\t\t\t{:else}\n\t\t\t\t\t\t\t\t<div class=\"project-description\"><h3>{project.name || 'Untitled project'}</h3>{#if project.description}<p>{project.description}</p>{/if}</div>\n\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t</article>\n\t\t\t\t\t{/each}\n\t\t\t\t</div>\n\t\t\t{/if}\n\t\t</section>\n\n\t\t<section class=\"contact\" aria-labelledby=\"contact-title\">\n\t\t\t<h2 id=\"contact-title\">{content.contact_title}</h2>\n\t\t\t{#if sent}\n\t\t\t\t<div class=\"success\" role=\"status\">\n\t\t\t\t\t<p>{content.success_message}</p>\n\t\t\t\t\t<button type=\"button\" class=\"btn-secondary\" onclick={() => sent = false}>{content.send_another}</button>\n\t\t\t\t</div>\n\t\t\t{:else}\n\t\t\t\t<form onsubmit={handle_submit} aria-busy={sending}>\n\t\t\t\t\t<div class=\"form-row\">\n\t\t\t\t\t\t<label for=\"contact-name\">Name<input id=\"contact-name\" name=\"name\" type=\"text\" autocomplete=\"name\" placeholder={content.name_placeholder} bind:value={name} disabled={sending} required /></label>\n\t\t\t\t\t\t<label for=\"contact-email\">Email<input id=\"contact-email\" name=\"email\" type=\"email\" autocomplete=\"email\" placeholder={content.email_placeholder} bind:value={email} disabled={sending} required /></label>\n\t\t\t\t\t</div>\n\t\t\t\t\t<label for=\"contact-message\">Message<textarea id=\"contact-message\" name=\"message\" placeholder={content.message_placeholder} bind:value={message} rows=\"4\" disabled={sending} required></textarea></label>\n\t\t\t\t\t{#if error}<p class=\"error\" role=\"alert\">{error}</p>{/if}\n\t\t\t\t\t<button type=\"submit\" class=\"btn-primary\" disabled={sending}>{sending ? 'Sending…' : content.send_button}</button>\n\t\t\t\t</form>\n\t\t\t{/if}\n\t\t</section>\n\t</div>\n</main>\n\n<style>\n\t.page, .page :global(*) { box-sizing: border-box; }\n\t.page { min-height: 100vh; padding: 3rem 1.5rem; background: var(--bg-color, #fafafa); color: var(--heading-color, #202020); font-family: var(--font, system-ui, sans-serif); line-height: 1.5; overflow-wrap: anywhere; }\n\t.container { width: 100%; max-width: 640px; margin: 0 auto; }\n\t.hero { display: flex; align-items: center; gap: 1rem; }\n\t.photo { width: 64px; height: 64px; flex: 0 0 64px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color, #e5e5e5); }\n\t.initials { display: grid; place-items: center; font-size: 1.125rem; font-weight: 600; background: var(--card-bg, #fff); color: var(--text-color, #666); }\n\t.identity { min-width: 0; }\n\th1 { margin: 0; font-size: 1.75rem; font-weight: 650; letter-spacing: -0.035em; line-height: 1.2; }\n\t.headline { margin: 0.4rem 0 0; color: var(--text-color, #666); font-size: 0.9375rem; }\n\t.socials { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin: 1rem 0 -0.5rem; }\n\t.socials a { display: inline-flex; align-items: center; gap: 0.375rem; min-height: 40px; color: var(--text-color, #666); text-decoration: none; font-size: 0.8125rem; }\n\t.socials a:hover { color: var(--accent-color, #2563eb); }\n\tsection { margin-top: 2.25rem; }\n\tsection h2 { font-size: 0.9375rem; font-weight: 600; margin: 0 0 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color, #e5e5e5); }\n\t.about p { margin: 0; color: var(--text-color, #666); white-space: pre-line; font-size: 0.9375rem; line-height: 1.75; }\n\t.project + .project { border-top: 1px solid var(--border-color, #e5e5e5); }\n\t.project a, .project-description { display: flex; align-items: center; gap: 1rem; padding: 1rem 0; text-decoration: none; color: inherit; }\n\t.project-description { display: block; }\n\t.project a > div { flex: 1; min-width: 0; }\n\t.project a :global(svg) { flex-shrink: 0; color: var(--text-color, #666); }\n\t.project:first-child a, .project:first-child .project-description { padding-top: 0; }\n\t.project a:hover h3 { color: var(--accent-color, #2563eb); }\n\t.project h3 { margin: 0; font-size: 0.9375rem; font-weight: 600; }\n\t.project p { margin: 0.25rem 0 0; font-size: 0.875rem; color: var(--text-color, #666); }\n\t.contact form { display: flex; flex-direction: column; gap: 1rem; }\n\t.form-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; }\n\tlabel { display: flex; flex-direction: column; gap: 0.375rem; font-size: 0.8125rem; font-weight: 500; }\n\tinput, textarea { width: 100%; min-width: 0; padding: 0.625rem 0.75rem; border: 1px solid var(--border-color, #e5e5e5); border-radius: var(--radius, 6px); background: var(--card-bg, #fff); color: var(--heading-color, #202020); font: inherit; font-size: 1rem; font-weight: 400; }\n\tinput { min-height: 44px; }\n\ttextarea { resize: vertical; min-height: 110px; }\n\tbutton { min-height: 40px; padding: 0.625rem 0.875rem; font: inherit; font-size: 0.8125rem; font-weight: 500; border-radius: var(--radius, 6px); cursor: pointer; }\n\t.btn-primary { align-self: flex-start; border: 1px solid transparent; color: #fff; background: var(--accent-color, #2563eb); }\n\t.btn-primary:hover:not(:disabled) { filter: brightness(0.92); }\n\t.btn-secondary { background: var(--card-bg, #fff); color: var(--heading-color, #202020); border: 1px solid var(--border-color, #e5e5e5); }\n\t.btn-secondary:hover:not(:disabled) { background: var(--hover-bg, #f5f5f5); }\n\tbutton:disabled { cursor: wait; opacity: 0.65; }\n\tinput:disabled, textarea:disabled { opacity: 0.7; }\n\t.success p { margin: 0 0 0.75rem; font-size: 0.9375rem; }\n\t.error, .load-error { color: #b91c1c; font-size: 0.875rem; }\n\t.error { margin: 0; }\n\t.load-error { margin-bottom: 1rem; }\n\t.load-error p { margin: 0 0 0.5rem; }\n\t.muted { margin: 0; color: var(--text-color, #666); font-size: 0.875rem; }\n\t:global(button:focus-visible), :global(a:focus-visible), :global(input:focus-visible), :global(textarea:focus-visible) { outline: 2px solid var(--accent-color, #2563eb); outline-offset: 3px; }\n\t@media (max-width: 500px) { .page { padding: 2rem 1.25rem; } .form-row { grid-template-columns: minmax(0, 1fr); } h1 { font-size: 1.5rem; } }\n\t@media (prefers-reduced-motion: reduce) { .page :global(*) { animation: none !important; transition: none !important; } }\n</style>\n",
+  "design": [
+    {
+      "id": "bg-color",
+      "name": "Background",
+      "css_var": "--bg-color",
+      "value": "#fafafa",
+      "type": "color",
+      "description": "Page background color"
+    },
+    {
+      "id": "card-bg",
+      "name": "Card Background",
+      "css_var": "--card-bg",
+      "value": "#ffffff",
+      "type": "color",
+      "description": "Background for cards and inputs"
+    },
+    {
+      "id": "hover-bg",
+      "name": "Hover Background",
+      "css_var": "--hover-bg",
+      "value": "#f5f5f5",
+      "type": "color",
+      "description": "Background on hover"
+    },
+    {
+      "id": "accent-color",
+      "name": "Accent Color",
+      "css_var": "--accent-color",
+      "value": "#2563eb",
+      "type": "color",
+      "description": "Primary accent color"
+    },
+    {
+      "id": "heading-color",
+      "name": "Heading Color",
+      "css_var": "--heading-color",
+      "value": "#202020",
+      "type": "color",
+      "description": "Color for headings"
+    },
+    {
+      "id": "text-color",
+      "name": "Text Color",
+      "css_var": "--text-color",
+      "value": "#737373",
+      "type": "color",
+      "description": "Color for body text"
+    },
+    {
+      "id": "border-color",
+      "name": "Border Color",
+      "css_var": "--border-color",
+      "value": "#e5e5e5",
+      "type": "color",
+      "description": "Color for borders"
+    },
+    {
+      "id": "font",
+      "name": "Font",
+      "css_var": "--font",
+      "value": "system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+      "type": "font",
+      "description": "Main font family"
+    },
+    {
+      "id": "radius",
+      "name": "Border Radius",
+      "css_var": "--radius",
+      "value": "6px",
+      "type": "radius",
+      "description": "Roundness of corners"
+    }
+  ],
+  "content": [
+    {
+      "id": "photo_url",
+      "name": "Photo URL",
+      "type": "image",
+      "value": "",
+      "description": "Your profile photo"
+    },
+    {
+      "id": "name",
+      "name": "Name",
+      "type": "text",
+      "value": "Alex Johnson",
+      "description": "Your name"
+    },
+    {
+      "id": "headline",
+      "name": "Headline",
+      "type": "text",
+      "value": "Independent designer and developer.",
+      "description": "Short tagline about you"
+    },
+    {
+      "id": "about_title",
+      "name": "About Title",
+      "type": "text",
+      "value": "About",
+      "description": "Title for about section"
+    },
+    {
+      "id": "bio",
+      "name": "Bio",
+      "type": "textarea",
+      "value": "I design and build websites and small tools. Here are a few recent projects.",
+      "description": "Your bio"
+    },
+    {
+      "id": "projects_title",
+      "name": "Projects Title",
+      "type": "text",
+      "value": "Projects",
+      "description": "Title for projects section"
+    },
+    {
+      "id": "view_project",
+      "name": "View Project",
+      "type": "text",
+      "value": "View project",
+      "description": "Link text on project cards"
+    },
+    {
+      "id": "contact_title",
+      "name": "Contact Title",
+      "type": "text",
+      "value": "Get in touch",
+      "description": "Title for contact section"
+    },
+    {
+      "id": "name_placeholder",
+      "name": "Name Placeholder",
+      "type": "text",
+      "value": "Your name",
+      "description": "Placeholder for name input"
+    },
+    {
+      "id": "email_placeholder",
+      "name": "Email Placeholder",
+      "type": "text",
+      "value": "Your email",
+      "description": "Placeholder for email input"
+    },
+    {
+      "id": "message_placeholder",
+      "name": "Message Placeholder",
+      "type": "text",
+      "value": "Your message...",
+      "description": "Placeholder for message input"
+    },
+    {
+      "id": "send_button",
+      "name": "Send Button",
+      "type": "text",
+      "value": "Send message",
+      "description": "Submit button text"
+    },
+    {
+      "id": "success_message",
+      "name": "Success Message",
+      "type": "text",
+      "value": "Your message was sent. Thanks for getting in touch.",
+      "description": "Message after successful submission"
+    },
+    {
+      "id": "send_another",
+      "name": "Send Another",
+      "type": "text",
+      "value": "Send another message",
+      "description": "Button to send another message"
+    },
+    {
+      "id": "error_message",
+      "name": "Error Message",
+      "type": "text",
+      "value": "Could not send your message. Please try again.",
+      "description": "Error message"
+    },
+    {
+      "id": "twitter_url",
+      "name": "Twitter URL",
+      "type": "text",
+      "value": "",
+      "description": "Twitter profile URL (leave empty to hide)"
+    },
+    {
+      "id": "github_url",
+      "name": "GitHub URL",
+      "type": "text",
+      "value": "",
+      "description": "GitHub profile URL (leave empty to hide)"
+    },
+    {
+      "id": "linkedin_url",
+      "name": "LinkedIn URL",
+      "type": "text",
+      "value": "",
+      "description": "LinkedIn profile URL (leave empty to hide)"
+    },
+    {
+      "id": "email",
+      "name": "Email",
+      "type": "text",
+      "value": "hello@example.com",
+      "description": "Email address (leave empty to hide)"
+    }
+  ],
+  "data": {
+    "projects": {
+      "schema": [
+        {
+          "name": "name",
+          "type": "text"
+        },
+        {
+          "name": "description",
+          "type": "text"
+        },
+        {
+          "name": "url",
+          "type": "text"
+        }
+      ],
+      "records": [
+        {
+          "id": "p1",
+          "name": "Project Alpha",
+          "description": "A small task manager for daily work.",
+          "url": "https://example.com"
+        },
+        {
+          "id": "p2",
+          "name": "Design System",
+          "description": "Reusable components for websites and small apps.",
+          "url": "https://example.com"
+        }
+      ],
+      "icon": "lucide:briefcase"
+    },
+    "messages": {
+      "schema": [
+        {
+          "name": "name",
+          "type": "text"
+        },
+        {
+          "name": "email",
+          "type": "text"
+        },
+        {
+          "name": "message",
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "type": "text"
+        }
+      ],
+      "records": [],
+      "icon": "lucide:message-square"
+    }
+  }
 }

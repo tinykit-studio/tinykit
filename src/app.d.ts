@@ -5,6 +5,7 @@ declare global {
 		// interface Error {}
 		interface Locals {
 			domain: string
+			appProject?: import('$lib/server/pb').Project | null
 		}
 		// interface PageData {}
 		// interface PageState {}

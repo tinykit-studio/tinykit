@@ -6,6 +6,9 @@ const config = {
 	preprocess: vitePreprocess(),
 	kit: {
 		adapter: adapter(),
+		// Hosted app uploads may come from opaque origins. The request hook
+		// limits those writes to the public data API.
+		csrf: { trustedOrigins: ['null'] },
 		alias: {
 			$lib: 'src/lib',
 			$tinykit: 'src/routes/tinykit'

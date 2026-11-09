@@ -11,5 +11,7 @@ local-notes
 pocketbase/*
 !pocketbase/pb_migrations
 !pocketbase/pb_migrations/**
+!pocketbase/pb_hooks
+!pocketbase/pb_hooks/**
 *.log
 .DS_Store

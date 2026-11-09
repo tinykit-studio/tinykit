@@ -1,242 +1,250 @@
 {
-  "id": "recipes",
-  "name": "Recipe Book",
-  "description": "Personal recipe collection with ingredients and instructions",
-  "preview": "lucide:chef-hat",
-  "tags": ["personal", "intermediate", "data"],
-  "kits": ["collections", "daily", "food"],
-  "frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport { proxy, asset } from '$tinykit'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet recipes = $state([])\n\tlet loading = $state(true)\n\tlet selected_id = $state(null)\n\tlet search = $state('')\n\tlet filter_category = $state('')\n\tlet view = $state('list') \n\tlet editing_recipe = $state(null)\n\tlet saving = $state(false)\n\n\t// Scraper state\n\tlet fetch_url = $state('') \n\tlet is_fetching = $state(false)\n\n\tlet form = $state({\n\t\ttitle: '',\n\t\tsource_url: '',\n\t\tdescription: '',\n\t\timage: null,\n\t\tprep_time: '',\n\t\tservings: '',\n\t\tcategory: '',\n\t\tingredients: '',\n\t\tinstructions: ''\n\t})\n\n\t// --- Hash Routing ---\n\tfunction parse_hash() {\n\t\tconst hash = window.location.hash.slice(1) || '/'\n\t\tconst parts = hash.split('/').filter(Boolean)\n\t\t\n\t\tif (parts[0] === 'recipe' && parts[1]) {\n\t\t\tselected_id = parts[1]\n\t\t\tview = 'detail'\n\t\t\tediting_recipe = null\n\t\t} else if (parts[0] === 'new') {\n\t\t\tselected_id = null\n\t\t\tediting_recipe = null\n\t\t\treset_form()\n\t\t\tview = 'form'\n\t\t} else if (parts[0] === 'edit' && parts[1]) {\n\t\t\tconst recipe = recipes.find(r => r.id === parts[1])\n\t\t\tif (recipe) {\n\t\t\t\tselected_id = parts[1]\n\t\t\t\tediting_recipe = recipe\n\t\t\t\tpopulate_form(recipe)\n\t\t\t\tview = 'form'\n\t\t\t} else {\n\t\t\t\t// Recipe not found, go to list\n\t\t\t\tnavigate_to('/')\n\t\t\t}\n\t\t} else {\n\t\t\tview = 'list'\n\t\t\tselected_id = null\n\t\t\tediting_recipe = null\n\t\t}\n\t}\n\n\tfunction navigate_to(path) {\n\t\twindow.location.hash = path\n\t}\n\n\tfunction reset_form() {\n\t\tform = {\n\t\t\ttitle: '',\n\t\t\tsource_url: '',\n\t\t\tdescription: '',\n\t\t\timage: null,\n\t\t\tprep_time: '',\n\t\t\tservings: '',\n\t\t\tcategory: '',\n\t\t\tingredients: '',\n\t\t\tinstructions: ''\n\t\t}\n\t}\n\n\tfunction populate_form(recipe) {\n\t\tform = {\n\t\t\ttitle: recipe.title || '',\n\t\t\tsource_url: recipe.source_url || '',\n\t\t\tdescription: recipe.description || '',\n\t\t\timage: null,\n\t\t\tprep_time: recipe.prep_time || '',\n\t\t\tservings: recipe.servings?.toString() || '',\n\t\t\tcategory: recipe.category || '',\n\t\t\tingredients: recipe.ingredients || '',\n\t\t\tinstructions: recipe.instructions || ''\n\t\t}\n\t}\n\n\t// Listen for hash changes\n\t$effect(() => {\n\t\tconst handle_hash = () => parse_hash()\n\t\twindow.addEventListener('hashchange', handle_hash)\n\t\t// Parse initial hash after recipes load\n\t\tif (!loading) parse_hash()\n\t\treturn () => window.removeEventListener('hashchange', handle_hash)\n\t})\n\t// ---------------------\n\n\tdata.recipes.subscribe(items => {\n\t\t\t// FIX: Deduplicate items based on ID to prevent each_key_duplicate error\n\t\tconst unique_map = new Map(items.map(i => [i.id, i]))\n\t\trecipes = Array.from(unique_map.values())\n\t\tloading = false\n\t});\n\n\tlet selected_recipe = $derived.by(() => \n\t\trecipes.find(r => r.id === selected_id)\n\t)\n\n\tlet categories = $derived.by(() => {\n\t\tconst cats = new Set(recipes.map(r => r.category).filter(Boolean))\n\t\treturn Array.from(cats).sort()\n\t})\n\n\tlet filtered_recipes = $derived.by(() => \n\t\trecipes.filter(r => {\n\t\t\tconst matches_search = !search || \n\t\t\t\tr.title?.toLowerCase().includes(search.toLowerCase()) ||\n\t\t\t\tr.ingredients?.toLowerCase().includes(search.toLowerCase())\n\t\t\tconst matches_category = !filter_category || r.category === filter_category\n\t\t\treturn matches_search && matches_category\n\t\t})\n\t)\n\n\tfunction parse_list(text) {\n\t\tif (!text) return []\n\t\treturn text.split('\\n').filter(line => line.trim())\n\t}\n\n\t// --- Scraper Logic ---\n\tasync function fetch_recipe() {\n\t\tif (!fetch_url) return\n\t\tis_fetching = true\n\t\t\n\t\ttry {\n\t\t\t// Fetch via proxy\n\t\t\tconst res = await proxy(fetch_url)\n\t\t\tconst html = await res.text()\n\t\t\t\n\t\t\t// Parse HTML\n\t\t\tconst parser = new DOMParser()\n\t\t\tconst doc = parser.parseFromString(html, 'text/html')\n\t\t\t\n\t\t\t// Find JSON-LD Scripts\n\t\t\tconst scripts = doc.querySelectorAll('script[type=\"application/ld+json\"]')\n\t\t\tlet recipe_data = null\n\n\t\t\t// Look for the specific Recipe schema\n\t\t\tfor (const script of scripts) {\n\t\t\t\ttry {\n\t\t\t\t\tconst json = JSON.parse(script.textContent)\n\t\t\t\t\tconst graph = Array.isArray(json) ? json : (json['@graph'] || [json])\n\t\t\t\t\trecipe_data = graph.find(item => item['@type'] === 'Recipe' || item['@type']?.includes('Recipe'))\n\t\t\t\t\tif (recipe_data) break\n\t\t\t\t} catch (e) { continue }\n\t\t\t}\n\n\t\t\tif (recipe_data) {\n\t\t\t\tconst clean = (str) => {\n\t\t\t\t\tif (!str) return ''\n\t\t\t\t\tconst txt = document.createElement('textarea')\n\t\t\t\t\ttxt.innerHTML = str\n\t\t\t\t\treturn txt.value\n\t\t\t\t}\n\n\t\t\t\tconst ingredients = Array.isArray(recipe_data.recipeIngredient) \n\t\t\t\t\t? recipe_data.recipeIngredient.map(clean).join('\\n')\n\t\t\t\t\t: ''\n\n\t\t\t\tlet instructions = ''\n\t\t\t\tif (Array.isArray(recipe_data.recipeInstructions)) {\n\t\t\t\t\tinstructions = recipe_data.recipeInstructions.map(step => {\n\t\t\t\t\t\tif (typeof step === 'string') return clean(step)\n\t\t\t\t\t\tif (step.text) return clean(step.text)\n\t\t\t\t\t\tif (step.itemListElement) {\n\t\t\t\t\t\t\treturn step.itemListElement.map(s => clean(s.text)).join('\\n')\n\t\t\t\t\t\t}\n\t\t\t\t\t\treturn ''\n\t\t\t\t\t}).filter(Boolean).join('\\n')\n\t\t\t\t}\n\n\t\t\t\tlet img = ''\n\t\t\t\tif (typeof recipe_data.image === 'string') img = recipe_data.image\n\t\t\t\telse if (Array.isArray(recipe_data.image)) img = recipe_data.image[0]\n\t\t\t\telse if (recipe_data.image?.url) img = recipe_data.image.url\n\n\t\t\t\tconst time = recipe_data.totalTime || recipe_data.prepTime\n\t\t\t\tconst pretty_time = time ? time.replace('PT', '').toLowerCase() : ''\n\n\t\t\t\t// Populate Form (note: images must be uploaded separately)\n\t\t\t\tform = {\n\t\t\t\t\t...form, \n\t\t\t\t\ttitle: clean(recipe_data.name),\n\t\t\t\t\tsource_url: fetch_url,\n\t\t\t\t\tdescription: clean(recipe_data.description),\n\t\t\t\t\tingredients: ingredients,\n\t\t\t\t\tinstructions: instructions,\n\t\t\t\t\tprep_time: pretty_time,\n\t\t\t\t\tservings: recipe_data.recipeYield?.toString() || ''\n\t\t\t\t}\n\t\t\t} else {\n\t\t\t\talert('Could not find a recipe on this page.')\n\t\t\t}\n\t\t} catch (err) {\n\t\t\tconsole.error(err)\n\t\t\talert('Failed to fetch recipe.')\n\t\t} finally {\n\t\t\tis_fetching = false\n\t\t\tfetch_url = '' \n\t\t}\n\t}\n\t// ---------------------\n\n\tfunction back_to_list() {\n\t\tnavigate_to('/')\n\t}\n\n\tfunction view_recipe(id) {\n\t\tnavigate_to(`/recipe/${id}`)\n\t}\n\n\tfunction start_new_recipe() {\n\t\tnavigate_to('/new')\n\t}\n\n\tfunction start_edit_recipe() {\n\t\tif (!selected_recipe) return\n\t\tnavigate_to(`/edit/${selected_recipe.id}`)\n\t}\n\n\tasync function save_recipe() {\n\t\tif (!form.title.trim()) return\n\t\tsaving = true\n\t\ttry {\n\t\t\tconst recipe_data = {\n\t\t\t\ttitle: form.title.trim(),\n\t\t\t\tsource_url: form.source_url.trim(),\n\t\t\t\tdescription: form.description.trim(),\n\t\t\t\tprep_time: form.prep_time.trim(),\n\t\t\t\tservings: form.servings ? parseInt(form.servings) : null,\n\t\t\t\tcategory: form.category.trim(),\n\t\t\t\tingredients: form.ingredients.trim(),\n\t\t\t\tinstructions: form.instructions.trim()\n\t\t\t}\n\t\t\t// Include image file if selected\n\t\t\tif (form.image) recipe_data.image = form.image\n\t\t\tif (editing_recipe) {\n\t\t\t\tawait data.recipes.update(editing_recipe.id, recipe_data)\n\t\t\t} else {\n\t\t\t\tawait data.recipes.create(recipe_data)\n\t\t\t}\n\t\t\tnavigate_to('/')\n\t\t} catch (err) {\n\t\t\tconsole.error('Failed to save recipe:', err)\n\t\t} finally {\n\t\t\tsaving = false\n\t\t}\n\t}\n\n\tasync function delete_recipe() {\n\t\tif (!selected_recipe || !confirm('Delete this recipe?')) return\n\t\ttry {\n\t\t\tawait data.recipes.delete(selected_recipe.id)\n\t\t\tnavigate_to('/')\n\t\t} catch (err) {\n\t\t\tconsole.error('Failed to delete recipe:', err)\n\t\t}\n\t}\n</script>\n\n<div class=\"page\">\n\t{#if view === 'form'}\n\t\t<div class=\"form-view\">\n\t\t\t<button class=\"back-btn\" onclick={back_to_list}>\n\t\t\t\t<Icon icon=\"lucide:arrow-left\" width={20} />\n\t\t\t\tCancel\n\t\t\t</button>\n\n\t\t\t<div class=\"form-content\">\n\t\t\t\t<h1>{editing_recipe ? 'Edit Recipe' : 'New Recipe'}</h1>\n\n\t\t\t\t{#if !editing_recipe}\n\t\t\t\t\t<div class=\"import-section\">\n\t\t\t\t\t\t<div class=\"import-input\">\n\t\t\t\t\t\t\t<Icon icon=\"lucide:link\" width={16} class=\"link-icon\"/>\n\t\t\t\t\t\t\t<input \n\t\t\t\t\t\t\t\ttype=\"url\" \n\t\t\t\t\t\t\t\tplaceholder=\"Paste a recipe URL to autofill...\" \n\t\t\t\t\t\t\t\tbind:value={fetch_url}\n\t\t\t\t\t\t\t\tonkeydown={(e) => e.key === 'Enter' && fetch_recipe()}\n\t\t\t\t\t\t\t/>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t\t<button class=\"import-btn\" onclick={fetch_recipe} disabled={is_fetching || !fetch_url}>\n\t\t\t\t\t\t\t{#if is_fetching}\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:loader-2\" width={16} class=\"spin\" />\n\t\t\t\t\t\t\t{:else}\n\t\t\t\t\t\t\t\tImport\n\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t</button>\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"divider\"><span>OR</span></div>\n\t\t\t\t{/if}\n\n\t\t\t\t<div class=\"form-group\">\n\t\t\t\t\t<label for=\"title\">Title *</label>\n\t\t\t\t\t<input id=\"title\" type=\"text\" bind:value={form.title} placeholder=\"Recipe name\" />\n\t\t\t\t</div>\n\t\t\t\t\n\t\t\t\t<div class=\"form-group\">\n\t\t\t\t\t<label for=\"source_url\">Source URL</label>\n\t\t\t\t\t<div class=\"input-with-icon\">\n\t\t\t\t\t\t<Icon icon=\"lucide:link\" width={16} class=\"input-icon\" />\n\t\t\t\t\t\t<input id=\"source_url\" type=\"url\" bind:value={form.source_url} placeholder=\"https://original-website.com/recipe\" />\n\t\t\t\t\t</div>\n\t\t\t\t</div>\n\n\t\t\t\t<div class=\"form-group\">\n\t\t\t\t\t<label for=\"description\">Description</label>\n\t\t\t\t\t<input id=\"description\" type=\"text\" bind:value={form.description} placeholder=\"Short description\" />\n\t\t\t\t</div>\n\n\t\t\t\t<div class=\"form-row\">\n\t\t\t\t\t<div class=\"form-group\">\n\t\t\t\t\t\t<label for=\"category\">Category</label>\n\t\t\t\t\t\t<input id=\"category\" type=\"text\" bind:value={form.category} placeholder=\"e.g., Breakfast, Dinner\" />\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"form-group\">\n\t\t\t\t\t\t<label for=\"prep_time\">Prep Time</label>\n\t\t\t\t\t\t<input id=\"prep_time\" type=\"text\" bind:value={form.prep_time} placeholder=\"e.g., 30 min\" />\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"form-group\">\n\t\t\t\t\t\t<label for=\"servings\">Servings</label>\n\t\t\t\t\t\t<input id=\"servings\" type=\"number\" bind:value={form.servings} placeholder=\"4\" />\n\t\t\t\t\t</div>\n\t\t\t\t</div>\n\n\t\t\t\t<div class=\"form-group\">\n\t\t\t\t\t<label for=\"image\">Photo</label>\n\t\t\t\t\t<input id=\"image\" type=\"file\" accept=\"image/*\" onchange={(e) => form.image = e.target.files[0]} />\n\t\t\t\t</div>\n\n\t\t\t\t<div class=\"form-group\">\n\t\t\t\t\t<label for=\"ingredients\">{content.ingredients_title}</label>\n\t\t\t\t\t<textarea id=\"ingredients\" bind:value={form.ingredients} rows=\"6\" placeholder=\"One ingredient per line\"></textarea>\n\t\t\t\t</div>\n\n\t\t\t\t<div class=\"form-group\">\n\t\t\t\t\t<label for=\"instructions\">{content.instructions_title}</label>\n\t\t\t\t\t<textarea id=\"instructions\" bind:value={form.instructions} rows=\"6\" placeholder=\"One step per line\"></textarea>\n\t\t\t\t</div>\n\n\t\t\t\t<button class=\"save-btn\" onclick={save_recipe} disabled={saving || !form.title.trim()}>\n\t\t\t\t\t{#if saving}\n\t\t\t\t\t\t<Icon icon=\"lucide:loader-2\" width={18} class=\"spin\" />\n\t\t\t\t\t\tSaving...\n\t\t\t\t\t{:else}\n\t\t\t\t\t\t<Icon icon=\"lucide:check\" width={18} />\n\t\t\t\t\t\t{editing_recipe ? 'Save Changes' : 'Add Recipe'}\n\t\t\t\t\t{/if}\n\t\t\t\t</button>\n\t\t\t</div>\n\t\t</div>\n\t{:else if view === 'detail' && selected_recipe}\n\t\t<div class=\"detail\">\n\t\t\t<div class=\"detail-header\">\n\t\t\t\t<button class=\"back-btn\" onclick={back_to_list}>\n\t\t\t\t\t<Icon icon=\"lucide:arrow-left\" width={20} />\n\t\t\t\t\t{content.back_button}\n\t\t\t\t</button>\n\t\t\t\t<div class=\"detail-actions\">\n\t\t\t\t\t<button class=\"action-btn\" onclick={start_edit_recipe}>\n\t\t\t\t\t\t<Icon icon=\"lucide:pencil\" width={18} />\n\t\t\t\t\t</button>\n\t\t\t\t\t<button class=\"action-btn delete\" onclick={delete_recipe}>\n\t\t\t\t\t\t<Icon icon=\"lucide:trash-2\" width={18} />\n\t\t\t\t\t</button>\n\t\t\t\t</div>\n\t\t\t</div>\n\n\t\t\t{#if selected_recipe.image}\n\t\t\t\t<div class=\"hero-image\">\n\t\t\t\t\t<img src={asset(selected_recipe.image)} alt={selected_recipe.title} />\n\t\t\t\t</div>\n\t\t\t{/if}\n\n\t\t\t<div class=\"detail-content\">\n\t\t\t\t<h1>{selected_recipe.title}</h1>\n\t\t\t\t\n\t\t\t\t<div class=\"meta\">\n\t\t\t\t\t{#if selected_recipe.prep_time}\n\t\t\t\t\t\t<span class=\"meta-item\">\n\t\t\t\t\t\t\t<Icon icon=\"lucide:clock\" width={16} />\n\t\t\t\t\t\t\t{selected_recipe.prep_time}\n\t\t\t\t\t\t</span>\n\t\t\t\t\t{/if}\n\t\t\t\t\t{#if selected_recipe.servings}\n\t\t\t\t\t\t<span class=\"meta-item\">\n\t\t\t\t\t\t\t<Icon icon=\"lucide:users\" width={16} />\n\t\t\t\t\t\t\t{selected_recipe.servings} {content.servings_label}\n\t\t\t\t\t\t</span>\n\t\t\t\t\t{/if}\n\t\t\t\t\t{#if selected_recipe.category}\n\t\t\t\t\t\t<span class=\"category-badge\">{selected_recipe.category}</span>\n\t\t\t\t\t{/if}\n\t\t\t\t\t\n\t\t\t\t\t{#if selected_recipe.source_url}\n\t\t\t\t\t\t<a href={selected_recipe.source_url} target=\"_blank\" class=\"meta-item link\">\n\t\t\t\t\t\t\t<Icon icon=\"lucide:external-link\" width={14} />\n\t\t\t\t\t\t\tOriginal Recipe\n\t\t\t\t\t\t</a>\n\t\t\t\t\t{/if}\n\t\t\t\t</div>\n\n\t\t\t\t{#if selected_recipe.description}\n\t\t\t\t\t<p class=\"description\">{selected_recipe.description}</p>\n\t\t\t\t{/if}\n\n\t\t\t\t<section class=\"section\">\n\t\t\t\t\t<h2>{content.ingredients_title}</h2>\n\t\t\t\t\t<ul class=\"ingredients\">\n\t\t\t\t\t\t{#each parse_list(selected_recipe.ingredients) as ingredient, i (i)}\n\t\t\t\t\t\t\t<li>{ingredient}</li>\n\t\t\t\t\t\t{/each}\n\t\t\t\t\t</ul>\n\t\t\t\t</section>\n\n\t\t\t\t<section class=\"section\">\n\t\t\t\t\t<h2>{content.instructions_title}</h2>\n\t\t\t\t\t<ol class=\"instructions\">\n\t\t\t\t\t\t{#each parse_list(selected_recipe.instructions) as step, i (i)}\n\t\t\t\t\t\t\t<li>{step}</li>\n\t\t\t\t\t\t{/each}\n\t\t\t\t\t</ol>\n\t\t\t\t</section>\n\t\t\t</div>\n\t\t</div>\n\t{:else}\n\t\t<header class=\"header\">\n\t\t\t<div class=\"header-left\">\n\t\t\t\t<Icon icon=\"lucide:chef-hat\" width={24} />\n\t\t\t\t<h1>{content.app_title}</h1>\n\t\t\t</div>\n\t\t\t<button class=\"add-btn\" onclick={start_new_recipe}>\n\t\t\t\t<Icon icon=\"lucide:plus\" width={20} />\n\t\t\t\tAdd Recipe\n\t\t\t</button>\n\t\t</header>\n\n\t\t<div class=\"filters\">\n\t\t\t<div class=\"search-box\">\n\t\t\t\t<Icon icon=\"lucide:search\" width={18} />\n\t\t\t\t<input\n\t\t\t\t\ttype=\"text\"\n\t\t\t\t\tbind:value={search}\n\t\t\t\t\tplaceholder={content.search_placeholder}\n\t\t\t\t/>\n\t\t\t</div>\n\t\t\t{#if categories.length > 0}\n\t\t\t\t<div class=\"categories\">\n\t\t\t\t\t<button \n\t\t\t\t\t\tclass=\"cat-btn\" \n\t\t\t\t\t\tclass:active={!filter_category}\n\t\t\t\t\t\tonclick={() => filter_category = ''}\n\t\t\t\t\t>\n\t\t\t\t\t\tAll\n\t\t\t\t\t</button>\n\t\t\t\t\t{#each categories as cat (cat)}\n\t\t\t\t\t\t<button \n\t\t\t\t\t\t\tclass=\"cat-btn\" \n\t\t\t\t\t\t\tclass:active={filter_category === cat}\n\t\t\t\t\t\t\tonclick={() => filter_category = cat}\n\t\t\t\t\t\t>\n\t\t\t\t\t\t\t{cat}\n\t\t\t\t\t\t</button>\n\t\t\t\t\t{/each}\n\t\t\t\t</div>\n\t\t\t{/if}\n\t\t</div>\n\n\t\t<main class=\"recipes\">\n\t\t\t{#if loading}\n\t\t\t\t<div class=\"loading\">\n\t\t\t\t\t<Icon icon=\"lucide:loader-2\" width={24} class=\"spin\" />\n\t\t\t\t</div>\n\t\t\t{:else if filtered_recipes.length === 0}\n\t\t\t\t<div class=\"empty\">\n\t\t\t\t\t<Icon icon=\"lucide:utensils-crossed\" width={48} />\n\t\t\t\t\t<p>{search || filter_category ? content.no_results : content.empty_state}</p>\n\t\t\t\t\t{#if !search && !filter_category}\n\t\t\t\t\t\t<button class=\"empty-add-btn\" onclick={start_new_recipe}>\n\t\t\t\t\t\t\t<Icon icon=\"lucide:plus\" width={18} />\n\t\t\t\t\t\t\tAdd Your First Recipe\n\t\t\t\t\t\t</button>\n\t\t\t\t\t{/if}\n\t\t\t\t</div>\n\t\t\t{:else}\n\t\t\t\t<div class=\"grid\">\n\t\t\t\t\t{#each filtered_recipes as recipe (recipe.id)}\n\t\t\t\t\t\t<button class=\"recipe-card\" onclick={() => view_recipe(recipe.id)}>\n\t\t\t\t\t\t\t{#if recipe.image}\n\t\t\t\t\t\t\t\t<div class=\"card-image\">\n\t\t\t\t\t\t\t\t\t<img src={asset(recipe.image)} alt={recipe.title} />\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t{:else}\n\t\t\t\t\t\t\t\t<div class=\"card-image placeholder\">\n\t\t\t\t\t\t\t\t\t<Icon icon=\"lucide:image\" width={32} />\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t\t<div class=\"card-content\">\n\t\t\t\t\t\t\t\t<h3>{recipe.title}</h3>\n\t\t\t\t\t\t\t\t<div class=\"card-meta\">\n\t\t\t\t\t\t\t\t\t{#if recipe.prep_time}\n\t\t\t\t\t\t\t\t\t\t<span><Icon icon=\"lucide:clock\" width={14} /> {recipe.prep_time}</span>\n\t\t\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t\t\t\t{#if recipe.category}\n\t\t\t\t\t\t\t\t\t\t<span class=\"card-category\">{recipe.category}</span>\n\t\t\t\t\t\t\t\t\t{/if}\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t</button>\n\t\t\t\t\t{/each}\n\t\t\t\t</div>\n\t\t\t{/if}\n\t\t</main>\n\t{/if}\n\t<footer class=\"footer\">built with <a href=\"https://tinykit.studio\" target=\"_blank\">tinykit.studio</a></footer>\n</div>\n\n<style>\n\t/* Import Section Styles */\n\t.import-section {\n\t\tdisplay: flex;\n\t\tgap: 8px;\n\t\tmargin-bottom: 1.5rem;\n\t\tbackground: var(--card-background, #ffffff);\n\t\tpadding: 6px;\n\t\tborder-radius: 10px;\n\t\tborder: 1px solid var(--border-color, #e8e0d8);\n\t}\n\n\t.import-input {\n\t\tflex: 1;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 8px;\n\t\tpadding: 0 10px;\n\t}\n\n\t.import-input input {\n\t\twidth: 100%;\n\t\tborder: none;\n\t\toutline: none;\n\t\tfont-size: 0.9rem;\n\t\tbackground: transparent;\n\t\tcolor: var(--body-text-color, #44403c);\n\t}\n\n\t.link-icon {\n\t\tcolor: var(--placeholder-color, #a8a29e);\n\t}\n\n\t.import-btn {\n\t\tpadding: 8px 16px;\n\t\tbackground: var(--secondary-text-color, #78716c);\n\t\tcolor: white;\n\t\tborder: none;\n\t\tborder-radius: 6px;\n\t\tfont-size: 0.85rem;\n\t\tfont-weight: 500;\n\t\tcursor: pointer;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t}\n\n\t.import-btn:disabled {\n\t\topacity: 0.5;\n\t\tcursor: default;\n\t}\n\n\t.import-btn:hover:not(:disabled) {\n\t\tbackground: var(--heading-text-color, #292524);\n\t}\n\n\t.divider {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\ttext-align: center;\n\t\tmargin-bottom: 1.5rem;\n\t\tcolor: var(--placeholder-color, #d6d3d1);\n\t\tfont-size: 0.75rem;\n\t\tfont-weight: 600;\n\t}\n\n\t.divider::before, .divider::after {\n\t\tcontent: '';\n\t\tflex: 1;\n\t\tborder-bottom: 1px solid var(--border-color, #e8e0d8);\n\t}\n\n\t.divider span {\n\t\tpadding: 0 10px;\n\t}\n\n\t/* Input with Icon Styles */\n\t.input-with-icon {\n\t\tposition: relative;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t}\n\n\t.input-with-icon .input-icon {\n\t\tposition: absolute;\n\t\tleft: 10px;\n\t\tcolor: var(--placeholder-color, #a8a29e);\n\t\tpointer-events: none;\n\t}\n\n\t.input-with-icon input {\n\t\tpadding-left: 34px;\n\t}\n\n\t/* Detail Link Styles */\n\t.meta-item.link {\n\t\ttext-decoration: none;\n\t\tcolor: var(--accent-color, #d97706);\n\t\tbackground: var(--cat-badge-bg, #fef3c7);\n\t\tpadding: 4px 10px;\n\t\tborder-radius: 6px;\n\t\tfont-size: 0.85rem;\n\t\ttransition: opacity 0.2s;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 6px;\n\t}\n\n\t.meta-item.link:hover {\n\t\topacity: 0.8;\n\t}\n\n\t/* Main Page Styles */\n\t.page {\n\t\tmin-height: 100vh;\n\t\tbackground: var(--page-background, #faf5f0);\n\t\tfont-family: var(--body-font, system-ui, sans-serif);\n\t}\n\n\t.header {\n\t\tpadding: 1.25rem 1.5rem;\n\t\tbackground: var(--header-background, #ffffff);\n\t\tborder-bottom: 1px solid var(--border-color, #e8e0d8);\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: space-between;\n\t}\n\n\t.header-left {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 10px;\n\t\tcolor: var(--accent-color, #d97706);\n\t}\n\n\t.header h1 {\n\t\tmargin: 0;\n\t\tfont-size: 1.125rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-text-color, #292524);\n\t}\n\n\t.add-btn {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 6px;\n\t\tpadding: 8px 16px;\n\t\tbackground: var(--accent-color, #d97706);\n\t\tcolor: white;\n\t\tborder: none;\n\t\tborder-radius: 8px;\n\t\tfont-size: 0.9rem;\n\t\tfont-weight: 500;\n\t\tcursor: pointer;\n\t\ttransition: opacity 0.15s;\n\t}\n\n\t.add-btn:hover {\n\t\topacity: 0.9;\n\t}\n\n\t.filters {\n\t\tpadding: 1rem 1.5rem;\n\t\tmax-width: 1000px;\n\t\tmargin: 0 auto;\n\t}\n\n\t.search-box {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 10px;\n\t\tpadding: 10px 14px;\n\t\tbackground: var(--input-background, #ffffff);\n\t\tborder: 1px solid var(--border-color, #e8e0d8);\n\t\tborder-radius: 10px;\n\t\tcolor: var(--placeholder-color, #a8a29e);\n\t}\n\n\t.search-box input {\n\t\tflex: 1;\n\t\tborder: none;\n\t\toutline: none;\n\t\tfont-size: 0.95rem;\n\t\tcolor: var(--body-text-color, #44403c);\n\t\tbackground: transparent;\n\t}\n\n\t.search-box input::placeholder {\n\t\tcolor: var(--placeholder-color, #a8a29e);\n\t}\n\n\t.categories {\n\t\tdisplay: flex;\n\t\tflex-wrap: wrap;\n\t\tgap: 8px;\n\t\tmargin-top: 12px;\n\t}\n\n\t.cat-btn {\n\t\tpadding: 6px 14px;\n\t\tbackground: var(--cat-background, #ffffff);\n\t\tcolor: var(--secondary-text-color, #78716c);\n\t\tborder: 1px solid var(--border-color, #e8e0d8);\n\t\tborder-radius: 20px;\n\t\tfont-size: 0.85rem;\n\t\tcursor: pointer;\n\t\ttransition: all 0.15s;\n\t}\n\n\t.cat-btn:hover {\n\t\tborder-color: var(--accent-color, #d97706);\n\t}\n\n\t.cat-btn.active {\n\t\tbackground: var(--accent-color, #d97706);\n\t\tcolor: #ffffff;\n\t\tborder-color: var(--accent-color, #d97706);\n\t}\n\n\t.recipes {\n\t\tmax-width: 1000px;\n\t\tmargin: 0 auto;\n\t\tpadding: 0 1.5rem 2rem;\n\t}\n\n\t.grid {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(auto-fill, minmax(280px, 1fr));\n\t\tgap: 1.25rem;\n\t}\n\n\t.recipe-card {\n\t\tbackground: var(--card-background, #ffffff);\n\t\tborder: 1px solid var(--border-color, #e8e0d8);\n\t\tborder-radius: var(--card-radius, 12px);\n\t\toverflow: hidden;\n\t\tcursor: pointer;\n\t\ttransition: all 0.2s;\n\t\ttext-align: left;\n\t}\n\n\t.recipe-card:hover {\n\t\ttransform: translateY(-2px);\n\t\tbox-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);\n\t}\n\n\t.card-image {\n\t\taspect-ratio: 16/10;\n\t\toverflow: hidden;\n\t\tbackground: var(--image-placeholder, #f5f0eb);\n\t}\n\n\t.card-image img {\n\t\twidth: 100%;\n\t\theight: 100%;\n\t\tobject-fit: cover;\n\t}\n\n\t.card-image.placeholder {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tcolor: var(--placeholder-color, #d6d3d1);\n\t}\n\n\t.card-content {\n\t\tpadding: 1rem;\n\t}\n\n\t.card-content h3 {\n\t\tmargin: 0 0 8px 0;\n\t\tcolor: var(--heading-text-color, #292524);\n\t\tfont-size: 1rem;\n\t\tfont-weight: 600;\n\t}\n\n\t.card-meta {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 12px;\n\t\tfont-size: 0.8rem;\n\t\tcolor: var(--secondary-text-color, #78716c);\n\t}\n\n\t.card-meta span {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 4px;\n\t}\n\n\t.card-category {\n\t\tpadding: 2px 8px;\n\t\tbackground: var(--cat-badge-bg, #fef3c7);\n\t\tcolor: var(--accent-color, #d97706);\n\t\tborder-radius: 4px;\n\t\tfont-size: 0.75rem;\n\t}\n\n\t/* Detail View */\n\t.detail {\n\t\tmax-width: 700px;\n\t\tmargin: 0 auto;\n\t\tpadding-bottom: 2rem;\n\t}\n\n\t.detail-header {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: space-between;\n\t\tpadding: 0 4px;\n\t}\n\n\t.detail-actions {\n\t\tdisplay: flex;\n\t\tgap: 8px;\n\t}\n\n\t.action-btn {\n\t\tpadding: 8px;\n\t\tbackground: none;\n\t\tborder: 1px solid var(--border-color, #e8e0d8);\n\t\tborder-radius: 8px;\n\t\tcolor: var(--secondary-text-color, #78716c);\n\t\tcursor: pointer;\n\t\ttransition: all 0.15s;\n\t}\n\n\t.action-btn:hover {\n\t\tbackground: var(--card-background, #ffffff);\n\t\tcolor: var(--heading-text-color, #292524);\n\t}\n\n\t.action-btn.delete:hover {\n\t\tcolor: #dc2626;\n\t\tborder-color: #dc2626;\n\t}\n\n\t.back-btn {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 6px;\n\t\tpadding: 12px 16px;\n\t\tbackground: none;\n\t\tborder: none;\n\t\tcolor: var(--secondary-text-color, #78716c);\n\t\tfont-size: 0.9rem;\n\t\tcursor: pointer;\n\t}\n\n\t.back-btn:hover {\n\t\tcolor: var(--heading-text-color, #292524);\n\t}\n\n\t.hero-image {\n\t\taspect-ratio: 16/9;\n\t\toverflow: hidden;\n\t}\n\n\t.hero-image img {\n\t\twidth: 100%;\n\t\theight: 100%;\n\t\tobject-fit: cover;\n\t}\n\n\t.detail-content {\n\t\tpadding: 1.5rem;\n\t}\n\n\t.detail-content h1 {\n\t\tmargin: 0 0 1rem 0;\n\t\tcolor: var(--heading-text-color, #292524);\n\t\tfont-size: 1.75rem;\n\t}\n\n\t.meta {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 16px;\n\t\tmargin-bottom: 1rem;\n\t\tflex-wrap: wrap;\n\t}\n\n\t.meta-item {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 6px;\n\t\tcolor: var(--secondary-text-color, #78716c);\n\t\tfont-size: 0.9rem;\n\t}\n\n\t.category-badge {\n\t\tpadding: 4px 12px;\n\t\tbackground: var(--cat-badge-bg, #fef3c7);\n\t\tcolor: var(--accent-color, #d97706);\n\t\tborder-radius: 20px;\n\t\tfont-size: 0.85rem;\n\t}\n\n\t.description {\n\t\tcolor: var(--body-text-color, #44403c);\n\t\tline-height: 1.6;\n\t\tmargin-bottom: 1.5rem;\n\t}\n\n\t.section {\n\t\tmargin-bottom: 2rem;\n\t}\n\n\t.section h2 {\n\t\tcolor: var(--heading-text-color, #292524);\n\t\tfont-size: 1.125rem;\n\t\tmargin: 0 0 1rem 0;\n\t\tpadding-bottom: 0.5rem;\n\t\tborder-bottom: 1px solid var(--border-color, #e8e0d8);\n\t}\n\n\t.ingredients {\n\t\tlist-style: none;\n\t\tpadding: 0;\n\t\tmargin: 0;\n\t}\n\n\t.ingredients li {\n\t\tpadding: 8px 0;\n\t\tcolor: var(--body-text-color, #44403c);\n\t\tborder-bottom: 1px dashed var(--border-color, #e8e0d8);\n\t}\n\n\t.ingredients li:last-child {\n\t\tborder-bottom: none;\n\t}\n\n\t.instructions {\n\t\tpadding-left: 1.25rem;\n\t\tmargin: 0;\n\t}\n\n\t.instructions li {\n\t\tpadding: 8px 0;\n\t\tcolor: var(--body-text-color, #44403c);\n\t\tline-height: 1.6;\n\t}\n\n\t/* Form View */\n\t.form-view {\n\t\tmax-width: 600px;\n\t\tmargin: 0 auto;\n\t\tpadding-bottom: 2rem;\n\t}\n\n\t.form-content {\n\t\tpadding: 0 1.5rem;\n\t}\n\n\t.form-content h1 {\n\t\tmargin: 0 0 1.5rem 0;\n\t\tcolor: var(--heading-text-color, #292524);\n\t\tfont-size: 1.5rem;\n\t}\n\n\t.form-group {\n\t\tmargin-bottom: 1rem;\n\t}\n\n\t.form-group label {\n\t\tdisplay: block;\n\t\tmargin-bottom: 6px;\n\t\tfont-size: 0.875rem;\n\t\tfont-weight: 500;\n\t\tcolor: var(--heading-text-color, #292524);\n\t}\n\n\t.form-group input,\n\t.form-group textarea {\n\t\twidth: 100%;\n\t\tpadding: 10px 12px;\n\t\tborder: 1px solid var(--border-color, #e8e0d8);\n\t\tborder-radius: 8px;\n\t\tfont-size: 0.95rem;\n\t\tcolor: var(--body-text-color, #44403c);\n\t\tbackground: var(--card-background, #ffffff);\n\t\tbox-sizing: border-box;\n\t}\n\n\t.form-group input:focus,\n\t.form-group textarea:focus {\n\t\toutline: none;\n\t\tborder-color: var(--accent-color, #d97706);\n\t}\n\n\t.form-group textarea {\n\t\tresize: vertical;\n\t\tmin-height: 100px;\n\t}\n\n\t.form-row {\n\t\tdisplay: grid;\n\t\tgrid-template-columns: repeat(3, 1fr);\n\t\tgap: 1rem;\n\t}\n\n\t@media (max-width: 500px) {\n\t\t.form-row {\n\t\t\tgrid-template-columns: 1fr;\n\t\t}\n\t}\n\n\t.save-btn {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tgap: 8px;\n\t\twidth: 100%;\n\t\tpadding: 12px;\n\t\tmargin-top: 1.5rem;\n\t\tbackground: var(--accent-color, #d97706);\n\t\tcolor: white;\n\t\tborder: none;\n\t\tborder-radius: 8px;\n\t\tfont-size: 1rem;\n\t\tfont-weight: 500;\n\t\tcursor: pointer;\n\t\ttransition: opacity 0.15s;\n\t}\n\n\t.save-btn:hover:not(:disabled) {\n\t\topacity: 0.9;\n\t}\n\n\t.save-btn:disabled {\n\t\topacity: 0.6;\n\t\tcursor: not-allowed;\n\t}\n\n\t.loading, .empty {\n\t\ttext-align: center;\n\t\tpadding: 4rem 2rem;\n\t\tcolor: var(--secondary-text-color, #78716c);\n\t}\n\n\t.empty p {\n\t\tmargin-top: 1rem;\n\t}\n\n\t.empty-add-btn {\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tgap: 6px;\n\t\tmargin-top: 1rem;\n\t\tpadding: 10px 20px;\n\t\tbackground: var(--accent-color, #d97706);\n\t\tcolor: white;\n\t\tborder: none;\n\t\tborder-radius: 8px;\n\t\tfont-size: 0.9rem;\n\t\tcursor: pointer;\n\t}\n\n\t.empty-add-btn:hover {\n\t\topacity: 0.9;\n\t}\n\n\t.loading :global(.spin),\n\t.save-btn :global(.spin) {\n\t\tanimation: spin 1s linear infinite;\n\t}\n\n\t@keyframes spin {\n\t\tfrom { transform: rotate(0deg); }\n\t\tto { transform: rotate(360deg); }\n\t}\n\n\t.footer {\n\t\ttext-align: center;\n\t\tpadding: 2rem 1rem;\n\t\tfont-size: 0.75rem;\n\t\tcolor: var(--secondary-text-color, #a8a29e);\n\t}\n\n\t.footer a {\n\t\tcolor: inherit;\n\t\ttext-decoration: none;\n\t}\n\n\t.footer a:hover {\n\t\ttext-decoration: underline;\n\t}\n</style>",
-  "design": [
-    {
-      "id": "body-font",
-      "name": "Font",
-      "css_var": "--body-font",
-      "value": "system-ui, sans-serif",
-      "type": "font",
-      "description": "Main font for all text"
-    },
-    {
-      "id": "page-background",
-      "name": "Page Background",
-      "css_var": "--page-background",
-      "value": "#faf5f0",
-      "type": "color",
-      "description": "Overall page background (warm)"
-    },
-    {
-      "id": "header-background",
-      "name": "Header Background",
-      "css_var": "--header-background",
-      "value": "#ffffff",
-      "type": "color",
-      "description": "Header bar background"
-    },
-    {
-      "id": "card-background",
-      "name": "Card Background",
-      "css_var": "--card-background",
-      "value": "#ffffff",
-      "type": "color",
-      "description": "Recipe card background"
-    },
-    {
-      "id": "heading-text-color",
-      "name": "Heading Color",
-      "css_var": "--heading-text-color",
-      "value": "#292524",
-      "type": "color",
-      "description": "Color for headings"
-    },
-    {
-      "id": "body-text-color",
-      "name": "Body Text",
-      "css_var": "--body-text-color",
-      "value": "#44403c",
-      "type": "color",
-      "description": "Color for body text"
-    },
-    {
-      "id": "secondary-text-color",
-      "name": "Secondary Text",
-      "css_var": "--secondary-text-color",
-      "value": "#78716c",
-      "type": "color",
-      "description": "Color for muted text"
-    },
-    {
-      "id": "accent-color",
-      "name": "Accent Color",
-      "css_var": "--accent-color",
-      "value": "#d97706",
-      "type": "color",
-      "description": "Primary accent color (amber)"
-    },
-    {
-      "id": "border-color",
-      "name": "Border Color",
-      "css_var": "--border-color",
-      "value": "#e8e0d8",
-      "type": "color",
-      "description": "Border and divider color"
-    },
-    {
-      "id": "cat-badge-bg",
-      "name": "Category Badge",
-      "css_var": "--cat-badge-bg",
-      "value": "#fef3c7",
-      "type": "color",
-      "description": "Category badge background"
-    },
-    {
-      "id": "card-radius",
-      "name": "Card Radius",
-      "css_var": "--card-radius",
-      "value": "12px",
-      "type": "radius",
-      "description": "Roundness of recipe cards"
-    }
-  ],
-  "content": [
-    {
-      "id": "app_title",
-      "name": "App Title",
-      "type": "text",
-      "value": "Recipe Book",
-      "description": "Title shown in header"
-    },
-    {
-      "id": "search_placeholder",
-      "name": "Search Placeholder",
-      "type": "text",
-      "value": "Search recipes...",
-      "description": "Search input placeholder"
-    },
-    {
-      "id": "back_button",
-      "name": "Back Button",
-      "type": "text",
-      "value": "Back",
-      "description": "Back button text"
-    },
-    {
-      "id": "servings_label",
-      "name": "Servings Label",
-      "type": "text",
-      "value": "servings",
-      "description": "Text after servings count"
-    },
-    {
-      "id": "ingredients_title",
-      "name": "Ingredients Title",
-      "type": "text",
-      "value": "Ingredients",
-      "description": "Ingredients section heading"
-    },
-    {
-      "id": "instructions_title",
-      "name": "Instructions Title",
-      "type": "text",
-      "value": "Instructions",
-      "description": "Instructions section heading"
-    },
-    {
-      "id": "empty_state",
-      "name": "Empty State",
-      "type": "text",
-      "value": "No recipes yet. Add your first one!",
-      "description": "Message when no recipes"
-    },
-    {
-      "id": "no_results",
-      "name": "No Results",
-      "type": "text",
-      "value": "No recipes match your search",
-      "description": "Message when search has no results"
-    }
-  ],
-  "data": {
-    "recipes": {
-      "icon": "lucide:utensils",
-      "schema": [
-        {
-          "name": "id",
-          "type": "text"
-        },
-        {
-          "name": "title",
-          "type": "text"
-        },
-        {
-          "name": "source_url",
-          "type": "text"
-        },
-        {
-          "name": "description",
-          "type": "text"
-        },
-        {
-          "name": "image",
-          "type": "file"
-        },
-        {
-          "name": "prep_time",
-          "type": "text"
-        },
-        {
-          "name": "servings",
-          "type": "number"
-        },
-        {
-          "name": "category",
-          "type": "text"
-        },
-        {
-          "name": "ingredients",
-          "type": "text"
-        },
-        {
-          "name": "instructions",
-          "type": "text"
-        }
-      ],
-      "records": [
-        {
-          "id": "r1",
-          "title": "Classic Pancakes",
-          "source_url": "",
-          "description": "Fluffy, golden pancakes perfect for a lazy weekend breakfast.",
-          "image": "",
-          "prep_time": "20 min",
-          "servings": 4,
-          "category": "Breakfast",
-          "ingredients": "1 1/2 cups all-purpose flour\n3 1/2 tsp baking powder\n1 tbsp sugar\n1/4 tsp salt\n1 1/4 cups milk\n1 egg\n3 tbsp melted butter",
-          "instructions": "Mix flour, baking powder, sugar, and salt in a large bowl.\nMake a well in the center and pour in milk, egg, and melted butter. Mix until smooth.\nHeat a griddle over medium-high heat and lightly oil.\nPour batter onto griddle, using about 1/4 cup per pancake.\nCook until bubbles form and edges are dry, then flip and cook until golden."
-        },
-        {
-          "id": "r2",
-          "title": "Avocado Toast",
-          "source_url": "",
-          "description": "Simple, healthy, and delicious - the perfect quick meal.",
-          "image": "",
-          "prep_time": "10 min",
-          "servings": 2,
-          "category": "Breakfast",
-          "ingredients": "2 slices sourdough bread\n1 ripe avocado\n1/2 lemon, juiced\nSalt and pepper to taste\nRed pepper flakes (optional)\n2 eggs (optional)",
-          "instructions": "Toast the bread until golden and crispy.\nCut avocado in half, remove pit, and scoop flesh into a bowl.\nMash avocado with lemon juice, salt, and pepper.\nSpread avocado mixture on toast.\nTop with red pepper flakes and a fried egg if desired."
-        },
-        {
-          "id": "r3",
-          "title": "Pasta Primavera",
-          "source_url": "",
-          "description": "A colorful vegetable pasta that's as beautiful as it is delicious.",
-          "image": "",
-          "prep_time": "30 min",
-          "servings": 4,
-          "category": "Dinner",
-          "ingredients": "12 oz penne pasta\n2 cups mixed vegetables (bell peppers, zucchini, cherry tomatoes)\n3 cloves garlic, minced\n1/4 cup olive oil\n1/2 cup parmesan cheese\nFresh basil\nSalt and pepper",
-          "instructions": "Cook pasta according to package directions. Reserve 1 cup pasta water.\nSauté garlic in olive oil until fragrant.\nAdd vegetables and cook until tender-crisp.\nToss pasta with vegetables, adding pasta water as needed.\nTop with parmesan and fresh basil. Season to taste."
-        }
-      ]
-    }
-  }
+	"id": "recipes",
+	"name": "Recipes",
+	"description": "Keep recipes, ingredients, and instructions.",
+	"preview": "lucide:chef-hat",
+	"tags": [
+		"personal",
+		"intermediate",
+		"data"
+	],
+	"kits": [
+		"collections",
+		"daily",
+		"food"
+	],
+	"frontend_code": "<script>\n  import Icon from '@iconify/svelte'\n  import { onMount, onDestroy } from 'svelte'\n  import { proxy, asset } from '$tinykit'\n  import content from '$content'\n  import data from '$data'\n\n  const list_params = { all: true }\n  let recipes = $state([])\n  let loading = $state(true)\n  let load_error = $state('')\n  let retrying_load = $state(false)\n  let action_error = $state('')\n  let selected_id = $state(null)\n  let search = $state('')\n  let filter_category = $state('')\n  let view = $state('list')\n  let editing_recipe = $state(null)\n  let saving = $state(false)\n  let deleting = $state(false)\n  let deleting_recipe = $state(null)\n  let confirm_delete = $state(false)\n  let form_error = $state('')\n  let import_error = $state('')\n  let fetch_url = $state('')\n  let is_fetching = $state(false)\n  let disposed = false\n  let mounted = false\n  let active_path = ''\n  let import_generation = 0\n\n  function blank_form() { return { title: '', source_url: '', description: '', image: null, prep_time: '', servings: '', category: '', ingredients: '', instructions: '' } }\n  let form = $state(blank_form())\n\n  function receive_recipes(items) {\n    if (disposed) return\n    recipes = [...new Map(items.filter(item => item?.id).map(item => [item.id, item])).values()]\n    loading = false\n    load_error = ''\n    if (mounted) parse_hash()\n  }\n  const unsubscribe = data.recipes.subscribe(receive_recipes, list_params, () => {\n    if (disposed) return\n    loading = false\n    load_error = 'Could not load your recipes. Try again.'\n  })\n  async function retry_load() {\n    if (retrying_load || disposed) return\n    retrying_load = true\n    try { receive_recipes(await data.recipes.list(list_params)) }\n    catch { if (!disposed) load_error = 'Could not load your recipes. Try again.' }\n    finally { if (!disposed) retrying_load = false }\n  }\n  function invalidate_import() { import_generation += 1; is_fetching = false }\n  function populate_form(recipe) {\n    form = { ...blank_form(), ...Object.fromEntries(['title', 'source_url', 'description', 'prep_time', 'category', 'ingredients', 'instructions'].map(key => [key, String(recipe[key] || '')])), servings: recipe.servings == null ? '' : String(recipe.servings) }\n  }\n  function parse_hash() {\n    const path = window.location.hash.slice(1) || '/'\n    const parts = path.split('/').filter(Boolean)\n    let id = null\n    try { id = parts[1] ? decodeURIComponent(parts[1]) : null } catch {}\n    if (path === active_path && !(view === 'missing' && id && recipes.some(recipe => recipe.id === id))) return\n    if (parts[0] === 'edit' && id && loading) return\n    invalidate_import()\n    action_error = ''; form_error = ''; import_error = ''; fetch_url = ''; confirm_delete = false\n    active_path = path\n    if (parts[0] === 'recipe' && id) {\n      selected_id = id; editing_recipe = null; view = 'detail'\n    } else if (parts[0] === 'new') {\n      selected_id = null; editing_recipe = null; form = blank_form(); view = 'form'\n    } else if (parts[0] === 'edit' && id) {\n      const recipe = recipes.find(item => item.id === id)\n      selected_id = id; editing_recipe = recipe || null\n      if (recipe) { populate_form(recipe); view = 'form' } else view = 'missing'\n    } else {\n      selected_id = null; editing_recipe = null; view = 'list'\n    }\n  }\n  function navigate_to(path) { window.location.hash = path; parse_hash() }\n  onMount(() => {\n    mounted = true\n    const handle_hash = () => parse_hash()\n    window.addEventListener('hashchange', handle_hash)\n    parse_hash()\n    return () => { mounted = false; window.removeEventListener('hashchange', handle_hash) }\n  })\n  onDestroy(() => { disposed = true; mounted = false; invalidate_import(); if (typeof unsubscribe === 'function') unsubscribe() })\n\n  let selected_recipe = $derived.by(() => recipes.find(recipe => recipe.id === selected_id) || (deleting_recipe?.id === selected_id ? deleting_recipe : null))\n  let categories = $derived.by(() => [...new Set(recipes.map(recipe => String(recipe.category || '').trim()).filter(Boolean))].sort())\n  let filtered_recipes = $derived.by(() => {\n    const query = search.trim().toLocaleLowerCase()\n    return recipes.filter(recipe => (!query || [recipe.title, recipe.ingredients, recipe.description].some(value => String(value || '').toLocaleLowerCase().includes(query))) && (!filter_category || String(recipe.category || '').trim() === filter_category))\n  })\n  function parse_list(value) { return String(value || '').split(/\\r?\\n/).map(line => line.trim()).filter(Boolean) }\n  function http_url(value) {\n    if (!String(value || '').trim()) return ''\n    try { const url = new URL(String(value).trim()); return ['http:', 'https:'].includes(url.protocol) ? url.href : null }\n    catch { return null }\n  }\n  function find_recipe(value) {\n    if (Array.isArray(value)) { for (const item of value) { const recipe = find_recipe(item); if (recipe) return recipe } }\n    else if (value && typeof value === 'object') {\n      const types = Array.isArray(value['@type']) ? value['@type'] : [value['@type']]\n      if (types.includes('Recipe')) return value\n      if (value['@graph']) return find_recipe(value['@graph'])\n    }\n    return null\n  }\n  function yield_servings(value) {\n    const match = String(Array.isArray(value) ? value[0] || '' : value || '').match(/\\d+(?:\\.\\d+)?/)\n    const number = match ? Number(match[0]) : 0\n    return Number.isInteger(number) && number > 0 ? String(number) : ''\n  }\n  function instruction_lines(value, clean) {\n    if (Array.isArray(value)) return value.flatMap(item => instruction_lines(item, clean))\n    if (typeof value === 'string') return [clean(value)]\n    if (value && typeof value === 'object') {\n      if (value.itemListElement) return instruction_lines(value.itemListElement, clean)\n      if (value.text) return [clean(value.text)]\n    }\n    return []\n  }\n  async function fetch_recipe() {\n    if (is_fetching || saving || disposed) return\n    import_error = ''\n    const url = http_url(fetch_url)\n    if (!url) { import_error = 'Enter an http or https recipe URL.'; return }\n    const generation = ++import_generation\n    const previous = { ...form }\n    is_fetching = true\n    try {\n      const response = await proxy(url)\n      if (response.ok === false) throw Error('Import failed')\n      const html = await response.text()\n      if (disposed || generation !== import_generation || http_url(fetch_url) !== url) return\n      const doc = new DOMParser().parseFromString(html, 'text/html')\n      let recipe_data = null\n      for (const script of doc.querySelectorAll('script[type=\"application/ld+json\"]')) {\n        try { recipe_data = find_recipe(JSON.parse(script.textContent)); if (recipe_data) break } catch {}\n      }\n      if (!recipe_data) { import_error = 'No recipe was found on this page. You can enter it below.'; return }\n      const clean = value => {\n        const parsed = new DOMParser().parseFromString(String(value || ''), 'text/html')\n        return (parsed.body.textContent || '').trim()\n      }\n      const time = recipe_data.totalTime || recipe_data.prepTime || ''\n      const imported = {\n        title: clean(recipe_data.name), source_url: url, description: clean(recipe_data.description),\n        ingredients: Array.isArray(recipe_data.recipeIngredient) ? recipe_data.recipeIngredient.map(clean).join('\\n') : '',\n        instructions: instruction_lines(recipe_data.recipeInstructions, clean).filter(Boolean).join('\\n'),\n        prep_time: String(time).replace(/^PT/, '').replace(/(\\d+)H/g, '$1 hr ').replace(/(\\d+)M/g, '$1 min ').replace(/(\\d+)S/g, '$1 sec ').trim(),\n        servings: yield_servings(recipe_data.recipeYield)\n      }\n      // Keep any fields typed while the request was running.\n      form = { ...form, ...Object.fromEntries(Object.entries(imported).filter(([key]) => form[key] === previous[key])) }\n    } catch { if (!disposed && generation === import_generation) import_error = 'Could not import this recipe. Check the URL or enter it below.' }\n    finally { if (!disposed && generation === import_generation) is_fetching = false }\n  }\n  function back_to_list() { if (!saving && !deleting) navigate_to('/') }\n  function view_recipe(id) { navigate_to(`/recipe/${encodeURIComponent(id)}`) }\n  function start_new_recipe() { navigate_to('/new') }\n  function start_edit_recipe() { if (selected_recipe && !deleting) navigate_to(`/edit/${encodeURIComponent(selected_recipe.id)}`) }\n  async function save_recipe(event) {\n    event?.preventDefault()\n    if (saving || disposed) return\n    form_error = ''\n    if (!form.title.trim()) { form_error = 'Enter a recipe title.'; return }\n    const source_url = http_url(form.source_url)\n    if (source_url === null) { form_error = 'Use an http or https source URL.'; return }\n    const raw_servings = String(form.servings ?? '').trim()\n    const servings = raw_servings ? Number(raw_servings) : null\n    if (servings !== null && (!Number.isSafeInteger(servings) || servings < 1)) { form_error = 'Servings must be a whole number greater than zero.'; return }\n    if (form.image && (!form.image.type?.startsWith('image/') || form.image.size > 10 * 1024 * 1024)) { form_error = 'Choose an image smaller than 10 MB.'; return }\n    invalidate_import()\n    saving = true\n    const path = active_path\n    const id = editing_recipe?.id\n    const fields = {\n      title: form.title.trim(), source_url, description: form.description.trim(), prep_time: form.prep_time.trim(),\n      servings, category: form.category.trim(), ingredients: form.ingredients.trim(), instructions: form.instructions.trim()\n    }\n    if (form.image) fields.image = form.image\n    try {\n      if (id) await data.recipes.update(id, fields)\n      else await data.recipes.create(fields)\n      if (!disposed && path === active_path) navigate_to('/')\n    } catch { if (!disposed && path === active_path) form_error = 'Could not save this recipe. Your changes are still here.' }\n    finally { if (!disposed) saving = false }\n  }\n  async function delete_recipe() {\n    if (!selected_recipe || deleting || disposed) return\n    const id = selected_recipe.id\n    deleting_recipe = selected_recipe\n    deleting = true\n    action_error = ''\n    try {\n      await data.recipes.delete(id)\n      if (!disposed && selected_id === id) navigate_to('/')\n    } catch { if (!disposed) action_error = 'Could not delete this recipe. Try again.' }\n    finally { if (!disposed) { deleting = false; deleting_recipe = null } }\n  }\n</script>\n\n<div class=\"page\">\n  {#if load_error}<div class=\"notice\" role=\"alert\"><span>{load_error}</span><button onclick={retry_load} disabled={retrying_load}>{retrying_load ? 'Retrying…' : 'Retry'}</button></div>{/if}\n  {#if action_error}<div class=\"notice\" role=\"alert\"><span>{action_error}</span><button onclick={() => action_error = ''}>Dismiss</button></div>{/if}\n  {#if view === 'form'}\n    <div class=\"form-view\">\n      <button class=\"back-btn\" onclick={back_to_list} disabled={saving}><Icon icon=\"lucide:arrow-left\" width={16} />Cancel</button>\n      <h1>{editing_recipe ? 'Edit recipe' : 'New recipe'}</h1>\n      {#if !editing_recipe}\n        <div class=\"import-section\"><label class=\"sr-only\" for=\"import-url\">Recipe URL to import</label><input id=\"import-url\" type=\"url\" placeholder=\"Recipe URL (optional)\" bind:value={fetch_url} disabled={saving} oninput={invalidate_import} onkeydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); fetch_recipe() } }} /><button onclick={fetch_recipe} disabled={saving || is_fetching || !fetch_url.trim()}>{is_fetching ? 'Importing…' : 'Import'}</button></div>\n        {#if import_error}<p class=\"error-text\" role=\"alert\">{import_error}</p>{/if}\n      {/if}\n      <form onsubmit={save_recipe}>\n        <fieldset disabled={saving}>\n          <label>Title<input required bind:value={form.title} placeholder=\"Recipe name\" /></label>\n          <label>Source URL<input type=\"url\" bind:value={form.source_url} placeholder=\"https://example.com/recipe\" /></label>\n          <label>Description<textarea bind:value={form.description} rows=\"2\" placeholder=\"A short description (optional)\"></textarea></label>\n          <div class=\"form-row\"><label>Category<input bind:value={form.category} placeholder=\"Breakfast, dinner…\" /></label><label>Prep time<input bind:value={form.prep_time} placeholder=\"30 min\" /></label><label>Servings<input type=\"number\" min=\"1\" step=\"1\" bind:value={form.servings} placeholder=\"4\" /></label></div>\n          <label>Photo<input type=\"file\" accept=\"image/*\" onchange={(event) => form.image = event.currentTarget.files?.[0] || null} /></label>\n          {#if editing_recipe?.image && !form.image}<p class=\"hint\">The current photo will be kept.</p>{/if}\n          <label>{content.ingredients_title}<textarea bind:value={form.ingredients} rows=\"6\" placeholder=\"One ingredient per line\"></textarea></label>\n          <label>{content.instructions_title}<textarea bind:value={form.instructions} rows=\"6\" placeholder=\"One step per line\"></textarea></label>\n        </fieldset>\n        {#if form_error}<p class=\"error-text\" role=\"alert\">{form_error}</p>{/if}\n        <div class=\"form-actions\"><button class=\"primary\" disabled={saving}>{saving ? 'Saving…' : editing_recipe ? 'Save changes' : 'Add recipe'}</button><button type=\"button\" onclick={back_to_list} disabled={saving}>Cancel</button></div>\n      </form>\n    </div>\n  {:else if view === 'detail' && selected_recipe}\n    <div class=\"detail\">\n      <div class=\"detail-header\"><button class=\"back-btn\" disabled={deleting} onclick={back_to_list}><Icon icon=\"lucide:arrow-left\" width={16} />{content.back_button}</button><div class=\"detail-actions\"><button onclick={start_edit_recipe} disabled={deleting}><Icon icon=\"lucide:pencil\" width={15} />Edit</button><button class=\"danger\" disabled={deleting} onclick={() => confirm_delete = !confirm_delete}><Icon icon=\"lucide:trash-2\" width={15} />Delete</button></div></div>\n      {#if confirm_delete}<div class=\"delete-confirm\"><span>Delete this recipe?</span><button class=\"danger\" disabled={deleting} onclick={delete_recipe}>{deleting ? 'Deleting…' : 'Delete recipe'}</button><button disabled={deleting} onclick={() => confirm_delete = false}>Cancel</button></div>{/if}\n      {#if selected_recipe.image}<img class=\"hero-image\" src={asset(selected_recipe.image)} alt={selected_recipe.title || 'Recipe photo'} />{/if}\n      <h1>{selected_recipe.title || 'Untitled recipe'}</h1>\n      <div class=\"meta\">{#if selected_recipe.prep_time}<span><Icon icon=\"lucide:clock\" width={15} />{selected_recipe.prep_time}</span>{/if}{#if selected_recipe.servings}<span><Icon icon=\"lucide:users\" width={15} />{selected_recipe.servings} {content.servings_label}</span>{/if}{#if selected_recipe.category}<span>{selected_recipe.category}</span>{/if}{#if http_url(selected_recipe.source_url)}<a href={http_url(selected_recipe.source_url)} target=\"_blank\" rel=\"noopener noreferrer\"><Icon icon=\"lucide:external-link\" width={14} />Original recipe</a>{/if}</div>\n      {#if selected_recipe.description}<p class=\"description\">{selected_recipe.description}</p>{/if}\n      <section><h2>{content.ingredients_title}</h2>{#if parse_list(selected_recipe.ingredients).length}<ul class=\"ingredients\">{#each parse_list(selected_recipe.ingredients) as ingredient, i (i)}<li>{ingredient}</li>{/each}</ul>{:else}<p class=\"hint\">No ingredients added.</p>{/if}</section>\n      <section><h2>{content.instructions_title}</h2>{#if parse_list(selected_recipe.instructions).length}<ol class=\"instructions\">{#each parse_list(selected_recipe.instructions) as step, i (i)}<li>{step}</li>{/each}</ol>{:else}<p class=\"hint\">No instructions added.</p>{/if}</section>\n    </div>\n  {:else if (view === 'missing' || view === 'detail') && !loading && !load_error}\n    <div class=\"empty\"><p>This recipe is no longer available.</p><button onclick={back_to_list}>{content.back_button}</button></div>\n  {:else if view === 'detail' || view === 'missing'}\n    {#if loading}<p class=\"empty\" role=\"status\">Loading recipe…</p>{/if}\n  {:else}\n    <header><div><h1>{content.app_title}</h1><p class=\"hint\">{recipes.length} {recipes.length === 1 ? 'recipe' : 'recipes'}</p></div><button class=\"primary\" onclick={start_new_recipe}><Icon icon=\"lucide:plus\" width={16} />Add recipe</button></header>\n    <label class=\"search-box\"><Icon icon=\"lucide:search\" width={16} /><input type=\"search\" aria-label=\"Search recipes\" bind:value={search} placeholder={content.search_placeholder} /></label>\n    {#if categories.length}\n      <div class=\"categories\" role=\"group\" aria-label=\"Recipe category\"><button class:active={!filter_category} aria-pressed={!filter_category} onclick={() => filter_category = ''}>All</button>{#each categories as category (category)}<button class:active={filter_category === category} aria-pressed={filter_category === category} onclick={() => filter_category = category}>{category}</button>{/each}</div>\n    {/if}\n    {#if loading}<p class=\"empty\" role=\"status\">Loading recipes…</p>\n    {:else if !filtered_recipes.length && !load_error}\n      <div class=\"empty\"><p>{search.trim() || filter_category ? content.no_results : content.empty_state}</p>{#if search.trim() || filter_category}<button onclick={() => { search = ''; filter_category = '' }}>Clear filters</button>{:else}<button onclick={start_new_recipe}>Add recipe</button>{/if}</div>\n    {:else}\n      <div class=\"recipe-list\">{#each filtered_recipes as recipe (recipe.id)}<button class=\"recipe-row\" onclick={() => view_recipe(recipe.id)}><span class=\"recipe-photo\">{#if recipe.image}<img src={asset(recipe.image)} alt=\"\" loading=\"lazy\" />{:else}<Icon icon=\"lucide:utensils\" width={20} />{/if}</span><span class=\"recipe-info\"><strong>{recipe.title || 'Untitled recipe'}</strong>{#if recipe.description}<span class=\"recipe-description\">{recipe.description}</span>{/if}<span class=\"meta\">{#if recipe.prep_time}<span>{recipe.prep_time}</span>{/if}{#if recipe.servings}<span>{recipe.servings} {content.servings_label}</span>{/if}{#if recipe.category}<span>{recipe.category}</span>{/if}</span></span><Icon icon=\"lucide:chevron-right\" width={16} /></button>{/each}</div>\n    {/if}\n  {/if}\n</div>\n\n<style>\n  :global(*) { box-sizing: border-box; }\n  .page { min-height: 100vh; padding: 1.75rem 1.25rem 3rem; background: var(--page-background, #fafafa); color: var(--body-text-color, #404040); font-family: var(--body-font, system-ui, sans-serif); font-size: .875rem; }\n  header, .search-box, .categories, .recipe-list, .notice, .empty { max-width: 860px; margin-left: auto; margin-right: auto; }\n  header, .detail-header, .detail-actions, .form-actions, .import-section, .delete-confirm, .notice { display: flex; align-items: center; gap: .625rem; }\n  header, .detail-header { justify-content: space-between; }\n  header { margin-bottom: 1.25rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color, #e5e5e5); background: var(--header-background, #fff); }\n  h1 { min-width: 0; font-size: 1.375rem; font-weight: 650; letter-spacing: -.025em; line-height: 1.3; margin: 0; color: var(--heading-text-color, #202020); overflow-wrap: anywhere; }\n  h2 { margin: 1.75rem 0 .75rem; font-size: .9375rem; font-weight: 600; color: var(--heading-text-color, #202020); }\n  .hint { color: var(--secondary-text-color, #737373); font-size: .8125rem; margin: .375rem 0 0; }\n  button, input, textarea { font: inherit; }\n  button { display: inline-flex; align-items: center; justify-content: center; gap: .375rem; min-height: 36px; padding: .375rem .625rem; background: var(--card-background, #fff); border: 1px solid var(--border-color, #e5e5e5); border-radius: 6px; color: inherit; cursor: pointer; }\n  button:hover:not(:disabled) { border-color: var(--secondary-text-color, #737373); }\n  button:disabled { opacity: .55; cursor: default; }\n  .primary { background: var(--accent-color, #92400e); border-color: transparent; color: #fff; white-space: nowrap; }\n  .primary:hover:not(:disabled) { filter: brightness(.94); border-color: transparent; }\n  input, textarea { width: 100%; min-width: 0; padding: .625rem .75rem; border: 1px solid var(--border-color, #e5e5e5); border-radius: 6px; color: inherit; background: var(--input-background, #fff); }\n  textarea { resize: vertical; line-height: 1.5; }\n  .search-box { display: flex; align-items: center; gap: .625rem; padding: 0 .75rem; border: 1px solid var(--border-color, #e5e5e5); border-radius: 6px; background: var(--input-background, #fff); color: var(--secondary-text-color, #737373); }\n  .search-box input { border: 0; background: none; padding: .625rem 0; }\n  .categories { display: flex; flex-wrap: wrap; gap: .375rem; margin-top: .75rem; margin-bottom: .875rem; }\n  .categories button { font-size: .8125rem; }\n  .categories .active { color: var(--accent-color, #92400e); border-color: var(--accent-color, #92400e); background: var(--cat-badge-bg, #f5f5f5); }\n  .recipe-list { overflow: hidden; margin-top: 1rem; border: 1px solid var(--border-color, #e5e5e5); border-radius: var(--card-radius, 6px); background: var(--card-background, #fff); }\n  .recipe-row { display: flex; width: 100%; padding: 1rem; gap: .875rem; text-align: left; border: none; border-radius: 0; border-bottom: 1px solid var(--border-color, #e5e5e5); }\n  .recipe-row:last-child { border-bottom: none; }\n  .recipe-row:hover:not(:disabled) { background: var(--page-background, #fafafa); border-color: var(--border-color, #e5e5e5); }\n  .recipe-photo { display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; flex: none; border-radius: 4px; background: var(--image-placeholder, #f5f5f5); color: var(--secondary-text-color, #737373); overflow: hidden; }\n  .recipe-photo img { width: 100%; height: 100%; object-fit: cover; }\n  .recipe-info { display: flex; flex: 1; flex-direction: column; min-width: 0; gap: .25rem; }\n  .recipe-info strong { font-size: .9375rem; font-weight: 600; color: var(--heading-text-color, #202020); overflow-wrap: anywhere; }\n  .recipe-description { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: .8125rem; color: var(--secondary-text-color, #737373); line-height: 1.5; }\n  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem 1rem; color: var(--secondary-text-color, #737373); font-size: .8125rem; }\n  .meta span, .meta a { display: inline-flex; align-items: center; gap: .375rem; }\n  .meta a { color: var(--accent-color, #92400e); text-decoration: none; }\n  .meta a:hover { text-decoration: underline; }\n  .detail, .form-view { max-width: 700px; margin: 0 auto; }\n  .detail-header { margin-bottom: 1.25rem; }\n  .back-btn { background: none; border-color: transparent; padding-left: 0; }\n  .detail h1 { font-size: 1.75rem; margin: 1rem 0 .75rem; }\n  .hero-image { display: block; width: 100%; max-height: 340px; object-fit: cover; border-radius: var(--card-radius, 6px); margin-bottom: 1.25rem; }\n  .description { line-height: 1.65; margin: 1rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }\n  .ingredients { padding: 0; margin: 0; list-style: none; }\n  .ingredients li { padding: .625rem 0; border-bottom: 1px solid var(--border-color, #e5e5e5); line-height: 1.5; overflow-wrap: anywhere; }\n  .instructions { margin: 0; padding-left: 1.25rem; }\n  .instructions li { padding: .375rem 0 .625rem .25rem; line-height: 1.65; overflow-wrap: anywhere; }\n  .form-view > .back-btn { margin-bottom: .75rem; }\n  .form-view h1 { margin-bottom: 1.25rem; }\n  .import-section { margin-bottom: 1rem; }\n  .import-section input { flex: 1; }\n  .import-section button { min-height: 40px; }\n  fieldset { min-width: 0; border: 0; margin: 0; padding: 0; }\n  label { display: flex; flex-direction: column; gap: .375rem; margin-bottom: 1rem; font-size: .8125rem; font-weight: 500; }\n  .search-box { flex-direction: row; font-weight: 400; margin-bottom: 0; }\n  .form-row { display: grid; grid-template-columns: 1fr 1fr 100px; gap: .75rem; }\n  .form-actions { margin-top: 1rem; }\n  .notice { justify-content: space-between; flex-wrap: wrap; padding: .625rem .75rem; margin-bottom: 1rem; border: 1px solid #fecaca; border-radius: 6px; color: #991b1b; background: #fff7f7; font-size: .8125rem; }\n  .error-text { color: #b91c1c; font-size: .8125rem; line-height: 1.5; }\n  .danger { color: #b91c1c; }\n  .delete-confirm { flex-wrap: wrap; padding: .75rem; background: var(--card-background, #fff); border: 1px solid var(--border-color, #e5e5e5); border-radius: 6px; margin-bottom: 1rem; font-size: .8125rem; }\n  .empty { text-align: center; padding: 2rem 1rem; color: var(--secondary-text-color, #737373); }\n  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }\n  :global(button:focus-visible), :global(a:focus-visible), :global(input:focus-visible), :global(textarea:focus-visible) { outline: 2px solid var(--accent-color, #92400e); outline-offset: 2px; }\n  @media (max-width: 580px) {\n    .page { padding: 1.25rem .875rem 2rem; }\n    h1 { min-width: 0; font-size: 1.25rem; }\n    header { gap: .75rem; }\n    input, textarea { font-size: 16px; }\n    .recipe-row { padding: .875rem .75rem; gap: .75rem; }\n    .recipe-photo { width: 42px; height: 42px; }\n    .recipe-description { -webkit-line-clamp: 1; }\n    .form-row { grid-template-columns: 1fr 1fr; }\n    .form-row label:first-child { grid-column: 1 / -1; }\n    .detail h1 { font-size: 1.5rem; }\n    .detail-header { gap: .5rem; }\n    .detail-actions { gap: .375rem; }\n    button { min-height: 40px; }\n  }\n  @media (prefers-reduced-motion: reduce) { :global(*) { scroll-behavior: auto !important; } }\n</style>\n",
+	"design": [
+		{
+			"id": "body-font",
+			"name": "Font",
+			"css_var": "--body-font",
+			"value": "system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+			"type": "font",
+			"description": "Main font for all text"
+		},
+		{
+			"id": "page-background",
+			"name": "Page Background",
+			"css_var": "--page-background",
+			"value": "#fafafa",
+			"type": "color",
+			"description": "Overall page background (warm)"
+		},
+		{
+			"id": "header-background",
+			"name": "Header Background",
+			"css_var": "--header-background",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Header bar background"
+		},
+		{
+			"id": "card-background",
+			"name": "Card Background",
+			"css_var": "--card-background",
+			"value": "#ffffff",
+			"type": "color",
+			"description": "Recipe card background"
+		},
+		{
+			"id": "heading-text-color",
+			"name": "Heading Color",
+			"css_var": "--heading-text-color",
+			"value": "#202020",
+			"type": "color",
+			"description": "Color for headings"
+		},
+		{
+			"id": "body-text-color",
+			"name": "Body Text",
+			"css_var": "--body-text-color",
+			"value": "#202020",
+			"type": "color",
+			"description": "Color for body text"
+		},
+		{
+			"id": "secondary-text-color",
+			"name": "Secondary Text",
+			"css_var": "--secondary-text-color",
+			"value": "#737373",
+			"type": "color",
+			"description": "Color for muted text"
+		},
+		{
+			"id": "accent-color",
+			"name": "Accent Color",
+			"css_var": "--accent-color",
+			"value": "#b45309",
+			"type": "color",
+			"description": "Primary accent color (amber)"
+		},
+		{
+			"id": "border-color",
+			"name": "Border Color",
+			"css_var": "--border-color",
+			"value": "#e5e5e5",
+			"type": "color",
+			"description": "Border and divider color"
+		},
+		{
+			"id": "cat-badge-bg",
+			"name": "Category Badge",
+			"css_var": "--cat-badge-bg",
+			"value": "#fef3c7",
+			"type": "color",
+			"description": "Category badge background"
+		},
+		{
+			"id": "card-radius",
+			"name": "Card Radius",
+			"css_var": "--card-radius",
+			"value": "6px",
+			"type": "radius",
+			"description": "Roundness of recipe cards"
+		}
+	],
+	"content": [
+		{
+			"id": "app_title",
+			"name": "App Title",
+			"type": "text",
+			"value": "Recipes",
+			"description": "Title shown in header"
+		},
+		{
+			"id": "search_placeholder",
+			"name": "Search Placeholder",
+			"type": "text",
+			"value": "Search recipes...",
+			"description": "Search input placeholder"
+		},
+		{
+			"id": "back_button",
+			"name": "Back Button",
+			"type": "text",
+			"value": "Back",
+			"description": "Back button text"
+		},
+		{
+			"id": "servings_label",
+			"name": "Servings Label",
+			"type": "text",
+			"value": "servings",
+			"description": "Text after servings count"
+		},
+		{
+			"id": "ingredients_title",
+			"name": "Ingredients Title",
+			"type": "text",
+			"value": "Ingredients",
+			"description": "Ingredients section heading"
+		},
+		{
+			"id": "instructions_title",
+			"name": "Instructions Title",
+			"type": "text",
+			"value": "Instructions",
+			"description": "Instructions section heading"
+		},
+		{
+			"id": "empty_state",
+			"name": "Empty State",
+			"type": "text",
+			"value": "No recipes yet.",
+			"description": "Message when no recipes"
+		},
+		{
+			"id": "no_results",
+			"name": "No Results",
+			"type": "text",
+			"value": "No recipes match your search",
+			"description": "Message when search has no results"
+		}
+	],
+	"data": {
+		"recipes": {
+			"icon": "lucide:utensils",
+			"schema": [
+				{
+					"name": "id",
+					"type": "text"
+				},
+				{
+					"name": "title",
+					"type": "text"
+				},
+				{
+					"name": "source_url",
+					"type": "text"
+				},
+				{
+					"name": "description",
+					"type": "text"
+				},
+				{
+					"name": "image",
+					"type": "file"
+				},
+				{
+					"name": "prep_time",
+					"type": "text"
+				},
+				{
+					"name": "servings",
+					"type": "number"
+				},
+				{
+					"name": "category",
+					"type": "text"
+				},
+				{
+					"name": "ingredients",
+					"type": "text"
+				},
+				{
+					"name": "instructions",
+					"type": "text"
+				}
+			],
+			"records": [
+				{
+					"id": "r1",
+					"title": "Classic Pancakes",
+					"source_url": "",
+					"description": "Weekend pancakes made with pantry staples.",
+					"image": "",
+					"prep_time": "20 min",
+					"servings": 4,
+					"category": "Breakfast",
+					"ingredients": "1 1/2 cups all-purpose flour\n3 1/2 tsp baking powder\n1 tbsp sugar\n1/4 tsp salt\n1 1/4 cups milk\n1 egg\n3 tbsp melted butter",
+					"instructions": "Mix flour, baking powder, sugar, and salt in a large bowl.\nMake a well in the center and pour in milk, egg, and melted butter. Mix until smooth.\nHeat a griddle over medium-high heat and lightly oil.\nPour batter onto griddle, using about 1/4 cup per pancake.\nCook until bubbles form and edges are dry, then flip and cook until golden."
+				},
+				{
+					"id": "r2",
+					"title": "Avocado Toast",
+					"source_url": "",
+					"description": "Toast with avocado, lemon, and an optional egg.",
+					"image": "",
+					"prep_time": "10 min",
+					"servings": 2,
+					"category": "Breakfast",
+					"ingredients": "2 slices sourdough bread\n1 ripe avocado\n1/2 lemon, juiced\nSalt and pepper to taste\nRed pepper flakes (optional)\n2 eggs (optional)",
+					"instructions": "Toast the bread until golden and crispy.\nCut avocado in half, remove pit, and scoop flesh into a bowl.\nMash avocado with lemon juice, salt, and pepper.\nSpread avocado mixture on toast.\nTop with red pepper flakes and a fried egg if desired."
+				},
+				{
+					"id": "r3",
+					"title": "Pasta Primavera",
+					"source_url": "",
+					"description": "Penne with vegetables, garlic, and parmesan.",
+					"image": "",
+					"prep_time": "30 min",
+					"servings": 4,
+					"category": "Dinner",
+					"ingredients": "12 oz penne pasta\n2 cups mixed vegetables (bell peppers, zucchini, cherry tomatoes)\n3 cloves garlic, minced\n1/4 cup olive oil\n1/2 cup parmesan cheese\nFresh basil\nSalt and pepper",
+					"instructions": "Cook pasta according to package directions. Reserve 1 cup pasta water.\nSauté garlic in olive oil until fragrant.\nAdd vegetables and cook until tender-crisp.\nToss pasta with vegetables, adding pasta water as needed.\nTop with parmesan and fresh basil. Season to taste."
+				}
+			]
+		}
+	}
 }

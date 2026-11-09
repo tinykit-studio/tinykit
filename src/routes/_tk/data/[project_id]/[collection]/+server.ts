@@ -1,7 +1,10 @@
 import { json, error } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import { getProject, pb } from '$lib/server/pb'
+import { getProject, withProjectLock } from '$lib/server/pb'
+import { appProjectForRequest } from '$lib/server/private-apps'
+import { commitAppData, readAppDataInput } from '$lib/server/app-data-write'
 import { check_rate_limit, check_origin, get_client_ip } from '$lib/server/data-security'
+import { assert_unique_record, DataMutationError } from '$lib/server/data-mutations'
 import { validate_schema, generate_id } from '$lib/server/data-utils'
 
 /**
@@ -46,12 +49,12 @@ function get_records(collection_data: any): any[] {
 }
 
 // GET - List records
-export const GET: RequestHandler = async ({ params, url }) => {
+export const GET: RequestHandler = async ({ params, url, locals }) => {
 	const { project_id, collection } = params
 
 	try {
 		// Get project and validate collection exists
-		const project = await getProject(project_id)
+		const project = await appProjectForRequest(locals, project_id)
 		if (!project) throw error(404, 'Project not found')
 		const data = project.data || {}
 
@@ -104,178 +107,69 @@ export const GET: RequestHandler = async ({ params, url }) => {
 }
 
 // POST - Create record
-export const POST: RequestHandler = async ({ params, request }) => {
+export const POST: RequestHandler = async (event) => {
+	const { params, request } = event
 	const { project_id, collection } = params
 
 	try {
-		// Get project first (needed for origin check and file uploads)
-		const project = await getProject(project_id)
-		if (!project) throw error(404, 'Project not found')
+		return await withProjectLock(project_id, async () => {
+			// Get project first (needed for origin check and file uploads)
+			const project = await getProject(project_id)
+			if (!project) throw error(404, 'Project not found')
 
-		// Security checks
-		check_origin(request, project.domain)
-		check_rate_limit(get_client_ip(request))
+			// Security checks
+			check_origin(request, project.domain)
+			check_rate_limit(get_client_ip(request))
 
-		// Parse request body - handle both JSON and FormData
-		let body: Record<string, any>
-		const content_type = request.headers.get('content-type') || ''
+			const { fields: body, files } = await readAppDataInput(request)
 
-		if (content_type.includes('multipart/form-data')) {
-			// FormData with potential file uploads
-			body = await parse_form_data_with_files(request, project_id)
-		} else if (content_type.includes('application/json')) {
-			body = await request.json()
-		} else {
-			// Try JSON first, fall back to FormData
-			try {
-				body = await request.json()
-			} catch {
-				body = await parse_form_data_with_files(request, project_id)
+			const data = project.data || {}
+
+			// Initialize collection if it doesn't exist (new format)
+			if (!Object.hasOwn(data, collection)) {
+				Object.defineProperty(data, collection, { value: { schema: [], records: [] }, enumerable: true, writable: true })
 			}
-		}
 
-		const data = project.data || {}
+			// Expect { schema, records } format
+			if (Array.isArray(data[collection])) data[collection] = {schema: [], records: data[collection]}
+			const collection_data = data[collection]
+			if (!collection_data.records) {
+				collection_data.records = []
+			}
 
-		// Initialize collection if it doesn't exist (new format)
-		if (!(collection in data)) {
-			data[collection] = { schema: [], records: [] }
-		}
+			// Validate fields against schema
+			const { warnings } = validate_schema(collection_data, { ...body, ...Object.fromEntries([...files.keys()].map(key => [key, null])) })
 
-		// Expect { schema, records } format
-		const collection_data = data[collection]
-		if (!collection_data.records) {
-			collection_data.records = []
-		}
+			const unique = event.url.searchParams.getAll('unique')
+			if (unique.some(field => files.has(field))) throw error(400, 'Upload fields cannot be used as unique keys.')
+			assert_unique_record(collection_data.records, body, unique)
 
-		// Validate fields against schema
-		const { warnings } = validate_schema(collection_data, body)
+			// Generate ID if not provided
+			const record = {
+				id: body.id || generate_id(),
+				...body
+			}
 
-		// Generate ID if not provided
-		const record = {
-			id: body.id || generate_id(),
-			...body
-		}
+			// Add record
+			collection_data.records.push(record)
 
-		// Add record
-		collection_data.records.push(record)
+			// Save back to project
+			Object.assign(record, await commitAppData(event, project_id, data, { collection, index: collection_data.records.length - 1, files }))
 
-		// Save back to project
-		await pb.collection('_tk_projects').update(project_id, { data })
+			// Include warnings in response if any
+			const response_body = warnings.length > 0
+				? { ...record, _warnings: warnings }
+				: record
 
-		// Include warnings in response if any
-		const response_body = warnings.length > 0
-			? { ...record, _warnings: warnings }
-			: record
-
-		return json(response_body, { status: 201 })
+			return json(response_body, { status: 201 })
+		})
 	} catch (err: any) {
-		if (err.status === 404) {
-			throw error(404, 'Project not found')
-		}
+		if (err instanceof DataMutationError) throw error(err.status, err.message)
+		if (err.status) throw err
 		console.error('[Data API] Create error:', err)
 		throw error(500, 'Failed to create record')
 	}
 }
-
-/**
- * Parse FormData with file upload support
- * - `_data` field contains JSON for non-file fields
- * - `_file:{fieldname}` entries contain files to upload
- * - Direct FormData passthrough also supported (Pocketbase-style)
- */
-async function parse_form_data_with_files(
-	request: Request,
-	project_id: string
-): Promise<Record<string, any>> {
-	const form = await request.formData()
-	const result: Record<string, any> = {}
-	const file_fields: Map<string, File[]> = new Map()
-
-	// First pass: collect all fields
-	for (const [key, value] of form.entries()) {
-		if (key === '_data') {
-			// JSON data for non-file fields
-			try {
-				Object.assign(result, JSON.parse(value as string))
-			} catch {
-				// Ignore parse errors
-			}
-		} else if (key.startsWith('_file:')) {
-			// File field (our convention)
-			const field_name = key.slice(6) // Remove '_file:' prefix
-			if (typeof value !== 'string') {
-				if (!file_fields.has(field_name)) {
-					file_fields.set(field_name, [])
-				}
-				file_fields.get(field_name)!.push(value)
-			}
-		} else if (typeof value !== 'string') {
-			// Direct file field (Pocketbase-style)
-			if (!file_fields.has(key)) {
-				file_fields.set(key, [])
-			}
-			file_fields.get(key)!.push(value)
-		} else {
-			// Regular field - try to parse as JSON, fall back to string
-			try {
-				result[key] = JSON.parse(value as string)
-			} catch {
-				result[key] = value
-			}
-		}
-	}
-
-	// Upload files and store filenames
-	if (file_fields.size > 0) {
-		const uploaded = await upload_files_to_assets(project_id, file_fields)
-		Object.assign(result, uploaded)
-	}
-
-	return result
-}
-
-/**
- * Upload files to project.assets and return field->filename mapping
- */
-async function upload_files_to_assets(
-	project_id: string,
-	file_fields: Map<string, File[]>
-): Promise<Record<string, string | string[]>> {
-	const result: Record<string, string | string[]> = {}
-
-	// Build FormData with all files for single upload request
-	const upload_form = new FormData()
-	const field_indices: Map<string, number[]> = new Map()
-	let file_index = 0
-
-	for (const [field_name, files] of file_fields) {
-		field_indices.set(field_name, [])
-		for (const file of files) {
-			// Use 'assets+' to append to existing files (Pocketbase convention)
-			upload_form.append('assets+', file)
-			field_indices.get(field_name)!.push(file_index++)
-		}
-	}
-
-	// Get current assets count before upload
-	const project = await pb.collection('_tk_projects').getOne(project_id)
-	const before_count = (project.assets as string[] || []).length
-
-	// Upload all files at once
-	const updated = await pb.collection('_tk_projects').update(project_id, upload_form)
-	const new_assets = (updated.assets as string[] || []).slice(before_count)
-
-	// Map uploaded filenames back to fields
-	let new_index = 0
-	for (const [field_name, indices] of field_indices) {
-		const filenames = indices.map(() => new_assets[new_index++])
-		// Single file -> string, multiple files -> array
-		result[field_name] = filenames.length === 1 ? filenames[0] : filenames
-	}
-
-	return result
-}
-
 
 // Helper: Apply simple filter (supports field=value and field!=value)
 function apply_filter(records: any[], filter: string): any[] {

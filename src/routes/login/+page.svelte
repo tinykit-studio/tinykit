@@ -3,6 +3,7 @@
 	import { onMount } from "svelte"
 	import { auth } from "$lib/pocketbase.svelte"
 	import { Loader2 } from "lucide-svelte"
+	import { page } from '$app/state'
 
 	let email = $state("")
 	let password = $state("")
@@ -42,7 +43,9 @@
 				body: JSON.stringify({ email, password })
 			}).catch(() => {})
 
-			goto("/tinykit")
+			const next = page.url.searchParams.get('next')
+			if (next?.startsWith('/') && !next.startsWith('//') && !/[\\\r\n]/.test(next)) window.location.assign(next)
+			else goto("/tinykit?dashboard=1")
 		} catch (err: any) {
 			error = err.message || "Login failed. Please check your credentials."
 		} finally {
@@ -109,7 +112,7 @@
 			<button
 				type="submit"
 				disabled={is_submitting}
-				class="w-full py-2.5 bg-[var(--builder-accent)] text-white rounded-lg hover:bg-[var(--builder-accent-hover)] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+				class="w-full py-2.5 bg-[var(--builder-accent)] text-[var(--builder-accent-text)] rounded-lg hover:bg-[var(--builder-accent-hover)] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
 			>
 				{#if is_submitting}
 					<Loader2 class="w-4 h-4 animate-spin" />
