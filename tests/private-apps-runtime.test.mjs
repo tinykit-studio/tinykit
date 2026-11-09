@@ -215,7 +215,17 @@ test('upgrade preserves legacy public artifacts, records, source assets, and cus
   }
   const newHTML='<!doctype html><h1>Updated public build</h1>';
   await publishFile(newHTML);
-  assert.equal(await (await fetch(preview)).text(),newHTML);
+  const republished = await fetch(preview);
+  assert.match(republished.headers.get('content-security-policy'),/\bsandbox\b/);
+  assert.doesNotMatch(republished.headers.get('content-security-policy'),/allow-same-origin/);
+  const republishedHTML = await republished.text();
+  assert.match(republishedHTML,/data-tinykit-legacy-storage/);
+  assert.ok(republishedHTML.endsWith('<h1>Updated public build</h1>'));
+  const modern = await admin.collection('_tk_projects').create({name:'New public app',kit:'custom',visibility:'public'});
+  const modernBuild = new FormData();
+  modernBuild.set('published_html',new Blob([newHTML],{type:'text/html'}),'index.html');
+  await admin.collection('_tk_projects').update(modern.id,modernBuild);
+  assert.equal(await (await fetch(server+'/tinykit/preview/'+modern.id)).text(),newHTML);
   const upgradedRules=await admin.collections.getOne('_tk_projects');assert.match(upgradedRules.viewRule,/name != 'hidden'/);assert.equal(upgradedRules.updateRule,null);
   const restoredAsset=await admin.collection('_tk_source_assets').getOne(asset.id);assert.equal(restoredAsset.project,project.id);assert.equal(restoredAsset.file,asset.file);
   const bytes=await fetch(admin.files.getURL(restoredAsset,restoredAsset.file,{token:await admin.files.getToken()}));assert.equal(await bytes.text(),'original source asset');

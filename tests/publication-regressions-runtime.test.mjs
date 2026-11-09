@@ -80,6 +80,56 @@ test('publication is atomic across web workers and the editor can review a new t
       track(spawn(process.execPath, ['scripts/companion/server.mjs', String(webPort)], { cwd: root, env: workerEnv, stdio: ['ignore', 'pipe', 'pipe'] }));
       await ready(async () => (await fetch(server + '/api/projects', { headers })).ok);
     }
+    const switched = await owner.collection('_tk_projects').create({
+      name: 'Visibility at commit', kit: 'custom', visibility: 'public',
+      data: { notes: { schema: [{ name: 'attachment', type: 'file' }], records: [] } }
+    });
+    const notes = servers[0] + `/_tk/data/${switched.id}/notes`;
+    const internalWrite = `/api/tinykit/projects/${switched.id}/app-data-write`;
+    const spoof = await fetch(pbURL + internalWrite, {
+      method: 'POST', headers, body: JSON.stringify({ actor: auth.record.id, data: {} })
+    });
+    assert.equal(spoof.status, 403, 'a regular builder cannot attest to the actor');
+    let commitReached, releaseCommit;
+    const beforeCommit = new Promise(resolve => { commitReached = resolve; });
+    const waitForVisibility = new Promise(resolve => { releaseCommit = resolve; });
+    intercept = async incoming => {
+      const path = new URL(incoming.url, pbURL).pathname;
+      if (path === internalWrite || (incoming.method === 'PATCH' && path === `/api/collections/_tk_projects/records/${switched.id}`)) {
+        commitReached();
+        await waitForVisibility;
+      }
+      return false;
+    };
+    const uploadNote = name => {
+      const form = new FormData();
+      form.append('_file:attachment', new Blob([name]), name + '.txt');
+      return form;
+    };
+    const queued = fetch(notes, { method: 'POST', body: uploadNote('anonymous') });
+    try {
+      await Promise.race([beforeCommit, queued.then(result => assert.fail(`Write finished before pause: ${result.status}`))]);
+      await owner.collection('_tk_projects').update(switched.id, { visibility: 'private' });
+    } finally {
+      releaseCommit();
+    }
+    assert.equal((await queued).status, 401);
+    intercept = undefined;
+    const afterDenial = await owner.collection('_tk_projects').getOne(switched.id);
+    assert.equal(afterDenial.visibility, 'private');
+    assert.deepEqual(afterDenial.assets, []);
+    assert.deepEqual(afterDenial.data.notes.records, []);
+    const ownerHeaders = { Authorization: headers.Authorization };
+    const allowed = await fetch(notes, { method: 'POST', headers: ownerHeaders, body: uploadNote('owner') });
+    assert.equal(allowed.status, 201, await allowed.clone().text());
+    const createdNote = await allowed.json();
+    assert.match(createdNote.attachment, /^owner_.*\.txt$/);
+    const patched = await fetch(notes + '/' + createdNote.id, { method: 'PATCH', headers: ownerHeaders, body: uploadNote('updated') });
+    assert.equal(patched.status, 200, await patched.clone().text());
+    const updatedNote = await patched.json();
+    const afterOwner = await owner.collection('_tk_projects').getOne(switched.id);
+    assert.deepEqual(afterOwner.assets, [createdNote.attachment, updatedNote.attachment]);
+    assert.equal(afterOwner.data.notes.records[0].attachment, updatedNote.attachment);
     const bundle = source => ({ format_version: 1, files: Object.fromEntries(Object.entries({ 'src/App.svelte': source, 'package.json': '{}', 'index.html': '<!doctype html>' }).map(([name, text]) => [name, Buffer.from(text).toString('base64')])) });
     for (const component of [false, true]) {
       const initial = '<h1>Initial résumé\r\n🙂</h1>';

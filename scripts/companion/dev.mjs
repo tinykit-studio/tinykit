@@ -1,6 +1,7 @@
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, readFile, realpath, rm, open as openFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, rm, open as openFile, copyFile, rename } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -101,6 +102,9 @@ export async function startCompanion(directory, { port, open, appOnly }) {
     await mkdir(dataDirectory, { recursive: true });
     await mkdir(hooksDirectory, { recursive: true });
     if (await realpath(dataDirectory) !== dataDirectory || await realpath(hooksDirectory) !== hooksDirectory) throw new Error('Local runtime directories must not be symlinks.');
+    const pendingHook = join(hooksDirectory, `app-data-write.${randomUUID()}.tmp`);
+    await copyFile(join(packageRoot, 'pocketbase/pb_hooks/app-data-write.pb.js'), pendingHook, constants.COPYFILE_EXCL);
+    await rename(pendingHook, join(hooksDirectory, 'app-data-write.pb.js'));
     const flags = ['--dir', dataDirectory, '--migrationsDir', join(packageRoot, 'pocketbase/pb_migrations'), '--hooksDir', hooksDirectory];
     const email = 'companion@localhost.test', password = randomBytes(32).toString('hex');
     await exec(binary, ['superuser', 'upsert', email, password, ...flags]);

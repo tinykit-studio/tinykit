@@ -171,7 +171,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (!untrustedFile && !isPublicAppHtml) return response
 	const isolated = isolateAppContent(response)
 	const project = event.locals.appProject
-	if (isPublicAppHtml && isolated.ok && project?.published_html && project.legacy_storage_html === project.published_html) {
+	if (isPublicAppHtml && isolated.ok && project?.published_html && project.legacy_storage_html) {
 		isolated.headers.delete('Content-Length')
 		isolated.headers.delete('ETag')
 		isolated.headers.set('Cache-Control', 'no-store')

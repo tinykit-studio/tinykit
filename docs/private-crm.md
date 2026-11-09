@@ -47,9 +47,9 @@ Public app pages run in a browser sandbox so their scripts cannot use a
 signed-in visitor's Studio session. Public app data still works through
 Tinykit's data API. Browser storage such as `localStorage` is unavailable to
 these sandboxed pages. On upgrade, existing public builds get an in-memory
-fallback for the `localStorage` methods while they serve the same published file.
-It resets on reload and cannot recover old browser data. Update any app that
-assumes storage is available before republishing it.
+fallback for the `localStorage` methods, including after republishing those
+apps. It resets on reload and cannot recover old browser data. New apps should
+handle unavailable storage in their source.
 
 Uploaded files and build artifacts are now protected in PocketBase. Public apps
 continue serving these through Tinykit's existing asset and app routes. Previously

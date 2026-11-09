@@ -30,22 +30,32 @@ function fixture() {
     signups:{schema:[{name:'email',type:'text'}],records:[]}
   }};
   let fails = false, writes = 0;
+  const write = async (_event, _id, data) => {
+    await pause();
+    if (fails) throw new Error('Offline');
+    writes++;
+    project = { ...project, data: structuredClone(data) };
+    return {};
+  };
   const imports = {
     '@sveltejs/kit':{json:(body, options) => Response.json(body, options),error:(status,message) => Object.assign(new Error(message),{status})},
     '$lib/server/pb':{
       withProjectLock,
-      getProject:async () => {await pause();return structuredClone(project);},
-      pb:{collection:() => ({update:async (_id,fields) => {await pause();if(fails)throw new Error('Offline');writes++;project={...project,...structuredClone(fields)};}})}
+      getProject:async () => {await pause();return structuredClone(project);}
     },
     '$lib/server/data-security':{check_origin:() => {},check_rate_limit:() => {},get_client_ip:() => '127.0.0.1'},
     '$lib/server/private-apps':{appProjectForRequest:() => structuredClone(project)},
+    '$lib/server/app-data-write':{commitAppData:write,readAppDataInput:async request => ({fields:await request.json(),files:new Map()})},
     '$lib/server/data-utils':dataUtils,
     '$lib/server/data-mutations':mutations
   };
   const create = loadTS('src/routes/_tk/data/[project_id]/[collection]/+server.ts', imports).POST;
   const adjust = loadTS('src/routes/_tk/data/[project_id]/[collection]/_adjust/+server.ts', imports).POST;
   const single = loadTS('src/routes/_tk/data/[project_id]/[collection]/[id]/+server.ts', imports);
-  const event = (collection, body, query = '', id) => ({params:{project_id:'project',collection,id},request:new Request(`https://example.test/_tk/data/project/${collection}${query}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})});
+  const event = (collection, body, query = '', id) => {
+    const url = new URL(`https://example.test/_tk/data/project/${collection}${query}`);
+    return {params:{project_id:'project',collection,id},url,request:new Request(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})};
+  };
   return {create,adjust,single,event,get project(){return project;},get writes(){return writes;},set fails(value){fails=value;}};
 }
 
