@@ -105,6 +105,8 @@ export async function startCompanion(directory, { port, open, appOnly }) {
     const pendingHook = join(hooksDirectory, `app-data-write.${randomUUID()}.tmp`);
     await copyFile(join(packageRoot, 'pocketbase/pb_hooks/app-data-write.pb.js'), pendingHook, constants.COPYFILE_EXCL);
     await rename(pendingHook, join(hooksDirectory, 'app-data-write.pb.js'));
+    await mkdir(join(hooksDirectory, 'lib'), { recursive: true });
+    await copyFile(join(packageRoot, 'pocketbase/pb_hooks/lib/definitions.cjs'), join(hooksDirectory, 'lib/definitions.cjs'));
     const flags = ['--dir', dataDirectory, '--migrationsDir', join(packageRoot, 'pocketbase/pb_migrations'), '--hooksDir', hooksDirectory];
     const email = 'companion@localhost.test', password = randomBytes(32).toString('hex');
     await exec(binary, ['superuser', 'upsert', email, password, ...flags]);

@@ -1,8 +1,7 @@
 import { json, error } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import { getProject, withProjectLock } from '$lib/server/pb'
 import { appProjectForRequest } from '$lib/server/private-apps'
-import { commitAppData, readAppDataInput } from '$lib/server/app-data-write'
+import { commitAppData, readAppDataInput, withAppDataWrite } from '$lib/server/app-data-write'
 import { check_rate_limit, check_origin, get_client_ip } from '$lib/server/data-security'
 import { assert_unique_record, DataMutationError } from '$lib/server/data-mutations'
 import { validate_schema, generate_id } from '$lib/server/data-utils'
@@ -112,16 +111,11 @@ export const POST: RequestHandler = async (event) => {
 	const { project_id, collection } = params
 
 	try {
-		return await withProjectLock(project_id, async () => {
-			// Get project first (needed for origin check and file uploads)
-			const project = await getProject(project_id)
-			if (!project) throw error(404, 'Project not found')
-
+		const { fields: body, files } = await readAppDataInput(request)
+		return await withAppDataWrite(project_id, async project => {
 			// Security checks
 			check_origin(request, project.domain)
 			check_rate_limit(get_client_ip(request))
-
-			const { fields: body, files } = await readAppDataInput(request)
 
 			const data = project.data || {}
 
@@ -154,7 +148,7 @@ export const POST: RequestHandler = async (event) => {
 			collection_data.records.push(record)
 
 			// Save back to project
-			Object.assign(record, await commitAppData(event, project_id, data, { collection, index: collection_data.records.length - 1, files }))
+			Object.assign(record, await commitAppData(event, project_id, data, project.app_data_revision, { collection, index: collection_data.records.length - 1, files }))
 
 			// Include warnings in response if any
 			const response_body = warnings.length > 0

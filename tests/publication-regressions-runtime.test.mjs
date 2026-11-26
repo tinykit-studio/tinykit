@@ -29,7 +29,7 @@ async function ready(fn) {
   throw Error('Publication fixture did not start');
 }
 
-test('publication is atomic across web workers and the editor can review a new target before creating it', { skip: !process.env.TINYKIT_TEST_PUBLICATION, timeout: 180000 }, async t => {
+test('two web workers preserve concurrent data writes, atomic publication, and new-target review', { skip: !process.env.TINYKIT_TEST_PUBLICATION, timeout: 180000 }, async t => {
   const temporary = await mkdtemp(join(tmpdir(), 'tinykit-publication-'));
   const children = []; let logs = '';
   const track = child => {
@@ -80,6 +80,86 @@ test('publication is atomic across web workers and the editor can review a new t
       track(spawn(process.execPath, ['scripts/companion/server.mjs', String(webPort)], { cwd: root, env: workerEnv, stdio: ['ignore', 'pipe', 'pipe'] }));
       await ready(async () => (await fetch(server + '/api/projects', { headers })).ok);
     }
+    const concurrent = await owner.collection('_tk_projects').create({
+      name: 'Concurrent app data', kit: 'custom', visibility: 'public',
+      data: {
+        options: { schema: [{ name: 'votes', type: 'number' }], records: [{ id: 'a', votes: 0 }] },
+        notes: { schema: [{ name: 'title', type: 'text' }, { name: 'attachment', type: 'file' }], records: [{ id: 'edit', title: 'Original' }, { id: 'remove', title: 'Delete me' }] },
+        signups: { schema: [{ name: 'email', type: 'text' }], records: [] }
+      }
+    });
+    const concurrentWrite = `/api/tinykit/projects/${concurrent.id}/app-data-write`;
+    const sendData = (worker, path, method, fields) => fetch(servers[worker] + `/_tk/data/${concurrent.id}/` + path, {
+      method, headers: fields instanceof FormData ? {} : { 'Content-Type': 'application/json' },
+      ...(fields === undefined ? {} : { body: fields instanceof FormData ? fields : JSON.stringify(fields) })
+    });
+    // Force worker 0 to calculate from an old snapshot, then let worker 1
+    // commit before releasing it. Every pair must merge or reject correctly.
+    async function overlap(first, second) {
+      let release, arrived, waiting = false;
+      const paused = new Promise(resolve => { release = resolve; });
+      const reached = new Promise(resolve => { arrived = resolve; });
+      intercept = async incoming => {
+        if (!waiting && incoming.method === 'POST' && new URL(incoming.url, pbURL).pathname === concurrentWrite) {
+          waiting = true;
+          arrived();
+          await paused;
+        }
+        return false;
+      };
+      const pending = first();
+      let other;
+      try {
+        await Promise.race([reached, pending.then(response => assert.fail(`Write completed before pause: ${response.status}`))]);
+        other = await second();
+      } finally {
+        release();
+      }
+      const result = await pending;
+      intercept = undefined;
+      return [result, other];
+    }
+    const increment = worker => sendData(worker, 'options/_adjust', 'POST', [{ id: 'a', field: 'votes', delta: 1 }]);
+    const votes = await overlap(() => increment(0), () => increment(1));
+    assert.deepEqual(votes.map(response => response.status), [200, 200]);
+    assert.deepEqual(await Promise.all(votes.map(async response => (await response.json())[0].votes)), [2, 1]);
+    assert.equal((await owner.collection('_tk_projects').getOne(concurrent.id)).data.options.records[0].votes, 2);
+    const duplicate = await overlap(
+      () => sendData(0, 'signups?unique=email', 'POST', { email: ' Same@Example.test ' }),
+      () => sendData(1, 'signups?unique=email', 'POST', { email: 'same@example.test' })
+    );
+    assert.deepEqual(duplicate.map(response => response.status), [409, 201]);
+    const distinct = await overlap(
+      () => sendData(0, 'notes', 'POST', { id: 'new', title: 'New note' }),
+      () => sendData(1, 'notes/edit', 'PATCH', { title: 'Edited note' })
+    );
+    assert.deepEqual(distinct.map(response => response.status), [201, 200]);
+    const deletion = await overlap(
+      () => sendData(0, 'notes/remove', 'DELETE'),
+      () => sendData(1, 'signups', 'POST', { id: 'another', email: 'another@example.test' })
+    );
+    assert.deepEqual(deletion.map(response => response.status), [204, 201]);
+    const attachments = name => {
+      const form = new FormData();
+      form.append('_data', JSON.stringify({ title: name }));
+      form.append('_file:attachment', new Blob([name]), name + '.txt');
+      return form;
+    };
+    const uploadedNotes = await overlap(
+      () => sendData(0, 'notes', 'POST', attachments('first')),
+      () => sendData(1, 'notes', 'POST', attachments('second'))
+    );
+    assert.deepEqual(uploadedNotes.map(response => response.status), [201, 201]);
+    const uploaded = await Promise.all(uploadedNotes.map(response => response.json()));
+    const combined = await owner.collection('_tk_projects').getOne(concurrent.id);
+    assert.equal(combined.data.options.records[0].votes, 2);
+    assert.equal(combined.data.signups.records.length, 2);
+    assert.equal(combined.data.notes.records.find(record => record.id === 'edit').title, 'Edited note');
+    assert.ok(combined.data.notes.records.some(record => record.id === 'new'));
+    assert.ok(!combined.data.notes.records.some(record => record.id === 'remove'));
+    for (const note of uploaded) assert.ok(combined.assets.includes(note.attachment));
+    assert.equal(combined.assets.length, 2, 'a stale upload must not leave an orphan file');
+    t.diagnostic('two workers preserve increments, unique creates, edits, deletions, and uploads');
     const switched = await owner.collection('_tk_projects').create({
       name: 'Visibility at commit', kit: 'custom', visibility: 'public',
       data: { notes: { schema: [{ name: 'attachment', type: 'file' }], records: [] } }

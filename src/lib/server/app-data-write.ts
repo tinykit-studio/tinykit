@@ -1,9 +1,26 @@
 import { error, type RequestEvent } from '@sveltejs/kit'
-import { pb, validateUserToken } from './pb'
+import { getProject, pb, validateUserToken, withProjectLock, type Project } from './pb'
 import { SESSION_COOKIE, sessionRequest } from './private-apps'
 
 type AppWriteRequest = Pick<RequestEvent, 'request' | 'cookies' | 'url'>
 type FileFields = Map<string, File[]>
+
+class StaleAppData extends Error {}
+
+export function withAppDataWrite<T>(projectId: string, mutate: (project: Project) => Promise<T>): Promise<T> {
+	return withProjectLock(projectId, async () => {
+		for (let attempt = 0; attempt < 20; attempt++) {
+			const project = await getProject(projectId, { strict: true })
+			if (!project) throw error(404, 'Project not found')
+			try {
+				return await mutate(project)
+			} catch (cause) {
+				if (!(cause instanceof StaleAppData)) throw cause
+			}
+		}
+		throw error(409, 'App data is busy. Retry this change.')
+	})
+}
 
 export async function readAppDataInput(request: Request) {
 	const contentType = request.headers.get('content-type') || ''
@@ -30,6 +47,7 @@ export async function readAppDataInput(request: Request) {
 
 export async function commitAppData(
 	event: AppWriteRequest, projectId: string, data: Record<string, any>,
+	expectedRevision: string | undefined,
 	upload?: { collection: string; index: number; files: FileFields }
 ): Promise<Record<string, string | string[]>> {
 	// A cookie only represents the user for a same-origin write, even if this
@@ -37,11 +55,11 @@ export async function commitAppData(
 	const cookie = event.request.headers.get('Origin') === event.url.origin
 		? event.cookies.get(SESSION_COOKIE) : undefined
 	const actor = (await validateUserToken(sessionRequest(event.request, cookie)))?.id || ''
-	let body: Record<string, any> | FormData = { actor, data }
+	let body: Record<string, any> | FormData = { actor, data, expected_revision: expectedRevision }
 	if (upload?.files.size) {
 		const form = new FormData()
 		form.set('payload', JSON.stringify({
-			actor, data,
+			actor, data, expected_revision: expectedRevision,
 			upload: {
 				collection: upload.collection,
 				index: upload.index,
@@ -55,6 +73,7 @@ export async function commitAppData(
 		const result = await pb.send(`/api/tinykit/projects/${projectId}/app-data-write`, { method: 'POST', body })
 		return result.fields
 	} catch (cause: any) {
+		if (cause.status === 409 && cause.response?.data?.app_data_revision) throw new StaleAppData()
 		if ([400, 401, 403, 404].includes(cause.status)) throw error(cause.status, cause.message)
 		throw cause
 	}

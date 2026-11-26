@@ -1,7 +1,6 @@
 import { json, error } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import { getProject, withProjectLock } from '$lib/server/pb'
-import { commitAppData } from '$lib/server/app-data-write'
+import { commitAppData, withAppDataWrite } from '$lib/server/app-data-write'
 import { check_rate_limit, check_origin, get_client_ip } from '$lib/server/data-security'
 import { adjust_counters, DataMutationError } from '$lib/server/data-mutations'
 
@@ -9,18 +8,16 @@ export const POST: RequestHandler = async (event) => {
   const {params, request} = event
   const {project_id, collection} = params
   try {
-    return await withProjectLock(project_id, async () => {
-      const project = await getProject(project_id)
-      if (!project) throw error(404, 'Project not found')
+    let changes
+    try { changes = await request.json() } catch { throw error(400, 'Invalid counter changes') }
+    return await withAppDataWrite(project_id, async project => {
       check_origin(request, project.domain)
       check_rate_limit(get_client_ip(request))
       const data = project.data || {}
       if (!Object.hasOwn(data, collection)) throw error(404, 'Collection not found')
-      let changes
-      try { changes = await request.json() } catch { throw error(400, 'Invalid counter changes') }
       const result = adjust_counters(data[collection], changes)
       const next = {...data, [collection]: {...data[collection], records: result.records}}
-      await commitAppData(event, project_id, next)
+      await commitAppData(event, project_id, next, project.app_data_revision)
       return json(result.items)
     })
   } catch (err: any) {

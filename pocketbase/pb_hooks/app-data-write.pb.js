@@ -2,9 +2,11 @@
 routerAdd('POST', '/api/tinykit/projects/{id}/app-data-write', (e) => {
   const body = e.requestInfo().body;
   const payload = typeof body.payload === 'string' ? JSON.parse(body.payload) : body;
+  const definitions = require(__hooks + '/lib/definitions.cjs');
   if (!payload.data || typeof payload.data !== 'object' || Array.isArray(payload.data)) {
     throw new BadRequestError('App data is required.');
   }
+  if (!/^[a-f0-9]{64}$/.test(payload.expected_revision || '')) throw new BadRequestError('The app data revision is required.');
   const fields = {};
   e.app.runInTransaction((app) => {
     const record = app.findRecordById('_tk_projects', e.request.pathValue('id'));
@@ -13,6 +15,13 @@ routerAdd('POST', '/api/tinykit/projects/{id}/app-data-write', (e) => {
     if (record.getString('visibility') === 'private') {
       if (!payload.actor) throw new UnauthorizedError('Sign in to update this private app.');
       if (record.getString('owner') !== payload.actor) throw new ForbiddenError('Only the app owner can update this app.');
+    }
+    const currentRevision = $security.sha256(definitions.canonical({
+      data: JSON.parse(record.getString('data') || 'null') || {},
+      schema: JSON.parse(record.getString('cli_schema') || 'null') || {}
+    }));
+    if (currentRevision !== payload.expected_revision) {
+      throw new ApiError(409, 'App data changed before this write.', { app_data_revision: true });
     }
     if (payload.upload) {
       const { collection, index, groups } = payload.upload;

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { File } from 'node:buffer';
+import { createHash } from 'node:crypto';
+import definitions from '../pocketbase/pb_hooks/lib/definitions.cjs';
 import ts from 'typescript';
 import { parse } from 'acorn';
 import { compile } from 'svelte/compiler';
@@ -161,6 +163,8 @@ test('cold published requests wait for authentication and enforce private access
   const server = loadTS('src/lib/server/pb.ts', {
     pocketbase: { default: MockPocketBase },
     fs: { existsSync: () => true, readFileSync: () => '{"auth_token":"test-token"}', writeFileSync() {} },
+    'node:crypto': { createHash },
+    './data-revision': { canonicalData: definitions.canonical },
     '$env/dynamic/private': environment,
     '$lib/ai/config': {}
   }, { console: { log() {}, warn() {}, error() {} } });

@@ -7,6 +7,8 @@
 import PocketBase from 'pocketbase'
 import { env } from '$env/dynamic/private'
 import * as fs from 'fs'
+import { createHash } from 'node:crypto'
+import { canonicalData } from './data-revision'
 import { settings_from_env, type LLMSettings } from '$lib/ai/config'
 export type { LLMSettings } from '$lib/ai/config'
 
@@ -211,6 +213,7 @@ export type Project = {
 	data: Record<string, any>
 	settings: Record<string, any>
 	cli_schema?: Record<string, any[]>
+	app_data_revision?: string
 	cli_publication?: any
 	created: string
 	updated: string
@@ -259,6 +262,9 @@ export async function getProject(id: string, { strict = false } = {}): Promise<P
 
 	try {
 		const project = await pb.collection('_tk_projects').getOne<Project>(id)
+		project.app_data_revision = createHash('sha256')
+			.update(canonicalData({ data: project.data || {}, schema: project.cli_schema || {} }))
+			.digest('hex')
 		// Schema activation is independent of stored rows. Materialize empty new
 		// collections for the data API without changing the persisted records.
 		if (project.cli_schema) {
