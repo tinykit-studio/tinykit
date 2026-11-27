@@ -36,10 +36,11 @@ routerAdd('POST', '/api/tinykit/projects/{id}/component-build', (e) => {
     const info = e.requestInfo();
     if (!app.canAccessRecord(record, info, record.collection().viewRule) || !app.canAccessRecord(record, info, record.collection().updateRule)) throw new ForbiddenError('Project publication denied.');
     const currentBundle = JSON.parse(record.getString('source_bundle') || 'null');
+    const draftRevision = JSON.parse(record.getString('cli_draft') || 'null')?.revision;
     if (currentBundle && !bundle) throw new ApiError(409, 'Include the component app source bundle when publishing.');
     if (bundle && !record.collection().fields.getByName('source_bundle')) throw new ApiError(409, 'Apply the source-bundle database migration before publishing.');
     const currentRevision = hasSource
-      ? $security.sha256(source.sourceText(record.getString('frontend_code'), currentBundle))
+      ? $security.sha256(source.sourceText(record.getString('frontend_code'), currentBundle, draftRevision))
       : $security.sha256(definitions.canonical(definitions.studioBuildState(record)));
     if (currentRevision !== revision) throw new ApiError(409, hasSource
       ? 'Server source changed; reconcile before publishing.'
@@ -48,7 +49,7 @@ routerAdd('POST', '/api/tinykit/projects/{id}/component-build', (e) => {
     if (bundle) record.set('source_bundle', bundle);
     record.set('published_html', $filesystem.fileFromBytes(body.html, 'index.html'));
     app.save(record);
-    result = { success: true, ...(hasSource ? { source_hash: $security.sha256(source.sourceText(body.frontend_code, bundle)) } : {}), size: body.html.length };
+    result = { success: true, ...(hasSource ? { source_hash: $security.sha256(source.sourceText(body.frontend_code, bundle, draftRevision)) } : {}), size: body.html.length };
   });
   return e.json(200, result);
 }, $apis.requireAuth('users'), $apis.bodyLimit(10000000));

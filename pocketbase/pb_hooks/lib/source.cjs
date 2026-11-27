@@ -46,8 +46,9 @@ function validateSourceBundle(bundle) {
   return { format_version: 1, files };
 }
 
-/** @param {string | undefined} frontend @param {SourceBundle | null | undefined} [bundle] */
-function sourceText(frontend, bundle) {
-  return bundle ? JSON.stringify({ frontend_code: frontend || '', source_bundle: validateSourceBundle(bundle) }) : frontend || '';
+/** @param {string | undefined} frontend @param {SourceBundle | null | undefined} [bundle] @param {string} [draftRevision] */
+function sourceText(frontend, bundle, draftRevision) {
+  return bundle ? JSON.stringify({ frontend_code: frontend || '', source_bundle: validateSourceBundle(bundle) })
+    : draftRevision ? JSON.stringify({ frontend_code: frontend || '', draft_revision: draftRevision }) : frontend || '';
 }
 module.exports = { validateSourceBundle, sourceText };

@@ -47,10 +47,13 @@ export function validateSourceBundle(bundle) {
   return { format_version: 1, files };
 }
 
-/** @param {string | undefined} frontend @param {SourceBundle | null | undefined} [bundle] */
-export function sourceHash(frontend, bundle) {
+/** @param {string | undefined} frontend @param {SourceBundle | null | undefined} [bundle] @param {string} [draftRevision] */
+export function sourceHash(frontend, bundle, draftRevision) {
   // Keep the initial single-file baseline compatible with existing exports.
-  return bundle ? hash(JSON.stringify({ frontend_code: frontend || '', source_bundle: validateSourceBundle(bundle) })) : hash(frontend || '');
+  // Before component activation, also bind the baseline to the saved draft.
+  // Exported draft contents may differ from the active frontend_code.
+  return bundle ? hash(JSON.stringify({ frontend_code: frontend || '', source_bundle: validateSourceBundle(bundle) }))
+    : draftRevision ? hash(JSON.stringify({ frontend_code: frontend || '', draft_revision: draftRevision })) : hash(frontend || '');
 }
 
 /** @param {string} root */

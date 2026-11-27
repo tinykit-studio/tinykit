@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import net from 'node:net';
 import PocketBase from 'pocketbase';
+import { randomUUID } from 'node:crypto';
 
 const exec = promisify(execFile), root = fileURLToPath(new URL('../', import.meta.url));
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -80,6 +81,27 @@ test('component CLI signs in once, exports, runs isolated data, publishes and de
     await assert.rejects(access(join(app, '.tinykit/dev.lock')), /ENOENT/);
     assert.equal((await cli('status', app)).running, false);
     assert.equal((await pb.collection('_tk_projects').getOne(id)).data.bookmarks.records.length, 4);
+    phase = 'unpublished draft export and publication';
+    const pending = await user.collection('_tk_projects').create({ name: 'Pending draft', kit: 'custom', visibility: 'private', frontend_code: '<h1>Active source</h1>', data: original.data });
+    const pendingHeaders = { Authorization: `Bearer ${auth.token}`, 'Content-Type': 'application/json' };
+    async function saveDraft(source) {
+      const status = await (await fetch(`${server}/api/projects/${pending.id}/hosted`, { headers: pendingHeaders })).json();
+      const response = await fetch(`${server}/api/projects/${pending.id}/draft`, { method: 'POST', headers: pendingHeaders, body: JSON.stringify({ definition: { ...status.definition, frontend_code: source }, expected_base_revision: status.base_revision, expected_draft_revision: status.draft?.revision || null, request_id: randomUUID() }) });
+      assert.equal(response.status, 200, await response.clone().text());
+    }
+    await saveDraft('<h1>Saved unpublished draft</h1>');
+    const pendingApp = join(temporary, 'pending-draft');
+    await cli('export', pending.id, pendingApp);
+    await symlink(join(root, 'node_modules'), join(pendingApp, 'node_modules'), 'junction');
+    assert.equal(await readFile(join(pendingApp, 'src/App.svelte'), 'utf8'), '<h1>Saved unpublished draft</h1>');
+    assert.equal((await cli('publish', pendingApp)).publish.state, 'succeeded');
+    const pendingActive = await pb.collection('_tk_projects').getOne(pending.id);
+    assert.equal(pendingActive.frontend_code, '<h1>Saved unpublished draft</h1>');
+    assert.deepEqual(pendingActive.data, original.data);
+    assert.equal((await cli('remote-status', pendingApp)).in_sync, true);
+    await writeFile(join(pendingApp, 'src/App.svelte'), '<h1>Republished draft edit</h1>');
+    assert.equal((await cli('publish', pendingApp)).publish.state, 'succeeded');
+    assert.equal((await pb.collection('_tk_projects').getOne(pending.id)).frontend_code, '<h1>Republished draft edit</h1>');
     phase = 'component publication';
     await mkdir(join(app, 'src/components'));
     await writeFile(join(app, 'src/App.svelte'), '<script>import Child from "./components/Child.svelte"; import content from "$content";</script><Child title={content.app_title} />');

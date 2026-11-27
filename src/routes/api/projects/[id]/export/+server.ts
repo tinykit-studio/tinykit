@@ -28,7 +28,9 @@ export const GET: RequestHandler = async ({ params, request }) => {
 		const base_revision = createHash('sha256').update(definitions.canonical(definitions.sourceState(project))).digest('hex')
 		const source = !project.source_bundle && project.cli_draft?.base_revision === base_revision ? project.cli_draft.definition : definitions.definition(project)
 		const source_bundle = project.source_bundle ? validateSourceBundle(project.source_bundle) : null
-		const source_hash = sourceHash(source.frontend_code, source_bundle)
+		// The publication baseline identifies the hosted state, independently of
+		// the saved draft selected as the starting point for local editing.
+		const source_hash = sourceHash(project.frontend_code, source_bundle, project.cli_draft?.revision)
 		// Keep a root edit made in Studio when restoring the rest of the tree.
 		if (source_bundle) source_bundle.files['src/App.svelte'] = Buffer.from(source.frontend_code).toString('base64')
 

@@ -236,6 +236,46 @@ test('two web workers preserve concurrent data writes, atomic publication, and n
       assert.equal((await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ ...payload, source_bundle: invalid }) })).status, 400);
       t.diagnostic(`${component ? 'component' : 'single-file'}: one winner, five conflicts across two web workers`);
     }
+    const pendingDraft = await owner.collection('_tk_projects').create({ name: 'Draft baseline race', kit: 'custom', visibility: 'private', frontend_code: '<h1>Active baseline</h1>' });
+    const pendingPath = `/api/projects/${pendingDraft.id}`;
+    const exportPending = async () => (await fetch(servers[0] + pendingPath + '/export', { headers })).json();
+    const beforeDraft = await exportPending();
+    async function savePendingDraft(frontend_code) {
+      const status = await (await fetch(servers[1] + pendingPath + '/hosted', { headers })).json();
+      const response = await fetch(servers[1] + pendingPath + '/draft', { method: 'POST', headers, body: JSON.stringify({ definition: { ...status.definition, frontend_code }, expected_base_revision: status.base_revision, expected_draft_revision: status.draft?.revision || null, request_id: `regression-${Date.now()}-${frontend_code.length}` }) });
+      assert.equal(response.status, 200, await response.clone().text());
+    }
+    const localSource = '<h1>Local draft edit</h1>';
+    const publishPending = baseline => fetch(servers[0] + pendingPath + '/build', { method: 'POST', headers, body: JSON.stringify({ frontend_code: localSource, source_bundle: bundle(localSource), html: '<!DOCTYPE html>' + localSource, expected_source_hash: baseline.source_hash }) });
+    await savePendingDraft('<h1>Saved draft</h1>');
+    assert.equal((await publishPending(beforeDraft)).status, 409, 'a draft created after export must invalidate the old baseline');
+    const exportedDraft = await exportPending();
+    let releaseDraft, draftArrived;
+    const draftHeld = new Promise(resolve => { releaseDraft = resolve; });
+    const draftCommitStarted = new Promise(resolve => { draftArrived = resolve; });
+    intercept = async incoming => {
+      if (incoming.method === 'POST' && new URL(incoming.url, pbURL).pathname === `/api/tinykit/projects/${pendingDraft.id}/component-build`) {
+        draftArrived();
+        await draftHeld;
+      }
+      return false;
+    };
+    const staleDraftWrite = publishPending(exportedDraft);
+    try {
+      await Promise.race([draftCommitStarted, staleDraftWrite.then(response => assert.fail(`Draft publication finished before pause: ${response.status}`))]);
+      await savePendingDraft('<h1>Newer saved draft</h1>');
+    } finally { releaseDraft(); }
+    assert.equal((await staleDraftWrite).status, 409, 'a draft changed after the web preflight must be rejected at commit');
+    intercept = undefined;
+    const afterDraftRace = await owner.collection('_tk_projects').getOne(pendingDraft.id);
+    assert.equal(afterDraftRace.frontend_code, pendingDraft.frontend_code);
+    assert.equal(afterDraftRace.cli_draft.definition.frontend_code, '<h1>Newer saved draft</h1>');
+    assert.equal(afterDraftRace.published_html, '');
+    const latestDraft = await exportPending();
+    await owner.collection('_tk_projects').update(pendingDraft.id, { frontend_code: '<h1>Changed active baseline</h1>' });
+    assert.equal((await publishPending(latestDraft)).status, 409, 'active source changes must still invalidate a draft export');
+    t.diagnostic('draft exports reject new drafts, changed drafts at commit, and changed active source');
+
     const legacy = '<h1>Original Studio source</h1>', next = '<h1>First CLI publication</h1>';
     const transition = await owner.collection('_tk_projects').create({ name: 'First CLI publication race', kit: 'custom', visibility: 'private', frontend_code: legacy });
     const buildPath = `/api/projects/${transition.id}/build`;

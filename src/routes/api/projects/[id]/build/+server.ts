@@ -59,7 +59,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			return json({ error: 'Source publishing requires source and its export hash.' }, { status: 400 })
 		}
 
-		const current_hash = sourceHash(project.frontend_code, project.source_bundle)
+		const current_hash = sourceHash(project.frontend_code, project.source_bundle, project.cli_draft?.revision)
 		if (current_hash !== expected_source_hash) return json({ error: 'Server source changed; reconcile before publishing.' }, { status: 409 })
 		return json(await client.send(`/api/tinykit/projects/${params.id}/component-build`, {
 			method: 'POST', body: { html, frontend_code, expected_source_hash: current_hash, ...(bundle ? { source_bundle: bundle } : {}) }
