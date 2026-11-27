@@ -1,4 +1,6 @@
+import { generate_memory_data_module } from './memory-data.js'
 import { generate_font_links } from './fonts.js'
+import { companionAssetReferences } from './companion.js'
 import { transform_content_fields } from './content-utils'
 
 /**
@@ -94,6 +96,7 @@ function create_collection(name) {
   const update_queue = new Map()
   let last_params = null
   let mutation_cooldown = 0 // Timestamp until which we ignore external updates
+  let cache_revision = 0
   let notifying = false // Reentrancy guard to prevent infinite loops
 
   // Compare two record arrays for equality (by JSON serialization)
@@ -123,6 +126,7 @@ function create_collection(name) {
         return // Skip notification if data hasn't changed
       }
       cache = records
+      cache_revision++
       notifying = true
       try {
         for (const cb of subscribers) {
@@ -150,20 +154,42 @@ function create_collection(name) {
 
     async list(params = {}) {
       last_params = params
+      const revision = cache_revision
       const query = new URLSearchParams()
       if (params.filter) query.set('filter', params.filter)
       if (params.sort) query.set('sort', params.sort)
       if (params.page) query.set('page', String(params.page))
       if (params.perPage) query.set('perPage', String(params.perPage))
       if (params.expand) query.set('expand', params.expand)
+      if (params.all) { query.set('page', '1'); query.set('perPage', '100') }
 
-      const res = await fetch(\`\${base_url}?\${query}\`)
-      if (!res.ok) throw new Error(await res.text())
-      const data = await res.json()
-      const items = data.items || []
-      // Update cache silently - don't notify subscribers
-      // Notifications come from: subscribe() initial load, mutations, external events
+      const items = []
+      const seen = new Set()
+      let page = 1, total_pages = 1
+      do {
+        if (params.all) query.set('page', String(page))
+        const res = await fetch(base_url + '?' + query.toString())
+        if (!res.ok) throw new Error(await res.text())
+        const result = await res.json()
+        for (const item of result.items || []) {
+          const id = item?.id == null ? null : String(item.id)
+          if (params.all && id !== null && seen.has(id)) continue
+          if (id !== null) seen.add(id)
+          items.push(item)
+        }
+        if (params.all) {
+          total_pages = Math.max(1, Number(result.totalPages || 1))
+          if (!Number.isSafeInteger(total_pages)) throw new Error('Invalid pagination response.')
+        }
+        page++
+      } while (params.all && page <= total_pages)
+
+      // A complete live snapshot or a confirmed local edit is newer than a
+      // paginated request that started before it. Never replace it with a
+      // partial or older result, including a retry completing out of order.
+      if (params.all && cache_revision !== revision && cache) return cache
       cache = items
+      cache_revision++
       return items
     },
 
@@ -176,13 +202,24 @@ function create_collection(name) {
       return res.json()
     },
 
-    async create(data) {
+    async create(data, options = {}) {
+      const query = new URLSearchParams()
+      if (options.unique && !Array.isArray(options.unique)) throw new TypeError('unique must be an array of fields')
+      for (const field of options.unique || []) query.append('unique', field)
+      const suffix = query.toString()
+      const create_url = base_url + (suffix ? '?' + suffix : '')
       // Generate client-side ID if not provided (prevents race conditions with SSE)
       const record_data = data.id ? data : { ...data, id: crypto.randomUUID().slice(0, 5) }
       // Support FormData passthrough, File objects auto-detection, or plain JSON
       const { body, headers } = prepareRequestBody(record_data)
-      const res = await fetch(base_url, { method: 'POST', headers, body })
-      if (!res.ok) throw new Error(await res.text())
+      const res = await fetch(create_url, { method: 'POST', headers, body })
+      if (!res.ok) {
+        let message = await res.text()
+        try { message = JSON.parse(message).message || message } catch {}
+        const error = new Error(message)
+        error.status = res.status
+        throw error
+      }
       const record = await res.json()
       // Set cooldown to ignore echo from our own mutation
       collection._set_cooldown(500)
@@ -195,6 +232,33 @@ function create_collection(name) {
         collection._notify(cache, true)
       }
       return record
+    },
+
+    async adjust(changes) {
+      const revision = cache_revision
+      const res = await fetch(base_url + '/_adjust', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(changes)
+      })
+      if (!res.ok) {
+        let message = await res.text()
+        try { message = JSON.parse(message).message || message } catch {}
+        const error = new Error(message)
+        error.status = res.status
+        throw error
+      }
+      const records = await res.json()
+      if (cache) {
+        if (cache_revision !== revision) {
+          // Realtime may already include later votes. Refresh instead of
+          // replacing them with this earlier write response. A refresh error
+          // must not make a successfully committed vote look like a failure.
+          try { collection._notify(await collection.list(last_params || {}), true) } catch {}
+        } else {
+          const updated = new Map(records.map(record => [String(record.id), record]))
+          collection._notify(cache.map(record => updated.get(String(record.id)) || record), true)
+        }
+      }
+      return records
     },
 
     async update(id, data) {
@@ -238,25 +302,45 @@ function create_collection(name) {
     },
 
     async delete(id) {
-      // Set cooldown to ignore echo from our own mutation
-      collection._set_cooldown(500)
-      // Optimistically update local cache first
-      if (cache) {
-        cache = cache.filter(r => r.id !== id)
-        collection._notify(cache, true)
+      // Keep deletion ordered with pending edits to the same record.
+      const previous_request = update_queue.get(id)
+      let release
+      const pending = new Promise(resolve => { release = resolve })
+      update_queue.set(id, pending)
+      if (previous_request) await previous_request
+      const previous_index = cache?.findIndex(record => record.id === id) ?? -1
+      const previous = previous_index < 0 ? null : cache[previous_index]
+      try {
+        collection._set_cooldown(500)
+        if (cache) collection._notify(cache.filter(record => record.id !== id), true)
+        const res = await fetch(\`\${base_url}/\${id}\`, { method: 'DELETE' })
+        if (!res.ok) throw new Error(await res.text())
+        // A list request may have finished while deletion was pending.
+        if (cache) collection._notify(cache.filter(record => record.id !== id), true)
+        return true
+      } catch (error) {
+        // Restore only this row, preserving edits and new records elsewhere.
+        if (cache && previous && !cache.some(record => record.id === id)) {
+          const restored = [...cache]
+          restored.splice(Math.min(previous_index, restored.length), 0, previous)
+          collection._notify(restored, true)
+        }
+        throw error
+      } finally {
+        release()
+        if (update_queue.get(id) === pending) update_queue.delete(id)
       }
-      const res = await fetch(\`\${base_url}/\${id}\`, { method: 'DELETE' })
-      if (!res.ok) throw new Error(await res.text())
-      return true
     },
 
     /**
      * Subscribe to realtime updates for this collection
      * @param {function} callback - Called with array of records on each update
      * @param {object} params - Optional list params (filter, sort, etc.)
+     * @param {function} onError - Optional initial-load failure callback
      * @returns {function} Unsubscribe function
      */
-    subscribe(callback, params = {}) {
+    subscribe(callback, params = {}, onError) {
+      let active = true
       // Validate callback is a function
       if (typeof callback !== 'function') {
         console.error('[db] subscribe() requires a function callback, got:', typeof callback)
@@ -272,16 +356,21 @@ function create_collection(name) {
       if (is_standalone) {
         // Initial fetch - explicitly notify this subscriber
         collection.list(params)
-          .then(items => callback(items))
-          .catch(e => console.error('[db] initial fetch error:', e))
+          .then(items => { if (active) callback(items) })
+          .catch(error => {
+            if (!active) return
+            if (typeof onError === 'function') onError(error)
+            else console.error('[db] initial fetch error:', error)
+          })
       } else if (cache !== null) {
         // In iframe with cached data - notify immediately
-        setTimeout(() => callback(cache), 0)
+        setTimeout(() => { if (active) callback(cache) }, 0)
       }
       // If in iframe with no cache yet, DATA_UPDATED will trigger _notify
 
       // Return unsubscribe function
       return () => {
+        active = false
         const idx = subscribers.indexOf(callback)
         if (idx > -1) subscribers.splice(idx, 1)
       }
@@ -372,7 +461,7 @@ export default db
  * @param {string} project_id
  * @returns {string}
  */
-const generate_tinykit_module = (project_id) => {
+const generate_tinykit_module = (project_id, preview_capability = '') => {
   return `
 const PROJECT_ID = '${project_id}'
 
@@ -392,7 +481,7 @@ export function asset(filename, options) {
   }
   // Use path-based project_id so query params stay clean for thumb/download
   let url = PROJECT_ID ? '/_tk/assets/' + PROJECT_ID + '/' + filename : '/_tk/assets/' + filename
-  const params = []
+  const params = ${JSON.stringify(preview_capability ? ['_preview=' + preview_capability] : [])}
   if (options?.thumb) params.push('thumb=' + options.thumb)
   if (options?.download) params.push('download=1')
   if (params.length) url += '?' + params.join('&')
@@ -446,7 +535,7 @@ proxy.url = function(url) {
 /**
  * @param {string} head
  * @param {string | object} broadcast_id_or_options - broadcast_id string or options object
- * @param {{content?: any[], design?: any[], project_id?: string, data_collections?: string[]}} [options]
+ * @param {{content?: any[], design?: any[], project_id?: string, data_collections?: string[], local_data?: boolean, preview_capability?: string}} [options]
  */
 export const dynamic_iframe_srcdoc = (head, broadcast_id_or_options, options = {}) => {
   // Support both calling conventions: (head, options) and (head, broadcast_id, options)
@@ -456,7 +545,7 @@ export const dynamic_iframe_srcdoc = (head, broadcast_id_or_options, options = {
   } else {
     broadcast_id = broadcast_id_or_options || '';
   }
-  const { content = [], design = [], project_id = '', data_collections = [] } = options;
+  const { content = [], design = [], project_id = '', data_collections = [], local_data = false, preview_capability = '' } = options;
 
   // Generate Bunny Fonts CDN links for any web fonts in design fields
   const font_links = generate_font_links(design);
@@ -465,7 +554,7 @@ export const dynamic_iframe_srcdoc = (head, broadcast_id_or_options, options = {
   const design_css = generate_design_css(design);
 
   // Transform content fields into key-value object (images → URLs, markdown → HTML)
-  const content_obj = transform_content_fields(content, project_id);
+  const content_obj = companionAssetReferences(transform_content_fields(content, project_id), project_id, preview_capability);
 
   // Transform design fields into key-value object
   /** @type {Record<string, string>} */
@@ -481,8 +570,8 @@ window.__tk_content = ${JSON.stringify(content_obj)};
 export default window.__tk_content;
 `.trim();
   const design_module = `export default ${JSON.stringify(design_obj)}`;
-  const data_module = generate_data_module(project_id, data_collections);
-  const tk_module = generate_tinykit_module(project_id);
+  const data_module = local_data ? generate_memory_data_module(data_collections) : generate_data_module(project_id, data_collections);
+  const tk_module = generate_tinykit_module(project_id, preview_capability);
   const content_url = `data:text/javascript,${encodeURIComponent(content_module)}`;
   const design_url = `data:text/javascript,${encodeURIComponent(design_module)}`;
   const data_url = `data:text/javascript,${encodeURIComponent(data_module)}`;
@@ -599,6 +688,12 @@ export default window.__tk_content;
 
           if (payload.componentApp) {
             await init(payload.componentApp)
+            // Importing $content can initialize it from an older iframe shell.
+            // Apply this source revision's content after imports, before mounting.
+            if (payload.content && window.__tk_content) {
+              for (const key in window.__tk_content) delete window.__tk_content[key]
+              Object.assign(window.__tk_content, payload.content)
+            }
             // Pre-populate data collections before mounting
             if (payload.data && typeof window.__tk_update_data === 'function') {
               window.__tk_update_data(payload.data)

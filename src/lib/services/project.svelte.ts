@@ -82,10 +82,15 @@ export const project_service = {
 		content?: ContentField[]
 		data?: Record<string, any>
 		initial_prompt?: string
+		icon?: string
+		template_id?: string
+		visibility?: 'public' | 'private'
 	}): Promise<Project> {
 		const project_data: Partial<Project> = {
 			...DEFAULT_PROJECT,
 			name: params.name,
+			owner: pb.authStore?.record?.id,
+			visibility: params.template_id === 'personal-crm' || params.visibility === 'private' ? 'private' : 'public',
 			domain: params.domain?.toLowerCase() || '',
 			kit: params.kit || 'custom',
 			frontend_code: params.frontend_code || '',
@@ -94,7 +99,9 @@ export const project_service = {
 			data: params.data || {},
 			settings: {
 				...DEFAULT_PROJECT.settings,
-				project_title: params.name
+				project_title: params.name,
+				...(params.icon ? { icon: params.icon } : {}),
+				...(params.template_id ? { template_id: params.template_id } : {})
 			}
 		}
 
@@ -102,7 +109,12 @@ export const project_service = {
 		// The server adds user messages when send_prompt is called
 		// The initial_prompt is passed to the project create endpoint to trigger the first message
 
-		return await pb.collection(COLLECTION).create<Project>(project_data)
+		const created = await pb.collection(COLLECTION).create<Project>(project_data)
+		if (project_data.visibility === 'private' && (created.visibility !== 'private' || !created.owner)) {
+			await pb.collection(COLLECTION).delete(created.id)
+			throw new Error('Upgrade this Tinykit server with private-app access before creating a private app.')
+		}
+		return created
 	},
 
 	/**
@@ -112,6 +124,8 @@ export const project_service = {
 		const projects = await Promise.all(
 			templates.map(t => this.create({
 				name: t.name,
+				icon: t.preview,
+				template_id: t.id,
 				kit: kit_id,
 				frontend_code: t.frontend_code || '',
 				design: t.design || [],

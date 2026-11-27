@@ -8,6 +8,7 @@ registerProcessors({
 })
 
 export { processCode, processCSS } from './utils'
+export { reset_workers as reset_compiler_workers } from './processors.js'
 export { dynamic_iframe_srcdoc, static_iframe_srcdoc, generate_design_css } from './iframe.js'
 export { extract_web_fonts } from './fonts.js'
 export { transform_content_fields } from './content-utils'

@@ -1,218 +1,218 @@
 {
-	"id": "notes",
-	"name": "Notes",
-	"description": "Note-taking app with rich text editing and search",
-	"preview": "lucide:file-text",
-	"tags": [
-		"productivity",
-		"intermediate",
-		"data"
-	],
-	"kits": [
-		"business",
-		"daily",
-		"developer"
-	],
-	"frontend_code": "<script>\n\timport Icon from \"@iconify/svelte\";\n\timport content from \"$content\";\n\timport data from \"$data\";\n\timport { Editor } from \"@tiptap/core\";\n\timport StarterKit from \"@tiptap/starter-kit\";\n\timport Underline from \"@tiptap/extension-underline\";\n\timport Link from \"@tiptap/extension-link\";\n\n\tlet notes = $state([]);\n\tlet selected_id = $state(null);\n\tlet search = $state(\"\");\n\tlet loading = $state(true);\n\tlet editor_el = $state(null);\n\tlet editor_instance = null;\n\tlet editorState = $state({ editor: null });\n\tlet save_timeout = null;\n\tlet last_note_id = null;\n\tlet is_updating = false;\n\n\t// Mobile state\n\tlet show_sidebar = $state(true);\n\tlet is_mobile = $state(false);\n\n\tdata.notes.subscribe((items) => {\n\t\tnotes = items;\n\t\tif (!items.find((n) => n.id === selected_id)) {\n\t\t\tselected_id = items[0]?.id ?? null;\n\t\t}\n\t\tloading = false;\n\t});\n\n\t// Check if mobile\n\t$effect(() => {\n\t\tif (typeof window === \"undefined\") return;\n\t\tconst check = () => {\n\t\t\tis_mobile = window.innerWidth < 768;\n\t\t\tif (!is_mobile) show_sidebar = true;\n\t\t};\n\t\tcheck();\n\t\twindow.addEventListener(\"resize\", check);\n\t\treturn () => window.removeEventListener(\"resize\", check);\n\t});\n\n\t// Initialize Tiptap when element is ready\n\t$effect(() => {\n\t\tif (!editor_el || !selected_note) return;\n\t\tif (typeof window === \"undefined\") return;\n\n\t\tif (!editor_instance) {\n\t\t\teditor_instance = new Editor({\n\t\t\t\telement: editor_el,\n\t\t\t\textensions: [\n\t\t\t\t\tStarterKit,\n\t\t\t\t\tUnderline,\n\t\t\t\t\tLink.configure({\n\t\t\t\t\t\topenOnClick: false,\n\t\t\t\t\t}),\n\t\t\t\t],\n\t\t\t\tcontent: selected_note.content || \"\",\n\t\t\t\tonUpdate: ({ editor: e }) => {\n\t\t\t\t\tif (!is_updating) debounced_save(e.getHTML());\n\t\t\t\t},\n\t\t\t\tonTransaction: ({ editor }) => {\n\t\t\t\t\teditorState = { editor };\n\t\t\t\t},\n\t\t\t});\n\t\t\teditorState = { editor: editor_instance };\n\t\t\tlast_note_id = selected_note.id;\n\t\t}\n\n\t\tif (last_note_id !== selected_note.id) {\n\t\t\tis_updating = true;\n\t\t\teditor_instance.commands.setContent(selected_note.content || \"\");\n\t\t\tlast_note_id = selected_note.id;\n\t\t\tsetTimeout(() => (is_updating = false), 0);\n\t\t}\n\t});\n\n\tlet selected_note = $derived.by(() =>\n\t\tnotes.find((n) => n.id === selected_id),\n\t);\n\n\tlet filtered_notes = $derived.by(() => {\n\t\tconst filtered = notes.filter(\n\t\t\t(n) =>\n\t\t\t\tn.title.toLowerCase().includes(search.toLowerCase()) ||\n\t\t\t\t(n.content || \"\").toLowerCase().includes(search.toLowerCase()),\n\t\t);\n\n\t\t// Sort: pinned first, then by updated date\n\t\treturn filtered.sort((a, b) => {\n\t\t\tif (a.pinned && !b.pinned) return -1;\n\t\t\tif (!a.pinned && b.pinned) return 1;\n\t\t\treturn new Date(b.updated) - new Date(a.updated);\n\t\t});\n\t});\n\n\tasync function create_note() {\n\t\tconst new_note = await data.notes.create({\n\t\t\ttitle: \"Untitled\",\n\t\t\tcontent: \"\",\n\t\t\tpinned: false,\n\t\t\tupdated: new Date().toISOString(),\n\t\t});\n\t\tselected_id = new_note.id;\n\t\tif (is_mobile) show_sidebar = false;\n\t}\n\n\tasync function update_note(field, value) {\n\t\tif (!selected_id) return;\n\t\tawait data.notes.update(selected_id, {\n\t\t\t[field]: value,\n\t\t\tupdated: new Date().toISOString(),\n\t\t});\n\t}\n\n\tasync function toggle_pin(id, e) {\n\t\te.stopPropagation();\n\t\tconst note = notes.find((n) => n.id === id);\n\t\tif (note) {\n\t\t\tawait data.notes.update(id, { pinned: !note.pinned });\n\t\t}\n\t}\n\n\tfunction debounced_save(html) {\n\t\tif (save_timeout) clearTimeout(save_timeout);\n\t\tsave_timeout = setTimeout(() => {\n\t\t\tif (selected_id) update_note(\"content\", html);\n\t\t}, 500);\n\t}\n\n\tasync function delete_note(id) {\n\t\tawait data.notes.delete(id);\n\t\tif (is_mobile) show_sidebar = true;\n\t}\n\n\tfunction select_note(id) {\n\t\tselected_id = id;\n\t\tif (is_mobile) show_sidebar = false;\n\t}\n\n\tfunction go_back() {\n\t\tshow_sidebar = true;\n\t}\n\n\tfunction format_date(ts) {\n\t\tif (!ts) return \"\";\n\t\treturn new Date(ts).toLocaleDateString();\n\t}\n\n\tfunction set_link() {\n\t\tconst url = window.prompt(\"Enter URL\");\n\t\tif (url) {\n\t\t\teditorState.editor.chain().focus().setLink({ href: url }).run();\n\t\t}\n\t}\n</script>\n\n<div class=\"app\">\n\t<div class=\"sidebar\" class:hide={is_mobile && !show_sidebar}>\n\t\t<div class=\"sidebar-header\">\n\t\t\t<input\n\t\t\t\ttype=\"text\"\n\t\t\t\tbind:value={search}\n\t\t\t\tplaceholder={content.search_placeholder} />\n\t\t\t<button onclick={create_note}\n\t\t\t\t><Icon icon=\"lucide:plus\" width={18} /></button>\n\t\t</div>\n\n\t\t<div class=\"notes-list\">\n\t\t\t{#if loading}\n\t\t\t\t<p class=\"empty\">{content.loading_message}</p>\n\t\t\t{:else if filtered_notes.length === 0}\n\t\t\t\t<p class=\"empty\">{content.empty_sidebar}</p>\n\t\t\t{:else}\n\t\t\t\t{#each filtered_notes as note (note.id)}\n\t\t\t\t\t<div\n\t\t\t\t\t\tclass=\"note-item\"\n\t\t\t\t\t\tclass:selected={note.id === selected_id}\n\t\t\t\t\t\tclass:pinned={note.pinned}\n\t\t\t\t\t\tonclick={() => select_note(note.id)}\n\t\t\t\t\t\tonkeydown={(e) => e.key === \"Enter\" && select_note(note.id)}\n\t\t\t\t\t\trole=\"button\"\n\t\t\t\t\t\ttabindex=\"0\">\n\t\t\t\t\t\t<div class=\"note-content\">\n\t\t\t\t\t\t\t<span class=\"note-title\">{note.title || \"Untitled\"}</span>\n\t\t\t\t\t\t\t<span class=\"note-date\">{format_date(note.updated)}</span>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t\t<button\n\t\t\t\t\t\t\tclass=\"pin-btn\"\n\t\t\t\t\t\t\tclass:active={note.pinned}\n\t\t\t\t\t\t\tonclick={(e) => toggle_pin(note.id, e)}\n\t\t\t\t\t\t\ttitle={note.pinned ? \"Unpin note\" : \"Pin note\"}>\n\t\t\t\t\t\t\t<Icon\n\t\t\t\t\t\t\t\ticon={note.pinned ? \"lucide:pin-off\" : \"lucide:pin\"}\n\t\t\t\t\t\t\t\twidth={14} />\n\t\t\t\t\t\t</button>\n\t\t\t\t\t</div>\n\t\t\t\t{/each}\n\t\t\t{/if}\n\t\t</div>\n\t\t<footer class=\"footer\">\n\t\t\tbuilt with <a href=\"https://tinykit.studio\" target=\"_blank\"\n\t\t\t\t>tinykit.studio</a>\n\t\t</footer>\n\t</div>\n\n\t<div class=\"editor\">\n\t\t{#if selected_note}\n\t\t\t<div class=\"editor-header\">\n\t\t\t\t{#if is_mobile}\n\t\t\t\t\t<button class=\"back-btn\" onclick={go_back}\n\t\t\t\t\t\t><Icon icon=\"lucide:chevron-left\" width={20} /></button>\n\t\t\t\t{/if}\n\t\t\t\t<input\n\t\t\t\t\ttype=\"text\"\n\t\t\t\t\tclass=\"title-input\"\n\t\t\t\t\tvalue={selected_note.title}\n\t\t\t\t\toninput={(e) => update_note(\"title\", e.target.value)}\n\t\t\t\t\tplaceholder={content.title_placeholder} />\n\t\t\t\t<button\n\t\t\t\t\tclass=\"pin-btn-header\"\n\t\t\t\t\tclass:active={selected_note.pinned}\n\t\t\t\t\tonclick={(e) => toggle_pin(selected_note.id, e)}\n\t\t\t\t\ttitle={selected_note.pinned ? \"Unpin note\" : \"Pin note\"}>\n\t\t\t\t\t<Icon\n\t\t\t\t\t\ticon={selected_note.pinned ? \"lucide:pin-off\" : \"lucide:pin\"}\n\t\t\t\t\t\twidth={18} />\n\t\t\t\t</button>\n\t\t\t\t<button\n\t\t\t\t\tclass=\"delete-btn\"\n\t\t\t\t\tonclick={() => delete_note(selected_note.id)}\n\t\t\t\t\ttitle=\"Delete note\"><Icon icon=\"lucide:trash-2\" width={18} /></button>\n\t\t\t</div>\n\n\t\t\t<div class=\"editor-container\">\n\t\t\t\t{#if editorState.editor}\n\t\t\t\t\t<div class=\"toolbar\">\n\t\t\t\t\t\t<div class=\"toolbar-group\">\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"bold\")}\n\t\t\t\t\t\t\t\tonclick={() =>\n\t\t\t\t\t\t\t\t\teditorState.editor.chain().focus().toggleBold().run()}\n\t\t\t\t\t\t\t\ttitle=\"Bold\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:bold\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"italic\")}\n\t\t\t\t\t\t\t\tonclick={() =>\n\t\t\t\t\t\t\t\t\teditorState.editor.chain().focus().toggleItalic().run()}\n\t\t\t\t\t\t\t\ttitle=\"Italic\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:italic\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"underline\")}\n\t\t\t\t\t\t\t\tonclick={() =>\n\t\t\t\t\t\t\t\t\teditorState.editor.chain().focus().toggleUnderline().run()}\n\t\t\t\t\t\t\t\ttitle=\"Underline\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:underline\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"strike\")}\n\t\t\t\t\t\t\t\tonclick={() =>\n\t\t\t\t\t\t\t\t\teditorState.editor.chain().focus().toggleStrike().run()}\n\t\t\t\t\t\t\t\ttitle=\"Strikethrough\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:strikethrough\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t</div>\n\n\t\t\t\t\t\t<div class=\"toolbar-divider\"></div>\n\n\t\t\t\t\t\t<div class=\"toolbar-group\">\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"heading\", {\n\t\t\t\t\t\t\t\t\tlevel: 1,\n\t\t\t\t\t\t\t\t})}\n\t\t\t\t\t\t\t\tonclick={() =>\n\t\t\t\t\t\t\t\t\teditorState.editor\n\t\t\t\t\t\t\t\t\t\t.chain()\n\t\t\t\t\t\t\t\t\t\t.focus()\n\t\t\t\t\t\t\t\t\t\t.toggleHeading({ level: 1 })\n\t\t\t\t\t\t\t\t\t\t.run()}\n\t\t\t\t\t\t\t\ttitle=\"Heading 1\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:heading-1\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"heading\", {\n\t\t\t\t\t\t\t\t\tlevel: 2,\n\t\t\t\t\t\t\t\t})}\n\t\t\t\t\t\t\t\tonclick={() =>\n\t\t\t\t\t\t\t\t\teditorState.editor\n\t\t\t\t\t\t\t\t\t\t.chain()\n\t\t\t\t\t\t\t\t\t\t.focus()\n\t\t\t\t\t\t\t\t\t\t.toggleHeading({ level: 2 })\n\t\t\t\t\t\t\t\t\t\t.run()}\n\t\t\t\t\t\t\t\ttitle=\"Heading 2\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:heading-2\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t</div>\n\n\t\t\t\t\t\t<div class=\"toolbar-divider\"></div>\n\n\t\t\t\t\t\t<div class=\"toolbar-group\">\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"bulletList\")}\n\t\t\t\t\t\t\t\tonclick={() =>\n\t\t\t\t\t\t\t\t\teditorState.editor.chain().focus().toggleBulletList().run()}\n\t\t\t\t\t\t\t\ttitle=\"Bullet List\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:list\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"orderedList\")}\n\t\t\t\t\t\t\t\tonclick={() =>\n\t\t\t\t\t\t\t\t\teditorState.editor.chain().focus().toggleOrderedList().run()}\n\t\t\t\t\t\t\t\ttitle=\"Numbered List\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:list-ordered\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t</div>\n\n\t\t\t\t\t\t<div class=\"toolbar-divider\"></div>\n\n\t\t\t\t\t\t<div class=\"toolbar-group\">\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"blockquote\")}\n\t\t\t\t\t\t\t\tonclick={() =>\n\t\t\t\t\t\t\t\t\teditorState.editor.chain().focus().toggleBlockquote().run()}\n\t\t\t\t\t\t\t\ttitle=\"Quote\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:quote\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"codeBlock\")}\n\t\t\t\t\t\t\t\tonclick={() =>\n\t\t\t\t\t\t\t\t\teditorState.editor.chain().focus().toggleCodeBlock().run()}\n\t\t\t\t\t\t\t\ttitle=\"Code Block\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:code\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"link\")}\n\t\t\t\t\t\t\t\tonclick={set_link}\n\t\t\t\t\t\t\t\ttitle=\"Link\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:link\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t</div>\n\n\t\t\t\t\t\t<div class=\"toolbar-divider\"></div>\n\n\t\t\t\t\t\t<div class=\"toolbar-group\">\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tonclick={() => editorState.editor.chain().focus().undo().run()}\n\t\t\t\t\t\t\t\tdisabled={!editorState.editor.can().undo()}\n\t\t\t\t\t\t\t\ttitle=\"Undo\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:undo\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tonclick={() => editorState.editor.chain().focus().redo().run()}\n\t\t\t\t\t\t\t\tdisabled={!editorState.editor.can().redo()}\n\t\t\t\t\t\t\t\ttitle=\"Redo\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:redo\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t{/if}\n\t\t\t\t<div bind:this={editor_el} class=\"tiptap-wrapper\"></div>\n\t\t\t</div>\n\t\t{:else}\n\t\t\t<div class=\"empty-state\">\n\t\t\t\t{#if is_mobile}\n\t\t\t\t\t<button class=\"back-btn-large\" onclick={go_back}\n\t\t\t\t\t\t><Icon icon=\"lucide:chevron-left\" width={20} /><span>Notes</span\n\t\t\t\t\t\t></button>\n\t\t\t\t{/if}\n\t\t\t\t<p>{content.empty_editor}</p>\n\t\t\t</div>\n\t\t{/if}\n\t</div>\n</div>\n\n<style>\n\t.app {\n\t\tdisplay: flex;\n\t\theight: 100vh;\n\t\theight: 100dvh;\n\t\tbackground: var(--page-background);\n\t\tfont-family: var(--body-font);\n\t\toverflow: hidden;\n\t}\n\n\t.sidebar {\n\t\twidth: 280px;\n\t\tbackground: var(--sidebar-background);\n\t\tborder-right: 1px solid var(--border-color);\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tflex-shrink: 0;\n\t}\n\t.sidebar-header {\n\t\tdisplay: flex;\n\t\tgap: 8px;\n\t\tpadding: 16px;\n\t\tborder-bottom: 1px solid var(--border-color);\n\t}\n\t.sidebar-header input {\n\t\tflex: 1;\n\t\tpadding: 8px 12px;\n\t\tborder: 1px solid var(--border-color);\n\t\tborder-radius: 6px;\n\t\tbackground: var(--input-background);\n\t\tcolor: var(--body-text-color);\n\t\tfont-size: 16px;\n\t}\n\t.sidebar-header input:focus {\n\t\toutline: none;\n\t\tborder-color: var(--accent-color);\n\t}\n\t.sidebar-header input::placeholder {\n\t\tcolor: var(--placeholder-color);\n\t}\n\t.sidebar-header button {\n\t\twidth: 36px;\n\t\theight: 36px;\n\t\tborder: none;\n\t\tborder-radius: 6px;\n\t\tbackground: var(--accent-color);\n\t\tcolor: white;\n\t\tcursor: pointer;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t}\n\n\t.notes-list {\n\t\tflex: 1;\n\t\toverflow-y: auto;\n\t\t-webkit-overflow-scrolling: touch;\n\t}\n\t.note-item {\n\t\twidth: 100%;\n\t\tpadding: 14px 16px;\n\t\tborder: none;\n\t\tborder-bottom: 1px solid var(--border-color);\n\t\tbackground: transparent;\n\t\ttext-align: left;\n\t\tcursor: pointer;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 8px;\n\t\tuser-select: none;\n\t}\n\t.note-item:hover {\n\t\tbackground: var(--hover-background);\n\t}\n\t.note-item.selected {\n\t\tbackground: var(--hover-background);\n\t\tborder-left: 3px solid var(--accent-color);\n\t\tpadding-left: 13px;\n\t}\n\t.note-item.pinned {\n\t\tbackground: var(--pinned-background);\n\t}\n\t.note-item.pinned.selected {\n\t\tbackground: var(--hover-background);\n\t}\n\t.note-content {\n\t\tflex: 1;\n\t\tmin-width: 0;\n\t}\n\t.note-title {\n\t\tdisplay: block;\n\t\tcolor: var(--body-text-color);\n\t\tfont-weight: 500;\n\t\tfont-size: 15px;\n\t\tmargin-bottom: 4px;\n\t\twhite-space: nowrap;\n\t\toverflow: hidden;\n\t\ttext-overflow: ellipsis;\n\t}\n\t.note-date {\n\t\tcolor: var(--muted-color);\n\t\tfont-size: 13px;\n\t}\n\n\t.pin-btn {\n\t\twidth: 28px;\n\t\theight: 28px;\n\t\tborder: none;\n\t\tborder-radius: 6px;\n\t\tbackground: transparent;\n\t\tcolor: var(--muted-color);\n\t\tcursor: pointer;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\topacity: 0;\n\t\ttransition:\n\t\t\topacity 0.15s ease,\n\t\t\tcolor 0.15s ease,\n\t\t\tbackground 0.15s ease;\n\t\tflex-shrink: 0;\n\t}\n\t.note-item:hover .pin-btn,\n\t.pin-btn.active {\n\t\topacity: 1;\n\t}\n\t.pin-btn:hover {\n\t\tbackground: var(--hover-background);\n\t\tcolor: var(--body-text-color);\n\t}\n\t.pin-btn.active {\n\t\tcolor: var(--accent-color);\n\t}\n\n\t.pin-btn-header {\n\t\twidth: 36px;\n\t\theight: 36px;\n\t\tborder: none;\n\t\tborder-radius: 6px;\n\t\tbackground: transparent;\n\t\tcolor: var(--muted-color);\n\t\tcursor: pointer;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\ttransition:\n\t\t\tcolor 0.15s ease,\n\t\t\tbackground 0.15s ease;\n\t}\n\t.pin-btn-header:hover {\n\t\tbackground: var(--hover-background);\n\t\tcolor: var(--body-text-color);\n\t}\n\t.pin-btn-header.active {\n\t\tcolor: var(--accent-color);\n\t}\n\n\t.editor {\n\t\tflex: 1;\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tbackground: var(--editor-background);\n\t\tmin-width: 0;\n\t}\n\t.editor-header {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 8px;\n\t\tpadding: 12px 16px;\n\t\tborder-bottom: 1px solid var(--border-color);\n\t}\n\t.back-btn {\n\t\twidth: 36px;\n\t\theight: 36px;\n\t\tborder: none;\n\t\tborder-radius: 6px;\n\t\tbackground: transparent;\n\t\tcolor: var(--accent-color);\n\t\tcursor: pointer;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tmargin-left: -8px;\n\t}\n\t.back-btn-large {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 4px;\n\t\tpadding: 8px 12px;\n\t\tborder: none;\n\t\tbackground: transparent;\n\t\tcolor: var(--accent-color);\n\t\tfont-size: 16px;\n\t\tcursor: pointer;\n\t\tmargin-bottom: 16px;\n\t}\n\t.title-input {\n\t\tflex: 1;\n\t\tfont-size: 18px;\n\t\tfont-weight: 600;\n\t\tpadding: 8px 0;\n\t\tborder: none;\n\t\tbackground: transparent;\n\t\tcolor: var(--body-text-color);\n\t\tmin-width: 0;\n\t}\n\t.title-input:focus {\n\t\toutline: none;\n\t}\n\t.title-input::placeholder {\n\t\tcolor: var(--placeholder-color);\n\t}\n\t.delete-btn {\n\t\twidth: 36px;\n\t\theight: 36px;\n\t\tborder: none;\n\t\tborder-radius: 6px;\n\t\tbackground: transparent;\n\t\tcolor: var(--muted-color);\n\t\tcursor: pointer;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t}\n\t.delete-btn:hover {\n\t\tbackground: #fef2f2;\n\t\tcolor: #dc2626;\n\t}\n\n\t.editor-container {\n\t\tflex: 1;\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\toverflow: hidden;\n\t}\n\n\t/* Toolbar - shadcn-like styling */\n\t.toolbar {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 4px;\n\t\tborder-bottom: 1px solid var(--border-color);\n\t\tbackground: var(--toolbar-background);\n\t\tflex-wrap: wrap;\n\t}\n\n\t.toolbar-group {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 1px;\n\t}\n\n\t.toolbar-btn {\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\twidth: 32px;\n\t\theight: 32px;\n\t\tpadding: 0;\n\t\tborder: none;\n\t\tbackground: transparent;\n\t\tcolor: var(--muted-color);\n\t\tcursor: pointer;\n\t\ttransition: all 0.15s ease;\n\t}\n\n\t.toolbar-btn:hover:not(:disabled) {\n\t\tbackground: var(--hover-background);\n\t\tcolor: var(--body-text-color);\n\t}\n\n\t.toolbar-btn.active {\n\t\tbackground: var(--hover-background);\n\t\tcolor: var(--accent-color);\n\t}\n\n\t.toolbar-btn:disabled {\n\t\topacity: 0.4;\n\t\tcursor: not-allowed;\n\t}\n\n\t.toolbar-divider {\n\t\twidth: 1px;\n\t\theight: 20px;\n\t\tbackground: var(--border-color);\n\t\tmargin: 0 6px;\n\t}\n\n\t/* Tiptap editor styling */\n\t.tiptap-wrapper {\n\t\tflex: 1;\n\t\toverflow-y: auto;\n\t\t-webkit-overflow-scrolling: touch;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap) {\n\t\tpadding: 16px;\n\t\tmin-height: 100%;\n\t\tfont-size: 16px;\n\t\tline-height: 1.7;\n\t\tcolor: var(--body-text-color);\n\t\toutline: none;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap p) {\n\t\tmargin: 0 0 0.75em;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap h1) {\n\t\tfont-size: 1.75em;\n\t\tfont-weight: 700;\n\t\tmargin: 1em 0 0.5em;\n\t\tline-height: 1.3;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap h2) {\n\t\tfont-size: 1.4em;\n\t\tfont-weight: 600;\n\t\tmargin: 1em 0 0.5em;\n\t\tline-height: 1.3;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap h3) {\n\t\tfont-size: 1.2em;\n\t\tfont-weight: 600;\n\t\tmargin: 1em 0 0.5em;\n\t\tline-height: 1.3;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap ul),\n\t.tiptap-wrapper :global(.tiptap ol) {\n\t\tpadding-left: 1.5em;\n\t\tmargin: 0.5em 0;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap li) {\n\t\tmargin: 0.25em 0;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap blockquote) {\n\t\tborder-left: 3px solid var(--accent-color);\n\t\tpadding-left: 1em;\n\t\tmargin: 1em 0;\n\t\tcolor: var(--muted-color);\n\t\tfont-style: italic;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap pre) {\n\t\tbackground: var(--code-background);\n\t\tpadding: 12px 16px;\n\t\tborder-radius: 8px;\n\t\toverflow-x: auto;\n\t\tfont-family: ui-monospace, \"SF Mono\", Menlo, Monaco, monospace;\n\t\tfont-size: 14px;\n\t\tmargin: 1em 0;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap code) {\n\t\tbackground: var(--code-background);\n\t\tpadding: 2px 6px;\n\t\tborder-radius: 4px;\n\t\tfont-family: ui-monospace, \"SF Mono\", Menlo, Monaco, monospace;\n\t\tfont-size: 0.9em;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap pre code) {\n\t\tbackground: none;\n\t\tpadding: 0;\n\t\tborder-radius: 0;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap a) {\n\t\tcolor: var(--accent-color);\n\t\ttext-decoration: underline;\n\t\ttext-underline-offset: 2px;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap a:hover) {\n\t\ttext-decoration-thickness: 2px;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap hr) {\n\t\tborder: none;\n\t\tborder-top: 1px solid var(--border-color);\n\t\tmargin: 1.5em 0;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap p.is-editor-empty:first-child::before) {\n\t\tcontent: attr(data-placeholder);\n\t\tcolor: var(--placeholder-color);\n\t\tpointer-events: none;\n\t\tfloat: left;\n\t\theight: 0;\n\t}\n\n\t.empty-state,\n\t.empty {\n\t\tflex: 1;\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tcolor: var(--muted-color);\n\t\tpadding: 1rem;\n\t}\n\t.footer {\n\t\tpadding: 12px 16px;\n\t\tfont-size: 12px;\n\t\tcolor: var(--muted-color);\n\t\ttext-align: center;\n\t\tborder-top: 1px solid var(--border-color);\n\t}\n\t.footer a {\n\t\tcolor: inherit;\n\t\ttext-decoration: none;\n\t}\n\n\t@media (max-width: 767px) {\n\t\t.sidebar {\n\t\t\tposition: absolute;\n\t\t\tinset: 0;\n\t\t\twidth: 100%;\n\t\t\tz-index: 50;\n\t\t\ttransform: translateX(0);\n\t\t\ttransition: transform 0.25s ease-out;\n\t\t}\n\t\t.sidebar.hide {\n\t\t\ttransform: translateX(-100%);\n\t\t\tpointer-events: none;\n\t\t}\n\t\t.editor {\n\t\t\tposition: absolute;\n\t\t\tinset: 0;\n\t\t\twidth: 100%;\n\t\t}\n\t\t.editor-header {\n\t\t\tpadding-top: max(12px, env(safe-area-inset-top));\n\t\t}\n\t\t.sidebar-header {\n\t\t\tpadding-top: max(16px, env(safe-area-inset-top));\n\t\t}\n\t\t.toolbar {\n\t\t\tpadding: 6px 8px;\n\t\t\tgap: 2px;\n\t\t}\n\t\t.toolbar-btn {\n\t\t\twidth: 28px;\n\t\t\theight: 28px;\n\t\t}\n\t\t.toolbar-divider {\n\t\t\tmargin: 0 4px;\n\t\t\theight: 16px;\n\t\t}\n\t\t.pin-btn {\n\t\t\topacity: 1;\n\t\t}\n\t}\n\n\t@media (min-width: 1024px) {\n\t\t.sidebar {\n\t\t\twidth: 320px;\n\t\t}\n\t\t.tiptap-wrapper :global(.tiptap) {\n\t\t\tpadding: 24px 32px;\n\t\t}\n\t}\n\n\t/* Uncomment below to enable automatic dark mode */\n\t/*\n\t@media (prefers-color-scheme: dark) {\n\t\t.app {\n\t\t\t--page-background: #0a0a0a;\n\t\t\t--sidebar-background: #111111;\n\t\t\t--editor-background: #0a0a0a;\n\t\t\t--input-background: #1a1a1a;\n\t\t\t--toolbar-background: #111111;\n\t\t\t--border-color: #2a2a2a;\n\t\t\t--body-text-color: #e5e5e5;\n\t\t\t--muted-color: #888888;\n\t\t\t--placeholder-color: #555555;\n\t\t\t--hover-background: #1a1a1a;\n\t\t\t--accent-color: #3b82f6;\n\t\t\t--code-background: #1a1a1a;\n\t\t\t--pinned-background: rgba(59, 130, 246, 0.1);\n\t\t}\n\n\t\t.delete-btn:hover {\n\t\t\tbackground: #2d1f1f;\n\t\t\tcolor: #f87171;\n\t\t}\n\t}\n\t*/\n</style>",
-	"design": [
-		{
-			"id": "body-font",
-			"name": "Body Font",
-			"css_var": "--body-font",
-			"value": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-			"type": "font",
-			"description": "Main font"
-		},
-		{
-			"id": "page-background",
-			"name": "Page Background",
-			"css_var": "--page-background",
-			"value": "#f8f9fa",
-			"type": "color",
-			"description": "Page background"
-		},
-		{
-			"id": "sidebar-background",
-			"name": "Sidebar Background",
-			"css_var": "--sidebar-background",
-			"value": "#ffffff",
-			"type": "color",
-			"description": "Sidebar background"
-		},
-		{
-			"id": "editor-background",
-			"name": "Editor Background",
-			"css_var": "--editor-background",
-			"value": "#ffffff",
-			"type": "color",
-			"description": "Editor background"
-		},
-		{
-			"id": "toolbar-background",
-			"name": "Toolbar Background",
-			"css_var": "--toolbar-background",
-			"value": "#fafbfc",
-			"type": "color",
-			"description": "Toolbar background"
-		},
-		{
-			"id": "border-color",
-			"name": "Border Color",
-			"css_var": "--border-color",
-			"value": "#e5e7eb",
-			"type": "color",
-			"description": "Borders"
-		},
-		{
-			"id": "body-text-color",
-			"name": "Text Color",
-			"css_var": "--body-text-color",
-			"value": "#1f2937",
-			"type": "color",
-			"description": "Body text"
-		},
-		{
-			"id": "muted-color",
-			"name": "Muted Color",
-			"css_var": "--muted-color",
-			"value": "#6b7280",
-			"type": "color",
-			"description": "Secondary text"
-		},
-		{
-			"id": "placeholder-color",
-			"name": "Placeholder Color",
-			"css_var": "--placeholder-color",
-			"value": "#9ca3af",
-			"type": "color",
-			"description": "Placeholders"
-		},
-		{
-			"id": "input-background",
-			"name": "Input Background",
-			"css_var": "--input-background",
-			"value": "#ffffff",
-			"type": "color",
-			"description": "Input fields"
-		},
-		{
-			"id": "hover-background",
-			"name": "Hover Background",
-			"css_var": "--hover-background",
-			"value": "#f3f4f6",
-			"type": "color",
-			"description": "Hover states"
-		},
-		{
-			"id": "accent-color",
-			"name": "Accent Color",
-			"css_var": "--accent-color",
-			"value": "#2563eb",
-			"type": "color",
-			"description": "Accent color"
-		},
-		{
-			"id": "code-background",
-			"name": "Code Background",
-			"css_var": "--code-background",
-			"value": "#f3f4f6",
-			"type": "color",
-			"description": "Code blocks"
-		},
-		{
-			"id": "pinned-background",
-			"name": "Pinned Background",
-			"css_var": "--pinned-background",
-			"value": "rgba(37, 99, 235, 0.05)",
-			"type": "color",
-			"description": "Pinned note highlight"
-		}
-	],
-	"content": [
-		{
-			"id": "search_placeholder",
-			"name": "Search Placeholder",
-			"type": "text",
-			"value": "Search notes...",
-			"description": "Placeholder in search input"
-		},
-		{
-			"id": "title_placeholder",
-			"name": "Title Placeholder",
-			"type": "text",
-			"value": "Note title",
-			"description": "Placeholder for note title"
-		},
-		{
-			"id": "content_placeholder",
-			"name": "Content Placeholder",
-			"type": "text",
-			"value": "Start writing...",
-			"description": "Placeholder for note content"
-		},
-		{
-			"id": "empty_sidebar",
-			"name": "Empty Sidebar",
-			"type": "text",
-			"value": "No notes yet",
-			"description": "Message when no notes in sidebar"
-		},
-		{
-			"id": "empty_editor",
-			"name": "Empty Editor",
-			"type": "text",
-			"value": "Select a note or create a new one",
-			"description": "Message when no note selected"
-		},
-		{
-			"id": "loading_message",
-			"name": "Loading Message",
-			"type": "text",
-			"value": "Loading...",
-			"description": "Shown while loading"
-		}
-	],
-	"data": {
-		"notes": {
-			"schema": [
-				{
-					"name": "id",
-					"type": "text"
-				},
-				{
-					"name": "title",
-					"type": "text"
-				},
-				{
-					"name": "content",
-					"type": "text"
-				},
-				{
-					"name": "pinned",
-					"type": "bool"
-				},
-				{
-					"name": "updated",
-					"type": "text"
-				}
-			],
-			"records": [
-				{
-					"id": "m4h8z",
-					"title": "Welcome to Notes",
-					"content": "<p>This is your personal note-taking app. Create, edit, and organize your thoughts.</p><h2>Features</h2><ul><li>Search through all your notes</li><li>Auto-saves as you type</li><li>Pin important notes to the top</li><li>Clean, distraction-free interface</li><li>Rich text formatting with Tiptap</li></ul>",
-					"pinned": true,
-					"updated": "2024-12-06T10:00:00Z"
-				},
-				{
-					"id": "b2k6x",
-					"title": "Quick Tips",
-					"content": "<p>Use the toolbar above to format your text. Your notes are saved automatically as you type.</p><p>Click the pin icon to keep important notes at the top of your list.</p>",
-					"pinned": false,
-					"updated": "2024-12-05T10:00:00Z"
-				}
-			],
-			"icon": "lucide:file-text"
-		}
-	}
+  "id": "notes",
+  "name": "Notes",
+  "description": "Write, search, and pin notes.",
+  "preview": "lucide:file-text",
+  "tags": [
+    "productivity",
+    "intermediate",
+    "data"
+  ],
+  "kits": [
+    "business",
+    "daily",
+    "developer"
+  ],
+  "frontend_code": "<script>\n\timport Icon from \"@iconify/svelte\";\n\timport { onDestroy } from \"svelte\";\n\timport content from \"$content\";\n\timport data from \"$data\";\n\timport { Editor } from \"@tiptap/core\";\n\timport StarterKit from \"@tiptap/starter-kit\";\n\timport Underline from \"@tiptap/extension-underline\";\n\timport Link from \"@tiptap/extension-link\";\n\tconst list_params = { all: true };\n\n\tlet notes = $state([]);\n\tlet selected_id = $state(null);\n\tlet search = $state(\"\");\n\tlet loading = $state(true);\n\tlet load_error = $state('');\n\tlet retrying_load = $state(false);\n\tlet disposed = false;\n\tlet load_request = 0;\n\tlet editor_el = $state(null);\n\tlet editor_instance = null;\n\tlet editorState = $state({ editor: null });\n\tlet save_timeout = null;\n\tlet pending_save = null;\n\tlet last_note_id = null;\n\tlet is_updating = false;\n\tlet mounted_editor_el = null;\n\tlet creating = $state(false);\n\tlet saving = $state(0);\n\tlet unsaved = $state(false);\n\tlet save_error = $state(\"\");\n\tlet action_error = $state(\"\");\n\tlet deleting_id = $state(null);\n\tconst drafts = new Map();\n\tconst writes = new Map();\n\n\t// Mobile state\n\tlet show_sidebar = $state(true);\n\tlet is_mobile = $state(false);\n\n\tfunction receive_notes(items) {\n\t\tif (disposed) return;\n\t\tload_request += 1;\n\t\tnotes = items.map(note => ({ ...note, ...drafts.get(note.id) }));\n\t\tif (!items.find((note) => note.id === selected_id)) selected_id = items[0]?.id ?? null;\n\t\tloading = false;\n\t\tload_error = '';\n\t}\n\tfunction load_failed() {\n\t\tif (disposed) return;\n\t\tloading = false;\n\t\tload_error = 'Could not load notes. Please try again.';\n\t}\n\tconst unsubscribe = data.notes.subscribe(receive_notes, list_params, load_failed);\n\tasync function retry_load() {\n\t\tif (retrying_load || disposed) return;\n\t\tconst request = ++load_request;\n\t\tretrying_load = true;\n\t\ttry {\n\t\t\tconst items = await data.notes.list(list_params);\n\t\t\tif (!disposed && request === load_request) receive_notes(items);\n\t\t} catch { if (!disposed && request === load_request) load_failed(); }\n\t\tfinally { if (!disposed) retrying_load = false; }\n\t}\n\n\t// Check if mobile\n\t$effect(() => {\n\t\tif (typeof window === \"undefined\") return;\n\t\tconst check = () => {\n\t\t\tis_mobile = window.innerWidth < 768;\n\t\t\tif (!is_mobile) show_sidebar = true;\n\t\t};\n\t\tcheck();\n\t\twindow.addEventListener(\"resize\", check);\n\t\treturn () => window.removeEventListener(\"resize\", check);\n\t});\n\n\t// Recreate per note so undo history cannot cross between notes.\n\t$effect(() => {\n\t\tconst note = selected_note;\n\t\tif (typeof window === \"undefined\") return;\n\t\tif (editor_instance && (!editor_el || !note || mounted_editor_el !== editor_el || last_note_id !== note.id)) {\n\t\t\teditor_instance.destroy();\n\t\t\teditor_instance = null;\n\t\t\teditorState = { editor: null };\n\t\t}\n\t\tif (!editor_el || !note) return;\n\t\tif (editor_instance) {\n\t\t\tif (!Object.hasOwn(drafts.get(note.id) || {}, \"content\") && !writes.has(note.id) && editor_instance.getHTML() !== (note.content || \"\")) {\n\t\t\t\tis_updating = true;\n\t\t\t\ttry { editor_instance.commands.setContent(note.content || \"\", { emitUpdate: false }); }\n\t\t\t\tfinally { is_updating = false; }\n\t\t\t}\n\t\t\treturn;\n\t\t}\n\t\teditor_instance = new Editor({\n\t\t\telement: editor_el,\n\t\t\textensions: [StarterKit.configure({ link: false, underline: false }), Underline, Link.configure({ openOnClick: false })],\n\t\t\tcontent: note.content || \"\",\n\t\t\teditorProps: { attributes: { 'aria-label': 'Note content', 'data-placeholder': content.content_placeholder } },\n\t\t\tonUpdate: ({ editor }) => { if (!is_updating) debounced_save(editor.getHTML()); },\n\t\t\tonTransaction: ({ editor }) => { editorState = { editor }; },\n\t\t});\n\t\teditorState = { editor: editor_instance };\n\t\tmounted_editor_el = editor_el;\n\t\tlast_note_id = note.id;\n\t});\n\n\tlet selected_note = $derived.by(() =>\n\t\tnotes.find((n) => n.id === selected_id),\n\t);\n\n\tlet filtered_notes = $derived.by(() => {\n\t\tconst filtered = notes.filter(\n\t\t\t(n) =>\n\t\t\t\t(n.title || \"\").toLowerCase().includes(search.toLowerCase()) ||\n\t\t\t\t(n.content || \"\").toLowerCase().includes(search.toLowerCase()),\n\t\t);\n\n\t\t// Sort: pinned first, then by updated date\n\t\treturn filtered.sort((a, b) => {\n\t\t\tif (a.pinned && !b.pinned) return -1;\n\t\t\tif (!a.pinned && b.pinned) return 1;\n\t\t\treturn new Date(b.updated) - new Date(a.updated);\n\t\t});\n\t});\n\n\tfunction stage_note(id, fields) {\n\t\tdrafts.set(id, { ...drafts.get(id), ...fields });\n\t\tnotes = notes.map(note => note.id === id ? { ...note, ...fields } : note);\n\t\tunsaved = true;\n\t}\n\n\tfunction persist_note(id, fields) {\n\t\tconst write = async () => {\n\t\t\tsaving += 1;\n\t\t\ttry {\n\t\t\t\tawait data.notes.update(id, { ...fields, updated: new Date().toISOString() });\n\t\t\t\tconst draft = drafts.get(id);\n\t\t\t\tif (draft) {\n\t\t\t\t\tfor (const [key, value] of Object.entries(fields)) if (draft[key] === value) delete draft[key];\n\t\t\t\t\tif (!Object.keys(draft).length) drafts.delete(id);\n\t\t\t\t}\n\t\t\t\tunsaved = drafts.size > 0;\n\t\t\t\tif (!unsaved) save_error = \"\";\n\t\t\t} catch (error) {\n\t\t\t\tsave_error = \"Changes could not be saved. Your edits are still here.\";\n\t\t\t\tthrow error;\n\t\t\t} finally { saving -= 1; }\n\t\t};\n\t\tconst previous = writes.get(id);\n\t\tconst promise = previous ? previous.catch(() => {}).then(write) : write();\n\t\twrites.set(id, promise);\n\t\tconst finish = () => { if (writes.get(id) === promise) writes.delete(id); };\n\t\tpromise.then(finish, finish);\n\t\treturn promise;\n\t}\n\n\tasync function create_note() {\n\t\tif (creating) return;\n\t\tcreating = true;\n\t\taction_error = \"\";\n\t\ttry {\n\t\t\tawait flush_save();\n\t\t\tconst new_note = await data.notes.create({ title: \"Untitled\", content: \"\", pinned: false, updated: new Date().toISOString() });\n\t\t\tselected_id = new_note.id;\n\t\t\tif (is_mobile) show_sidebar = false;\n\t\t} catch { action_error = \"Could not create a note. Please try again.\"; }\n\t\tfinally { creating = false; }\n\t}\n\n\tasync function update_note(field, value) {\n\t\tif (!selected_id) return;\n\t\tconst id = selected_id;\n\t\tstage_note(id, { [field]: value });\n\t\ttry { await persist_note(id, { [field]: value }); } catch {}\n\t}\n\n\tasync function toggle_pin(id, e) {\n\t\te.stopPropagation();\n\t\tconst note = notes.find(n => n.id === id);\n\t\tif (!note) return;\n\t\tstage_note(id, { pinned: !note.pinned });\n\t\ttry { await persist_note(id, { pinned: !note.pinned }); } catch {}\n\t}\n\n\tfunction flush_save() {\n\t\tif (save_timeout) clearTimeout(save_timeout);\n\t\tsave_timeout = null;\n\t\tconst change = pending_save;\n\t\tpending_save = null;\n\t\tif (!change) return Promise.resolve();\n\t\treturn persist_note(change.id, { content: change.html });\n\t}\n\n\tfunction debounced_save(html) {\n\t\tif (!selected_id) return;\n\t\tif (save_timeout) clearTimeout(save_timeout);\n\t\tstage_note(selected_id, { content: html });\n\t\tpending_save = { id: selected_id, html };\n\t\tsave_timeout = setTimeout(() => { flush_save().catch(() => {}); }, 500);\n\t}\n\n\tasync function retry_saves() {\n\t\tif (save_timeout) clearTimeout(save_timeout);\n\t\tsave_timeout = null;\n\t\tpending_save = null;\n\t\tawait Promise.allSettled([...drafts].map(([id, fields]) => persist_note(id, { ...fields })));\n\t}\n\n\tasync function delete_note(id) {\n\t\tif (deleting_id) return;\n\t\tdeleting_id = id;\n\t\taction_error = \"\";\n\t\tif (pending_save?.id === id) {\n\t\t\tclearTimeout(save_timeout);\n\t\t\tsave_timeout = null;\n\t\t\tpending_save = null;\n\t\t}\n\t\ttry {\n\t\t\tawait writes.get(id)?.catch(() => {});\n\t\t\tawait data.notes.delete(id);\n\t\t\tdrafts.delete(id);\n\t\t\tunsaved = drafts.size > 0;\n\t\t\tif (!unsaved) save_error = \"\";\n\t\t\tif (is_mobile) show_sidebar = true;\n\t\t} catch { action_error = \"Could not delete this note. Please try again.\"; }\n\t\tfinally { deleting_id = null; }\n\t}\n\n\tfunction select_note(id) {\n\t\tflush_save().catch(() => {});\n\t\tselected_id = id;\n\t\tif (is_mobile) show_sidebar = false;\n\t}\n\n\tfunction go_back() {\n\t\tshow_sidebar = true;\n\t}\n\n\tfunction format_date(ts) {\n\t\tif (!ts) return \"\";\n\t\tconst date = new Date(ts);\n\t\treturn Number.isNaN(date.getTime()) ? \"\" : date.toLocaleDateString();\n\t}\n\n\tfunction set_link() {\n\t\tif (!editorState.editor) return;\n\t\tconst value = window.prompt(\"Enter URL (leave blank to remove link)\", editorState.editor.getAttributes(\"link\").href || \"\");\n\t\tif (value === null) return;\n\t\tif (!value.trim()) { editorState.editor.chain().focus().unsetLink().run(); return; }\n\t\ttry {\n\t\t\tconst url = new URL(value.trim());\n\t\t\tif (![\"http:\", \"https:\", \"mailto:\"].includes(url.protocol)) throw new Error();\n\t\t\teditorState.editor.chain().focus().setLink({ href: url.href }).run();\n\t\t\taction_error = \"\";\n\t\t} catch { action_error = \"Enter a valid http, https, or email link.\"; }\n\t}\n\tonDestroy(() => {\n\t\tdisposed = true;\n\t\tload_request += 1;\n\t\tflush_save().catch(() => {});\n\t\tunsubscribe();\n\t\teditor_instance?.destroy();\n\t});\n</script>\n\n<div class=\"app\">\n\t{#if save_error || action_error}\n\t\t<div class=\"notice\" role=\"alert\">{action_error || save_error}\n\t\t\t{#if save_error}<button onclick={retry_saves} disabled={saving > 0}>Retry save</button>{/if}\n\t\t\t{#if action_error}<button onclick={() => action_error = \"\"} aria-label=\"Dismiss error\">Dismiss</button>{/if}\n\t\t</div>\n\t{/if}\n\t<div class=\"sidebar\" class:hide={is_mobile && !show_sidebar}>\n\t\t<div class=\"sidebar-header\">\n\t\t\t<input\n\t\t\t\ttype=\"search\"\n\t\t\t\taria-label=\"Search notes\"\n\t\t\t\tbind:value={search}\n\t\t\t\tplaceholder={content.search_placeholder} />\n\t\t\t<button onclick={create_note} aria-label=\"New note\" disabled={creating}\n\t\t\t\t><Icon icon=\"lucide:plus\" width={18} /></button>\n\t\t</div>\n\n\t\t{#if load_error}\n\t\t\t<div class=\"load-error\" role=\"alert\"><p>{load_error}</p><button onclick={retry_load} disabled={retrying_load}>{retrying_load ? 'Retrying…' : 'Retry'}</button></div>\n\t\t{/if}\n\t\t<div class=\"notes-list\">\n\t\t\t{#if loading}\n\t\t\t\t<p class=\"empty\">{content.loading_message}</p>\n\t\t\t{:else if filtered_notes.length === 0 && !load_error}\n\t\t\t\t<p class=\"empty\">{search ? \"No matching notes\" : content.empty_sidebar}</p>\n\t\t\t{:else}\n\t\t\t\t{#each filtered_notes as note (note.id)}\n\t\t\t\t\t<div\n\t\t\t\t\t\tclass=\"note-item\"\n\t\t\t\t\t\tclass:selected={note.id === selected_id}\n\t\t\t\t\t\tclass:pinned={note.pinned}\n>\n\t\t\t\t\t\t<button class=\"note-select\" onclick={() => select_note(note.id)} aria-current={note.id === selected_id ? \"true\" : undefined}>\n\t\t\t\t\t\t<div class=\"note-content\">\n\t\t\t\t\t\t\t<span class=\"note-title\">{note.title || \"Untitled\"}</span>\n\t\t\t\t\t\t\t<span class=\"note-date\">{format_date(note.updated)}</span>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t\t</button>\n\t\t\t\t\t\t<button\n\t\t\t\t\t\t\tclass=\"pin-btn\"\n\t\t\t\t\t\t\tclass:active={note.pinned}\n\t\t\t\t\t\t\tonclick={(e) => toggle_pin(note.id, e)}\n\t\t\t\t\t\t\ttitle={note.pinned ? \"Unpin note\" : \"Pin note\"} aria-label={note.pinned ? \"Unpin note\" : \"Pin note\"} aria-pressed={!!note.pinned}>\n\t\t\t\t\t\t\t<Icon\n\t\t\t\t\t\t\t\ticon={note.pinned ? \"lucide:pin-off\" : \"lucide:pin\"}\n\t\t\t\t\t\t\t\twidth={14} />\n\t\t\t\t\t\t</button>\n\t\t\t\t\t</div>\n\t\t\t\t{/each}\n\t\t\t{/if}\n\t\t</div>\n\t\t\n\t</div>\n\n\t<div class=\"editor\" inert={is_mobile && show_sidebar}>\n\t\t{#if selected_note}\n\t\t\t<div class=\"editor-header\">\n\t\t\t\t{#if is_mobile}\n\t\t\t\t\t<button class=\"back-btn\" onclick={go_back} aria-label=\"Back to notes\"\n\t\t\t\t\t\t><Icon icon=\"lucide:chevron-left\" width={20} /></button>\n\t\t\t\t{/if}\n\t\t\t\t<input\n\t\t\t\t\ttype=\"text\"\n\t\t\t\t\tclass=\"title-input\" aria-label=\"Note title\"\n\t\t\t\t\tvalue={selected_note.title}\n\t\t\t\t\toninput={(e) => update_note(\"title\", e.target.value)}\n\t\t\t\t\tplaceholder={content.title_placeholder} />\n\t\t\t\t<button\n\t\t\t\t\tclass=\"pin-btn-header\"\n\t\t\t\t\tclass:active={selected_note.pinned}\n\t\t\t\t\tonclick={(e) => toggle_pin(selected_note.id, e)}\n\t\t\t\t\ttitle={selected_note.pinned ? \"Unpin note\" : \"Pin note\"} aria-label={selected_note.pinned ? \"Unpin note\" : \"Pin note\"} aria-pressed={!!selected_note.pinned}>\n\t\t\t\t\t<Icon\n\t\t\t\t\t\ticon={selected_note.pinned ? \"lucide:pin-off\" : \"lucide:pin\"}\n\t\t\t\t\t\twidth={18} />\n\t\t\t\t</button>\n\t\t\t\t<button\n\t\t\t\t\tclass=\"delete-btn\"\n\t\t\t\t\tonclick={() => delete_note(selected_note.id)}\n\t\t\t\t\ttitle=\"Delete note\" aria-label=\"Delete note\" disabled={deleting_id === selected_note.id}><Icon icon=\"lucide:trash-2\" width={18} /></button>\n\t\t\t</div>\n\n\t\t\t<div class=\"save-status\" role=\"status\">{saving ? \"Saving…\" : unsaved ? \"Unsaved changes\" : \"Saved\"}</div>\n\t\t\t<div class=\"editor-container\">\n\t\t\t\t{#if editorState.editor}\n\t\t\t\t\t<div class=\"toolbar\">\n\t\t\t\t\t\t<div class=\"toolbar-group\">\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"bold\")}\n\t\t\t\t\t\t\t\tonclick={() =>\n\t\t\t\t\t\t\t\t\teditorState.editor.chain().focus().toggleBold().run()}\n\t\t\t\t\t\t\t\ttitle=\"Bold\" aria-label=\"Bold\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:bold\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"italic\")}\n\t\t\t\t\t\t\t\tonclick={() =>\n\t\t\t\t\t\t\t\t\teditorState.editor.chain().focus().toggleItalic().run()}\n\t\t\t\t\t\t\t\ttitle=\"Italic\" aria-label=\"Italic\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:italic\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"underline\")}\n\t\t\t\t\t\t\t\tonclick={() =>\n\t\t\t\t\t\t\t\t\teditorState.editor.chain().focus().toggleUnderline().run()}\n\t\t\t\t\t\t\t\ttitle=\"Underline\" aria-label=\"Underline\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:underline\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"strike\")}\n\t\t\t\t\t\t\t\tonclick={() =>\n\t\t\t\t\t\t\t\t\teditorState.editor.chain().focus().toggleStrike().run()}\n\t\t\t\t\t\t\t\ttitle=\"Strikethrough\" aria-label=\"Strikethrough\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:strikethrough\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t</div>\n\n\t\t\t\t\t\t<div class=\"toolbar-divider\"></div>\n\n\t\t\t\t\t\t<div class=\"toolbar-group\">\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"heading\", {\n\t\t\t\t\t\t\t\t\tlevel: 1,\n\t\t\t\t\t\t\t\t})}\n\t\t\t\t\t\t\t\tonclick={() =>\n\t\t\t\t\t\t\t\t\teditorState.editor\n\t\t\t\t\t\t\t\t\t\t.chain()\n\t\t\t\t\t\t\t\t\t\t.focus()\n\t\t\t\t\t\t\t\t\t\t.toggleHeading({ level: 1 })\n\t\t\t\t\t\t\t\t\t\t.run()}\n\t\t\t\t\t\t\t\ttitle=\"Heading 1\" aria-label=\"Heading 1\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:heading-1\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"heading\", {\n\t\t\t\t\t\t\t\t\tlevel: 2,\n\t\t\t\t\t\t\t\t})}\n\t\t\t\t\t\t\t\tonclick={() =>\n\t\t\t\t\t\t\t\t\teditorState.editor\n\t\t\t\t\t\t\t\t\t\t.chain()\n\t\t\t\t\t\t\t\t\t\t.focus()\n\t\t\t\t\t\t\t\t\t\t.toggleHeading({ level: 2 })\n\t\t\t\t\t\t\t\t\t\t.run()}\n\t\t\t\t\t\t\t\ttitle=\"Heading 2\" aria-label=\"Heading 2\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:heading-2\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t</div>\n\n\t\t\t\t\t\t<div class=\"toolbar-divider\"></div>\n\n\t\t\t\t\t\t<div class=\"toolbar-group\">\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"bulletList\")}\n\t\t\t\t\t\t\t\tonclick={() =>\n\t\t\t\t\t\t\t\t\teditorState.editor.chain().focus().toggleBulletList().run()}\n\t\t\t\t\t\t\t\ttitle=\"Bullet List\" aria-label=\"Bullet List\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:list\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"orderedList\")}\n\t\t\t\t\t\t\t\tonclick={() =>\n\t\t\t\t\t\t\t\t\teditorState.editor.chain().focus().toggleOrderedList().run()}\n\t\t\t\t\t\t\t\ttitle=\"Numbered List\" aria-label=\"Numbered List\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:list-ordered\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t</div>\n\n\t\t\t\t\t\t<div class=\"toolbar-divider\"></div>\n\n\t\t\t\t\t\t<div class=\"toolbar-group\">\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"blockquote\")}\n\t\t\t\t\t\t\t\tonclick={() =>\n\t\t\t\t\t\t\t\t\teditorState.editor.chain().focus().toggleBlockquote().run()}\n\t\t\t\t\t\t\t\ttitle=\"Quote\" aria-label=\"Quote\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:quote\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"codeBlock\")}\n\t\t\t\t\t\t\t\tonclick={() =>\n\t\t\t\t\t\t\t\t\teditorState.editor.chain().focus().toggleCodeBlock().run()}\n\t\t\t\t\t\t\t\ttitle=\"Code Block\" aria-label=\"Code Block\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:code\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tclass:active={editorState.editor.isActive(\"link\")}\n\t\t\t\t\t\t\t\tonclick={set_link}\n\t\t\t\t\t\t\t\ttitle=\"Link\" aria-label=\"Link\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:link\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t</div>\n\n\t\t\t\t\t\t<div class=\"toolbar-divider\"></div>\n\n\t\t\t\t\t\t<div class=\"toolbar-group\">\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tonclick={() => editorState.editor.chain().focus().undo().run()}\n\t\t\t\t\t\t\t\tdisabled={!editorState.editor.can().undo()}\n\t\t\t\t\t\t\t\ttitle=\"Undo\" aria-label=\"Undo\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:undo\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t\t<button\n\t\t\t\t\t\t\t\tclass=\"toolbar-btn\"\n\t\t\t\t\t\t\t\tonclick={() => editorState.editor.chain().focus().redo().run()}\n\t\t\t\t\t\t\t\tdisabled={!editorState.editor.can().redo()}\n\t\t\t\t\t\t\t\ttitle=\"Redo\" aria-label=\"Redo\">\n\t\t\t\t\t\t\t\t<Icon icon=\"lucide:redo\" width={16} />\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t{/if}\n\t\t\t\t<div bind:this={editor_el} class=\"tiptap-wrapper\"></div>\n\t\t\t</div>\n\t\t{:else}\n\t\t\t<div class=\"empty-state\">\n\t\t\t\t{#if is_mobile}\n\t\t\t\t\t<button class=\"back-btn-large\" onclick={go_back}\n\t\t\t\t\t\t><Icon icon=\"lucide:chevron-left\" width={20} /><span>Notes</span\n\t\t\t\t\t\t></button>\n\t\t\t\t{/if}\n\t\t\t\t<p>{content.empty_editor}</p>\n\t\t\t</div>\n\t\t{/if}\n\t</div>\n</div>\n\n<style>\n\t.app {\n\t\tposition: relative;\n\t\tdisplay: flex;\n\t\theight: 100vh;\n\t\theight: 100dvh;\n\t\tbackground: var(--page-background);\n\t\tfont-family: var(--body-font);\n\t\toverflow: hidden;\n\t}\n\n\t.sidebar {\n\t\twidth: 280px;\n\t\tbackground: var(--sidebar-background);\n\t\tborder-right: 1px solid var(--border-color);\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tflex-shrink: 0;\n\t}\n\t.sidebar-header {\n\t\tdisplay: flex;\n\t\tgap: 8px;\n\t\tpadding: 16px;\n\t\tborder-bottom: 1px solid var(--border-color);\n\t}\n\t.sidebar-header input {\n\t\tmin-width: 0;\n\t\tflex: 1;\n\t\tpadding: 8px 12px;\n\t\tborder: 1px solid var(--border-color);\n\t\tborder-radius: 6px;\n\t\tbackground: var(--input-background);\n\t\tcolor: var(--body-text-color);\n\t\tfont-size: 16px;\n\t}\n\t.sidebar-header input:focus {\n\t\toutline: none;\n\t\tborder-color: var(--accent-color);\n\t}\n\t.sidebar-header input::placeholder {\n\t\tcolor: var(--placeholder-color);\n\t}\n\t.sidebar-header button {\n\t\twidth: 36px;\n\t\theight: 36px;\n\t\tborder: none;\n\t\tborder-radius: 6px;\n\t\tbackground: var(--accent-color);\n\t\tcolor: white;\n\t\tcursor: pointer;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t}\n\n\t.notes-list {\n\t\tflex: 1;\n\t\toverflow-y: auto;\n\t\t-webkit-overflow-scrolling: touch;\n\t}\n\t.note-item {\n\t\twidth: 100%;\n\t\tpadding: 0 12px 0 0;\n\t\tborder: none;\n\t\tborder-bottom: 1px solid var(--border-color);\n\t\tbackground: transparent;\n\t\ttext-align: left;\n\t\tcursor: pointer;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 8px;\n\t\tuser-select: none;\n\t}\n\t.note-item:hover {\n\t\tbackground: var(--hover-background);\n\t}\n\t.note-item.selected {\n\t\tbackground: var(--hover-background);\n\t\tborder-left: 3px solid var(--accent-color);\n\t\tpadding-left: 0;\n\t}\n\t.note-item.pinned {\n\t\tbackground: var(--pinned-background);\n\t}\n\t.note-item.pinned.selected {\n\t\tbackground: var(--hover-background);\n\t}\n\t.note-content {\n\t\tflex: 1;\n\t\tmin-width: 0;\n\t}\n\t.note-title {\n\t\tdisplay: block;\n\t\tcolor: var(--body-text-color);\n\t\tfont-weight: 500;\n\t\tfont-size: 15px;\n\t\tmargin-bottom: 4px;\n\t\twhite-space: nowrap;\n\t\toverflow: hidden;\n\t\ttext-overflow: ellipsis;\n\t}\n\t.note-date {\n\t\tcolor: var(--muted-color);\n\t\tfont-size: 13px;\n\t}\n\n\t.pin-btn {\n\t\twidth: 28px;\n\t\theight: 28px;\n\t\tborder: none;\n\t\tborder-radius: 6px;\n\t\tbackground: transparent;\n\t\tcolor: var(--muted-color);\n\t\tcursor: pointer;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\topacity: 1;\n\t\ttransition:\n\t\t\topacity 0.15s ease,\n\t\t\tcolor 0.15s ease,\n\t\t\tbackground 0.15s ease;\n\t\tflex-shrink: 0;\n\t}\n\t.note-item:hover .pin-btn,\n\t.pin-btn.active {\n\t\topacity: 1;\n\t}\n\t.pin-btn:hover {\n\t\tbackground: var(--hover-background);\n\t\tcolor: var(--body-text-color);\n\t}\n\t.pin-btn.active {\n\t\tcolor: var(--accent-color);\n\t}\n\n\t.pin-btn-header {\n\t\twidth: 36px;\n\t\theight: 36px;\n\t\tborder: none;\n\t\tborder-radius: 6px;\n\t\tbackground: transparent;\n\t\tcolor: var(--muted-color);\n\t\tcursor: pointer;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\ttransition:\n\t\t\tcolor 0.15s ease,\n\t\t\tbackground 0.15s ease;\n\t}\n\t.pin-btn-header:hover {\n\t\tbackground: var(--hover-background);\n\t\tcolor: var(--body-text-color);\n\t}\n\t.pin-btn-header.active {\n\t\tcolor: var(--accent-color);\n\t}\n\n\t.editor {\n\t\tflex: 1;\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\tbackground: var(--editor-background);\n\t\tmin-width: 0;\n\t}\n\t.editor-header {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 8px;\n\t\tpadding: 12px 16px;\n\t\tborder-bottom: 1px solid var(--border-color);\n\t}\n\t.back-btn {\n\t\twidth: 36px;\n\t\theight: 36px;\n\t\tborder: none;\n\t\tborder-radius: 6px;\n\t\tbackground: transparent;\n\t\tcolor: var(--accent-color);\n\t\tcursor: pointer;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tmargin-left: -8px;\n\t}\n\t.back-btn-large {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 4px;\n\t\tpadding: 8px 12px;\n\t\tborder: none;\n\t\tbackground: transparent;\n\t\tcolor: var(--accent-color);\n\t\tfont-size: 16px;\n\t\tcursor: pointer;\n\t\tmargin-bottom: 16px;\n\t}\n\t.title-input {\n\t\tflex: 1;\n\t\tfont-size: 18px;\n\t\tfont-weight: 600;\n\t\tpadding: 8px 0;\n\t\tborder: none;\n\t\tbackground: transparent;\n\t\tcolor: var(--body-text-color);\n\t\tmin-width: 0;\n\t}\n\t.title-input:focus {\n\t\toutline: none;\n\t}\n\t.title-input::placeholder {\n\t\tcolor: var(--placeholder-color);\n\t}\n\t.delete-btn {\n\t\twidth: 36px;\n\t\theight: 36px;\n\t\tborder: none;\n\t\tborder-radius: 6px;\n\t\tbackground: transparent;\n\t\tcolor: var(--muted-color);\n\t\tcursor: pointer;\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t}\n\t.delete-btn:hover {\n\t\tbackground: #fef2f2;\n\t\tcolor: #dc2626;\n\t}\n\n\t.editor-container {\n\t\tflex: 1;\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\toverflow: hidden;\n\t}\n\n\t/* Toolbar - shadcn-like styling */\n\t.toolbar {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 4px;\n\t\tborder-bottom: 1px solid var(--border-color);\n\t\tbackground: var(--toolbar-background);\n\t\tflex-wrap: wrap;\n\t}\n\n\t.toolbar-group {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 1px;\n\t}\n\n\t.toolbar-btn {\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\twidth: 32px;\n\t\theight: 32px;\n\t\tpadding: 0;\n\t\tborder: none;\n\t\tbackground: transparent;\n\t\tcolor: var(--muted-color);\n\t\tcursor: pointer;\n\t\ttransition: background-color 150ms, color 150ms, border-color 150ms;\n\t}\n\n\t.toolbar-btn:hover:not(:disabled) {\n\t\tbackground: var(--hover-background);\n\t\tcolor: var(--body-text-color);\n\t}\n\n\t.toolbar-btn.active {\n\t\tbackground: var(--hover-background);\n\t\tcolor: var(--accent-color);\n\t}\n\n\t.toolbar-btn:disabled {\n\t\topacity: 0.4;\n\t\tcursor: not-allowed;\n\t}\n\n\t.toolbar-divider {\n\t\twidth: 1px;\n\t\theight: 20px;\n\t\tbackground: var(--border-color);\n\t\tmargin: 0 6px;\n\t}\n\n\t/* Tiptap editor styling */\n\t.tiptap-wrapper {\n\t\tflex: 1;\n\t\toverflow-y: auto;\n\t\t-webkit-overflow-scrolling: touch;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap) {\n\t\tpadding: 16px;\n\t\tmin-height: 100%;\n\t\tfont-size: 16px;\n\t\tline-height: 1.7;\n\t\tcolor: var(--body-text-color);\n\t\toutline: none;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap p) {\n\t\tmargin: 0 0 0.75em;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap h1) {\n\t\tfont-size: 1.75em;\n\t\tfont-weight: 700;\n\t\tmargin: 1em 0 0.5em;\n\t\tline-height: 1.3;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap h2) {\n\t\tfont-size: 1.4em;\n\t\tfont-weight: 600;\n\t\tmargin: 1em 0 0.5em;\n\t\tline-height: 1.3;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap h3) {\n\t\tfont-size: 1.2em;\n\t\tfont-weight: 600;\n\t\tmargin: 1em 0 0.5em;\n\t\tline-height: 1.3;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap ul),\n\t.tiptap-wrapper :global(.tiptap ol) {\n\t\tpadding-left: 1.5em;\n\t\tmargin: 0.5em 0;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap li) {\n\t\tmargin: 0.25em 0;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap blockquote) {\n\t\tborder-left: 3px solid var(--accent-color);\n\t\tpadding-left: 1em;\n\t\tmargin: 1em 0;\n\t\tcolor: var(--muted-color);\n\t\tfont-style: italic;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap pre) {\n\t\tbackground: var(--code-background);\n\t\tpadding: 12px 16px;\n\t\tborder-radius: 8px;\n\t\toverflow-x: auto;\n\t\tfont-family: ui-monospace, \"SF Mono\", Menlo, Monaco, monospace;\n\t\tfont-size: 14px;\n\t\tmargin: 1em 0;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap code) {\n\t\tbackground: var(--code-background);\n\t\tpadding: 2px 6px;\n\t\tborder-radius: 4px;\n\t\tfont-family: ui-monospace, \"SF Mono\", Menlo, Monaco, monospace;\n\t\tfont-size: 0.9em;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap pre code) {\n\t\tbackground: none;\n\t\tpadding: 0;\n\t\tborder-radius: 0;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap a) {\n\t\tcolor: var(--accent-color);\n\t\ttext-decoration: underline;\n\t\ttext-underline-offset: 2px;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap a:hover) {\n\t\ttext-decoration-thickness: 2px;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap hr) {\n\t\tborder: none;\n\t\tborder-top: 1px solid var(--border-color);\n\t\tmargin: 1.5em 0;\n\t}\n\n\t.tiptap-wrapper :global(.tiptap p.is-editor-empty:first-child::before) {\n\t\tcontent: attr(data-placeholder);\n\t\tcolor: var(--placeholder-color);\n\t\tpointer-events: none;\n\t\tfloat: left;\n\t\theight: 0;\n\t}\n\n\t.empty-state,\n\t.empty {\n\t\tflex: 1;\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tcolor: var(--muted-color);\n\t\tpadding: 1rem;\n\t}\n\n\t@media (max-width: 767px) {\n\t\t.sidebar {\n\t\t\tposition: absolute;\n\t\t\tinset: 0;\n\t\t\twidth: 100%;\n\t\t\tz-index: 50;\n\t\t\ttransform: translateX(0);\n\t\t\ttransition: transform 0.25s ease-out;\n\t\t}\n\t\t.sidebar.hide {\n\t\t\ttransform: translateX(-100%);\n\t\t\tpointer-events: none;\n\t\t}\n\t\t.editor {\n\t\t\tposition: absolute;\n\t\t\tinset: 0;\n\t\t\twidth: 100%;\n\t\t}\n\t\t.editor-header {\n\t\t\tpadding-top: max(12px, env(safe-area-inset-top));\n\t\t}\n\t\t.sidebar-header {\n\t\t\tpadding-top: max(16px, env(safe-area-inset-top));\n\t\t}\n\t\t.toolbar {\n\t\t\tpadding: 6px 8px;\n\t\t\tgap: 2px;\n\t\t}\n\t\t.toolbar-btn { width: 36px; height: 36px; }\n\t\t.pin-btn, .sidebar-header button { min-width: 40px; min-height: 40px; }\n\t\t.sidebar.hide { visibility: hidden; }\n\t\t.save-status { font-size: 12px; }\n\t\t.toolbar-divider {\n\t\t\tmargin: 0 4px;\n\t\t\theight: 16px;\n\t\t}\n\t\t.pin-btn {\n\t\t\topacity: 1;\n\t\t}\n\t}\n\n\t@media (min-width: 1024px) {\n\t\t.sidebar {\n\t\t\twidth: 320px;\n\t\t}\n\t\t.tiptap-wrapper :global(.tiptap) {\n\t\t\tpadding: 24px 32px;\n\t\t}\n\t}\n\n\t/* Uncomment below to enable automatic dark mode */\n\t/*\n\t@media (prefers-color-scheme: dark) {\n\t\t.app {\n\t\t\t--page-background: #0a0a0a;\n\t\t\t--sidebar-background: #111111;\n\t\t\t--editor-background: #0a0a0a;\n\t\t\t--input-background: #1a1a1a;\n\t\t\t--toolbar-background: #111111;\n\t\t\t--border-color: #2a2a2a;\n\t\t\t--body-text-color: #e5e5e5;\n\t\t\t--muted-color: #888888;\n\t\t\t--placeholder-color: #555555;\n\t\t\t--hover-background: #1a1a1a;\n\t\t\t--accent-color: #3b82f6;\n\t\t\t--code-background: #1a1a1a;\n\t\t\t--pinned-background: rgba(59, 130, 246, 0.1);\n\t\t}\n\n\t\t.delete-btn:hover {\n\t\t\tbackground: #2d1f1f;\n\t\t\tcolor: #f87171;\n\t\t}\n\t}\n\t*/\n\n\n  :global(button:focus-visible), :global(a:focus-visible), :global(input:focus-visible), :global(textarea:focus-visible), :global(select:focus-visible) {\n    outline: 2px solid var(--accent-color, #2563eb);\n    outline-offset: 2px;\n  }\n  @media (prefers-reduced-motion: reduce) {\n    :global(*), :global(*::before), :global(*::after) {\n      animation-duration: 0.01ms !important;\n      animation-iteration-count: 1 !important;\n      transition-duration: 0.01ms !important;\n    }\n  }\n\n\t.note-select { flex: 1; min-width: 0; border: 0; padding: 14px 16px; text-align: left; background: transparent; cursor: pointer; }\n\t.save-status { padding: 5px 16px; font-size: 11px; color: var(--muted-color); border-bottom: 1px solid var(--border-color); }\n\t.notice { position: absolute; z-index: 100; top: 8px; left: 8px; right: 8px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px; background: var(--editor-background); color: #b91c1c; border: 1px solid #fca5a5; border-radius: 6px; font-size: 13px; }\n\t.notice button { padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-background); color: var(--body-text-color); cursor: pointer; }\n\t.tiptap-wrapper :global(.tiptap) { overflow-wrap: anywhere; }\n\t.tiptap-wrapper :global(.tiptap:focus-visible) { outline: 2px solid var(--accent-color); outline-offset: -2px; }\n\n\t.load-error { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px; color: #b91c1c; font-size: 13px; }\n\t.load-error p { margin: 0; flex: 1; min-width: 120px; }\n\t.load-error button { padding: 8px 12px; border: 1px solid var(--border-color, #e5e5e5); border-radius: 4px; background: var(--input-background, #fff); color: var(--body-text-color, #202020); cursor: pointer; }\n</style>",
+  "design": [
+    {
+      "id": "body-font",
+      "name": "Body Font",
+      "css_var": "--body-font",
+      "value": "system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+      "type": "font",
+      "description": "Main font"
+    },
+    {
+      "id": "page-background",
+      "name": "Page Background",
+      "css_var": "--page-background",
+      "value": "#fafafa",
+      "type": "color",
+      "description": "Page background"
+    },
+    {
+      "id": "sidebar-background",
+      "name": "Sidebar Background",
+      "css_var": "--sidebar-background",
+      "value": "#ffffff",
+      "type": "color",
+      "description": "Sidebar background"
+    },
+    {
+      "id": "editor-background",
+      "name": "Editor Background",
+      "css_var": "--editor-background",
+      "value": "#ffffff",
+      "type": "color",
+      "description": "Editor background"
+    },
+    {
+      "id": "toolbar-background",
+      "name": "Toolbar Background",
+      "css_var": "--toolbar-background",
+      "value": "#f5f5f5",
+      "type": "color",
+      "description": "Toolbar background"
+    },
+    {
+      "id": "border-color",
+      "name": "Border Color",
+      "css_var": "--border-color",
+      "value": "#e5e5e5",
+      "type": "color",
+      "description": "Borders"
+    },
+    {
+      "id": "body-text-color",
+      "name": "Text Color",
+      "css_var": "--body-text-color",
+      "value": "#202020",
+      "type": "color",
+      "description": "Body text"
+    },
+    {
+      "id": "muted-color",
+      "name": "Muted Color",
+      "css_var": "--muted-color",
+      "value": "#737373",
+      "type": "color",
+      "description": "Secondary text"
+    },
+    {
+      "id": "placeholder-color",
+      "name": "Placeholder Color",
+      "css_var": "--placeholder-color",
+      "value": "#9ca3af",
+      "type": "color",
+      "description": "Placeholders"
+    },
+    {
+      "id": "input-background",
+      "name": "Input Background",
+      "css_var": "--input-background",
+      "value": "#ffffff",
+      "type": "color",
+      "description": "Input fields"
+    },
+    {
+      "id": "hover-background",
+      "name": "Hover Background",
+      "css_var": "--hover-background",
+      "value": "#f5f5f5",
+      "type": "color",
+      "description": "Hover states"
+    },
+    {
+      "id": "accent-color",
+      "name": "Accent Color",
+      "css_var": "--accent-color",
+      "value": "#2563eb",
+      "type": "color",
+      "description": "Accent color"
+    },
+    {
+      "id": "code-background",
+      "name": "Code Background",
+      "css_var": "--code-background",
+      "value": "#f5f5f5",
+      "type": "color",
+      "description": "Code blocks"
+    },
+    {
+      "id": "pinned-background",
+      "name": "Pinned Background",
+      "css_var": "--pinned-background",
+      "value": "rgba(37, 99, 235, 0.05)",
+      "type": "color",
+      "description": "Pinned note highlight"
+    }
+  ],
+  "content": [
+    {
+      "id": "search_placeholder",
+      "name": "Search Placeholder",
+      "type": "text",
+      "value": "Search notes...",
+      "description": "Placeholder in search input"
+    },
+    {
+      "id": "title_placeholder",
+      "name": "Title Placeholder",
+      "type": "text",
+      "value": "Note title",
+      "description": "Placeholder for note title"
+    },
+    {
+      "id": "content_placeholder",
+      "name": "Content Placeholder",
+      "type": "text",
+      "value": "Start writing...",
+      "description": "Placeholder for note content"
+    },
+    {
+      "id": "empty_sidebar",
+      "name": "Empty Sidebar",
+      "type": "text",
+      "value": "No notes yet",
+      "description": "Message when no notes in sidebar"
+    },
+    {
+      "id": "empty_editor",
+      "name": "Empty Editor",
+      "type": "text",
+      "value": "Select a note or create a new one",
+      "description": "Message when no note selected"
+    },
+    {
+      "id": "loading_message",
+      "name": "Loading Message",
+      "type": "text",
+      "value": "Loading...",
+      "description": "Shown while loading"
+    }
+  ],
+  "data": {
+    "notes": {
+      "schema": [
+        {
+          "name": "id",
+          "type": "text"
+        },
+        {
+          "name": "title",
+          "type": "text"
+        },
+        {
+          "name": "content",
+          "type": "text"
+        },
+        {
+          "name": "pinned",
+          "type": "bool"
+        },
+        {
+          "name": "updated",
+          "type": "text"
+        }
+      ],
+      "records": [
+        {
+          "id": "m4h8z",
+          "title": "Welcome to Notes",
+          "content": "<p>Notes save automatically as you type.</p><p>Create a note with the + button. Pin a note to keep it at the top.</p>",
+          "pinned": true,
+          "updated": "2024-12-06T10:00:00Z"
+        },
+        {
+          "id": "b2k6x",
+          "title": "Quick Tips",
+          "content": "<p>Use the toolbar above to format your text. Your notes are saved automatically as you type.</p><p>Click the pin icon to keep important notes at the top of your list.</p>",
+          "pinned": false,
+          "updated": "2024-12-05T10:00:00Z"
+        }
+      ],
+      "icon": "lucide:file-text"
+    }
+  }
 }

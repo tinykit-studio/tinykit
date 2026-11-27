@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import { updateProject, validateUserToken, unauthorizedResponse } from '$lib/server/pb'
+import { getProject, updateProject, validateUserToken, unauthorizedResponse } from '$lib/server/pb'
 import { get_template } from '$lib/templates'
 
 // POST /api/projects/:id/templates - Apply a template to project
@@ -23,7 +23,11 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			return json({ error: 'Template not found' }, { status: 404 })
 		}
 
+		const project = await getProject(params.id)
+		if (!project) return json({ error: 'Project not found' }, { status: 404 })
+
 		await updateProject(params.id, {
+			settings: { ...project.settings, icon: template.preview, template_id: template.id },
 			frontend_code: template.frontend_code,
 			design: template.design || [],
 			content: template.content || [],

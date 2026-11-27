@@ -33,7 +33,8 @@
 			try {
 				const file_url = pb.files.getURL(
 					{ id: project_id, collectionId: collection_id, collectionName: collection_id },
-					compiled_html
+					compiled_html,
+					{ token: await pb.files.getToken() }
 				)
 				const response = await fetch(file_url)
 				if (response.ok) {

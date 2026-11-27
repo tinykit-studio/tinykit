@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import { createProject, listProjects, validateUserToken, unauthorizedResponse } from '$lib/server/pb'
+import { createProject, deleteProject, listProjects, validateUserToken, unauthorizedResponse } from '$lib/server/pb'
 import { get_template } from '$lib/templates'
 
 // GET /api/projects - List all projects
@@ -12,7 +12,7 @@ export const GET: RequestHandler = async ({ request }) => {
 
 	try {
 		const projects = await listProjects()
-		return json(projects)
+		return json(projects.filter(project => project.visibility !== 'private' || project.owner === user.id), { headers: { 'Cache-Control': 'no-store' } })
 	} catch (error: any) {
 		console.error('Failed to list projects:', error)
 		return json({ error: 'Failed to list projects' }, { status: 500 })
@@ -27,7 +27,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	try {
-		const { name, domain, kit, template_id, initial_prompt } = await request.json()
+		const { name, domain, kit, template_id, initial_prompt, visibility } = await request.json()
 
 		if (!name) {
 			return json({ error: 'Name is required' }, { status: 400 })
@@ -52,6 +52,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		const project = await createProject({
 			name,
+			owner: user.id,
+			visibility: template_id === 'personal-crm' || visibility === 'private' ? 'private' : 'public',
+			data: template_id ? get_template(template_id)?.data : {},
 			domain: project_domain,
 			kit,
 			frontend_code,
@@ -59,6 +62,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			content,
 			initial_prompt
 		})
+		if ((template_id === 'personal-crm' || visibility === 'private') && (!project?.owner || project.visibility !== 'private')) {
+			if (project) await deleteProject(project.id)
+			return json({ error: 'Upgrade this Tinykit server with private-app access before creating a private app.' }, { status: 409 })
+		}
 
 		return json(project)
 	} catch (error: any) {

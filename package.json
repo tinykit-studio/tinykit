@@ -4,7 +4,13 @@
   "description": "Open-source AI development platform - build production apps in an afternoon",
   "private": true,
   "type": "module",
+  "bin": {
+    "tinykit": "./scripts/tinykit.mjs"
+  },
   "scripts": {
+    "tinykit": "node scripts/tinykit.mjs",
+    "test:companion": "TINYKIT_TEST_RUNTIME=1 node --test tests/companion-runtime.test.mjs",
+    "test:hosted": "TINYKIT_TEST_HOSTED=1 node --test tests/hosted-runtime.test.mjs",
     "dev": "concurrently --kill-others \"npm run pocketbase:serve\" \"vite dev\"",
     "dev:vite": "vite dev",
     "build": "vite build",

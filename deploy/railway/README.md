@@ -117,6 +117,7 @@ Your app will be available at: `https://your-project.up.railway.app`
 | `PORT` | Server port (Railway sets this) | Auto |
 | `WORKSPACE_DIR` | Project storage path | `/app/workspace` |
 | `LLM_BASE_URL` | Custom LLM endpoint | Provider default |
+| `PUBLIC_TINYKIT_LOCAL_EDIT_BRANCH` | Branch to use in Studio's copied local agent prompt for a staging build. Leave unset for standard deployments. | Unset |
 
 ## Persistent Storage
 

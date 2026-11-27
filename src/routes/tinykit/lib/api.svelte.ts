@@ -58,7 +58,7 @@ export async function delete_snapshot(project_id: string, id: string): Promise<v
 
 export async function restore_from_snapshot_data(
 	project_id: string,
-	data: { frontend_code: string; design: DesignField[]; content: ContentField[]; collections?: CollectionSchema[] }
+	data: { frontend_code: string; design: DesignField[]; content: ContentField[]; collections?: CollectionSchema[]; data?: Record<string, any>; backend_code?: string; custom_instructions?: string; source_bundle?: Project['source_bundle'] | null }
 ): Promise<void> {
 	const project = await get_project(project_id)
 	const update_data: Partial<Project> = {
@@ -66,9 +66,13 @@ export async function restore_from_snapshot_data(
 		design: data.design,
 		content: data.content
 	}
+	if (data.backend_code !== undefined) update_data.backend_code = data.backend_code
+	if (data.custom_instructions !== undefined) update_data.custom_instructions = data.custom_instructions
+	if (data.source_bundle !== undefined) update_data.source_bundle = data.source_bundle
+	if (data.data !== undefined) update_data.data = data.data
 
 	// Restore collection schemas and records if provided
-	if (data.collections && Array.isArray(data.collections) && data.collections.length > 0) {
+	if (data.data === undefined && data.collections && Array.isArray(data.collections) && data.collections.length > 0) {
 		const updated_data = { ...project.data }
 		for (const col of data.collections) {
 			// Restore both schema and records from snapshot
@@ -319,18 +323,23 @@ export async function build_app(project_id: string): Promise<any> {
 	// Import compiler dynamically to avoid SSR issues
 	const { processCode } = await import('$lib/compiler/init')
 
-	// Get source code and config using SDK
-	const project = await get_project(project_id)
+	const endpoint = `/api/projects/${project_id}/build`
+	const snapshot = await fetch(endpoint, { headers: get_auth_headers(), cache: 'no-store' })
+	if (!snapshot.ok) {
+		const result = await snapshot.json()
+		throw new Error(result.error || 'Failed to load the app for building.')
+	}
+	const { inputs: project, revision } = await snapshot.json() as {
+		inputs: { frontend_code: string; name: string; content: ContentField[]; design: DesignField[]; data_collections: string[] }
+		revision: string
+	}
 	const source_code = project.frontend_code || ''
-
-	// Get list of data collections from project.data keys
-	const data_collections = Object.keys(project.data || {})
 
 	const config: BuildConfig = {
 		fields: project.content || [],
 		design: project.design || [],
 		project_id,
-		data_collections,
+		data_collections: project.data_collections,
 		project_name: project.name || 'tinykit App'
 	}
 
@@ -382,10 +391,10 @@ export async function build_app(project_id: string): Promise<any> {
 	})
 
 	// Send to server to save (still needs server endpoint for file storage)
-	const res = await fetch(`/api/projects/${project_id}/build`, {
+	const res = await fetch(endpoint, {
 		method: "POST",
 		headers: get_auth_headers(),
-		body: JSON.stringify({ html })
+		body: JSON.stringify({ html, expected_studio_revision: revision })
 	})
 
 	if (!res.ok) {

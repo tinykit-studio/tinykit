@@ -1,7 +1,6 @@
 // @ts-nocheck
 import { rollup } from '@rollup/browser'
-import svelteWorker from './svelte.worker?worker'
-import PromiseWorker from 'promise-worker'
+import { compile_svelte } from './svelte-compile.js'
 import registerPromiseWorker from 'promise-worker/register'
 import commonjs from './plugins/commonjs'
 import json from './plugins/json'
@@ -10,8 +9,6 @@ import { svelte_runtime } from './svelte-runtime-sources.js'
 import { compiler_entry } from './svelte-runtime.js'
 import { create_module_loader } from './module-loader.js'
 import IconifyShim from '../shims/IconifyIcon.svelte?raw'
-
-const sveltePromiseWorker = new PromiseWorker(new svelteWorker())
 
 // Based on https://github.com/pngwn/REPLicant & the Svelte REPL package (https://github.com/sveltejs/sites/tree/master/packages/repl)
 
@@ -353,12 +350,12 @@ proxy.url = function(url) {
 							const processedCode = processGlobalStyles(code)
 
 							try {
-								const res = await sveltePromiseWorker.postMessage({
+								const res = compile_svelte({
 									code: processedCode,
 									svelteOptions
 								})
 
-								// Handle structured error from svelte worker
+								// Handle structured error from the svelte compiler
 								if (res.error) {
 									noteBuildError(res.error, id, code)
 									return ''

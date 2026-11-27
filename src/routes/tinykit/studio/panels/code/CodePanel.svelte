@@ -240,7 +240,17 @@ export const daily_checkin = {
                 </Tooltip.Root>
             </div>
         </Tooltip.Provider>
-        {#if active_tab === "frontend"}
+        {#if active_tab === "frontend" && store.project?.source_bundle}
+            <div class="h-full overflow-auto p-5 space-y-4">
+                <p>This app has multiple source files. Download the project to edit and publish it from your local editor.</p>
+                <ul class="font-mono text-xs space-y-1">
+                    {#each Object.keys(store.project.source_bundle.files).filter(name => name.startsWith('src/')).sort() as name}
+                        <li>{name}</li>
+                    {/each}
+                </ul>
+                <pre class="text-xs whitespace-pre-wrap">{code_content}</pre>
+            </div>
+        {:else if active_tab === "frontend"}
             <CodeMirror
                 value={code_content}
                 language="svelte"

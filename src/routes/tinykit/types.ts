@@ -16,8 +16,11 @@ export type Project = {
 	collectionId?: string
 	name: string
 	domain?: string
+	owner?: string
+	visibility?: 'public' | 'private' | ''
 	kit: string
 	frontend_code: string
+	source_bundle?: { format_version: number; files: Record<string, string> } | null
 	backend_code: string
 	published_html: string
 	assets: string[]
@@ -33,6 +36,8 @@ export type Project = {
 }
 
 export type ProjectSettings = {
+	icon?: string
+	template_id?: string
 	vibe_zone_enabled?: boolean
 	project_title?: string
 	domain?: string

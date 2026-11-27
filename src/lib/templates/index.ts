@@ -44,6 +44,7 @@ import canvas from './canvas.json'
 import timer from './timer.json'
 import voice_memo from './voice-memo.json'
 import projects from './projects.json'
+import project_tracker from './project-tracker.json'
 import collab_board from './collab-board.json'
 import ticket_tracker from './ticket-tracker.json'
 
@@ -59,6 +60,7 @@ import rate_calculator from './rate-calculator.json'
 import portfolio from './portfolio.json'
 import testimonials from './testimonials.json'
 import client_crm from './client-crm.json'
+import personal_crm from './personal-crm.json'
 
 // Creator
 import dev_blog from './dev-blog.json'
@@ -92,7 +94,9 @@ export type Template = {
 	preview: string
 	tags?: string[]
 	kits?: string[]
+	visibility?: 'public' | 'private'
 	archetype?: 'site' | 'app' | 'form' | 'dashboard'
+	preview_records?: Record<string, Array<Record<string, any>>>
 	frontend_code: string
 	design: DesignField[]
 	content: ContentField[]
@@ -175,7 +179,9 @@ export const KITS: Kit[] = [
 export const FEATURED_KITS = KITS.filter(k => k.featured)
 
 // All templates (each defines its own kit memberships via `kits` array)
-export const TEMPLATES: Template[] = [
+const ALL_TEMPLATES: Template[] = [
+  { ...personal_crm, archetype: 'app' } as Template,
+  { ...project_tracker, archetype: 'app' } as Template,
 	// launch
 	{ ...waitlist, archetype: 'form' } as Template,
 	{ ...voting_board, archetype: 'app' } as Template,
@@ -235,6 +241,36 @@ export const TEMPLATES: Template[] = [
 	{ ...rss_reader, archetype: 'app' } as Template
 ]
 
+// The picker offers a maintained set of distinct starters. Keep the remaining
+// definitions addressable by ID for saved links and older installations.
+export const FEATURED_TEMPLATE_IDS = [
+  'personal-crm',
+  'project-tracker',
+  'notes', 'kanban', 'bookmarks', 'habits', 'timer', 'expense',
+  'reading-list', 'recipes', 'goal-tracker', 'client-crm', 'invoice', 'time-tracker'
+]
+const featured_ids = new Set(FEATURED_TEMPLATE_IDS)
+const STARTER_IDS = [
+  ...FEATURED_TEMPLATE_IDS,
+  'homepage', 'linktree', 'portfolio', 'waitlist', 'poll', 'changelog'
+]
+export const TEMPLATES: Template[] = STARTER_IDS.map(id => {
+  const template = ALL_TEMPLATES.find(template => template.id === id)
+  if (!template) throw new Error(`Missing starter template: ${id}`)
+  return template
+})
+export const FEATURED_TEMPLATES = TEMPLATES.filter(template => featured_ids.has(template.id))
+
+// Keep the same featured grouping when a picker narrows its results.
+export function get_template_groups(templates: Template[]) {
+  const featured = templates.filter(template => featured_ids.has(template.id))
+  const other = templates.filter(template => !featured_ids.has(template.id))
+  return [
+    { id: 'featured', label: 'Featured apps', templates: featured },
+    { id: 'more', label: 'More templates', templates: other }
+  ].filter(group => group.templates.length > 0)
+}
+
 // Get templates for a specific kit
 export function get_templates_for_kit(kit_id: string): Template[] {
 	return TEMPLATES.filter(t => t.kits?.includes(kit_id))
@@ -245,7 +281,7 @@ export const get_templates_by_kit = get_templates_for_kit
 
 // Get a template by ID
 export function get_template(id: string): Template | undefined {
-	return TEMPLATES.find(t => t.id === id)
+	return ALL_TEMPLATES.find(t => t.id === id)
 }
 
 // Get featured kits with their templates
@@ -267,4 +303,13 @@ export function get_all_kits_with_templates(): KitWithTemplates[] {
 // List all templates (for API endpoint)
 export function list_templates(): Template[] {
 	return TEMPLATES
+}
+
+// Demo records are separate from the data copied into a new app.
+export function get_template_preview_data(template: Template): NonNullable<Template['data']> {
+  const data = JSON.parse(JSON.stringify(template.data || {}))
+  for (const [name, records] of Object.entries(template.preview_records || {})) {
+    if (data[name]) data[name].records = JSON.parse(JSON.stringify(records))
+  }
+  return data
 }

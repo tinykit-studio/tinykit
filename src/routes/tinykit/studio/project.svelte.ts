@@ -111,6 +111,13 @@ export class ProjectStore {
                         const current_data = JSON.stringify(this.project?.data || {});
                         const data_changed = incoming_data !== current_data;
 
+                        // Refresh the hosted preview after a local app activates
+                        // its component tree and built HTML together.
+                        if ((incoming.source_bundle || this.project?.source_bundle) &&
+                            (JSON.stringify(incoming.source_bundle) !== JSON.stringify(this.project?.source_bundle) || incoming.published_html !== this.project?.published_html)) {
+                            this.project = { ...this.project!, frontend_code: incoming.frontend_code, source_bundle: incoming.source_bundle, published_html: incoming.published_html };
+                        }
+
                         // Sync data changes immediately (for manual CRUD operations)
                         if (data_changed && !chat_changed) {
                             this.project = {

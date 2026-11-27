@@ -1,166 +1,166 @@
 {
-	"id": "changelog",
-	"name": "Changelog",
-	"description": "Public changelog with tags, dates, and RSS feed",
-	"preview": "lucide:history",
-	"tags": [
-		"launch",
-		"updates",
-		"beginner"
-	],
-	"kits": [
-		"launch",
-		"developer"
-	],
-	"frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet entries = $state([])\n\tlet loading = $state(true)\n\tlet filter_tag = $state('all')\n\n\tdata.changelog.subscribe(items => {\n\t\tentries = items.sort((a, b) => \n\t\t\tnew Date(b.date).getTime() - new Date(a.date).getTime()\n\t\t)\n\t\tloading = false\n\t})\n\n\tconst tag_config = {\n\t\t'new': { label: 'New', icon: 'lucide:sparkles', color: '#22c55e' },\n\t\t'improved': { label: 'Improved', icon: 'lucide:trending-up', color: '#3b82f6' },\n\t\t'fixed': { label: 'Fixed', icon: 'lucide:wrench', color: '#f59e0b' }\n\t}\n\n\tlet filtered_entries = $derived(\n\t\tfilter_tag === 'all' \n\t\t\t? entries \n\t\t\t: entries.filter(e => e.tag === filter_tag)\n\t)\n\n\tfunction format_date(date_str) {\n\t\treturn new Date(date_str).toLocaleDateString('en-US', {\n\t\t\tyear: 'numeric',\n\t\t\tmonth: 'long',\n\t\t\tday: 'numeric'\n\t\t})\n\t}\n\n\tfunction get_tag_info(tag) {\n\t\treturn tag_config[tag] || tag_config['new']\n\t}\n\n\t// Simple markdown-ish rendering for descriptions\n\tfunction render_content(text) {\n\t\tif (!text) return ''\n\t\treturn text\n\t\t\t.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>')\n\t\t\t.replace(/\\*(.+?)\\*/g, '<em>$1</em>')\n\t\t\t.replace(/`(.+?)`/g, '<code>$1</code>')\n\t\t\t.replace(/\\n/g, '<br>')\n\t}\n</script>\n\n<div class=\"page\">\n\t<header class=\"header\">\n\t\t<div class=\"header-content\">\n\t\t\t<h1>{content.title}</h1>\n\t\t\t<p>{content.description}</p>\n\t\t</div>\n\t\t<a href=\"/rss\" class=\"rss-link\" title=\"RSS Feed\">\n\t\t\t<Icon icon=\"lucide:rss\" width={20} />\n\t\t</a>\n\t</header>\n\n\t<div class=\"filters\">\n\t\t<button \n\t\t\tclass:active={filter_tag === 'all'}\n\t\t\tonclick={() => filter_tag = 'all'}\n\t\t>All updates</button>\n\t\t{#each Object.entries(tag_config) as [key, config] (key)}\n\t\t\t<button \n\t\t\t\tclass:active={filter_tag === key}\n\t\t\t\tonclick={() => filter_tag = key}\n\t\t\t\tstyle=\"--tag-color: {config.color}\"\n\t\t\t>\n\t\t\t\t<Icon icon={config.icon} width={14} />\n\t\t\t\t{config.label}\n\t\t\t</button>\n\t\t{/each}\n\t</div>\n\n\t{#if loading}\n\t\t<div class=\"loading\">\n\t\t\t<Icon icon=\"lucide:loader-2\" width={24} class=\"spin\" />\n\t\t</div>\n\t{:else if filtered_entries.length === 0}\n\t\t<div class=\"empty\">\n\t\t\t<Icon icon=\"lucide:file-text\" width={48} />\n\t\t\t<p>{content.empty_text}</p>\n\t\t</div>\n\t{:else}\n\t\t<div class=\"timeline\">\n\t\t\t{#each filtered_entries as entry (entry.id)}\n\t\t\t\t{@const tag_info = get_tag_info(entry.tag)}\n\t\t\t\t<article class=\"entry\">\n\t\t\t\t\t<div class=\"entry-meta\">\n\t\t\t\t\t\t<time datetime={entry.date}>{format_date(entry.date)}</time>\n\t\t\t\t\t\t<span class=\"tag\" style=\"--tag-color: {tag_info.color}\">\n\t\t\t\t\t\t\t<Icon icon={tag_info.icon} width={12} />\n\t\t\t\t\t\t\t{tag_info.label}\n\t\t\t\t\t\t</span>\n\t\t\t\t\t</div>\n\t\t\t\t\t<h2>{entry.title}</h2>\n\t\t\t\t\t{#if entry.description}\n\t\t\t\t\t\t<div class=\"entry-content\">\n\t\t\t\t\t\t\t{@html render_content(entry.description)}\n\t\t\t\t\t\t</div>\n\t\t\t\t\t{/if}\n\t\t\t\t</article>\n\t\t\t{/each}\n\t\t</div>\n\t{/if}\n\n\t<footer class=\"footer\">\n\t\t<a href=\"/rss\" class=\"rss-button\">\n\t\t\t<Icon icon=\"lucide:rss\" width={16} />\n\t\t\t{content.rss_button}\n\t\t</a>\n\t</footer>\n</div>\n\n<style>\n\t.page {\n\t\tmin-height: 100vh;\n\t\tbackground: var(--bg-color, #ffffff);\n\t\tpadding: 3rem 1.5rem;\n\t\tfont-family: var(--font, system-ui, sans-serif);\n\t}\n\n\t.header {\n\t\tmax-width: 680px;\n\t\tmargin: 0 auto 2rem;\n\t\tdisplay: flex;\n\t\tjustify-content: space-between;\n\t\talign-items: flex-start;\n\t\tgap: 1rem;\n\t}\n\n\t.header h1 {\n\t\tfont-size: 2rem;\n\t\tfont-weight: 700;\n\t\tcolor: var(--heading-color, #0f172a);\n\t\tmargin: 0 0 0.375rem;\n\t}\n\n\t.header p {\n\t\tcolor: var(--text-color, #64748b);\n\t\tmargin: 0;\n\t\tfont-size: 1.0625rem;\n\t}\n\n\t.rss-link {\n\t\tcolor: var(--text-color, #64748b);\n\t\tpadding: 0.5rem;\n\t\tborder-radius: var(--radius, 6px);\n\t\ttransition: all 0.2s;\n\t}\n\n\t.rss-link:hover {\n\t\tcolor: var(--accent-color, #f97316);\n\t\tbackground: var(--hover-bg, #f8fafc);\n\t}\n\n\t.filters {\n\t\tmax-width: 680px;\n\t\tmargin: 0 auto 2rem;\n\t\tdisplay: flex;\n\t\tgap: 0.5rem;\n\t\tflex-wrap: wrap;\n\t}\n\n\t.filters button {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.375rem;\n\t\tpadding: 0.5rem 0.875rem;\n\t\tbackground: transparent;\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: var(--radius, 6px);\n\t\tcolor: var(--text-color, #64748b);\n\t\tfont-size: 0.875rem;\n\t\tcursor: pointer;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.filters button:hover {\n\t\tborder-color: var(--tag-color, var(--accent-color, #3b82f6));\n\t\tcolor: var(--tag-color, var(--accent-color, #3b82f6));\n\t}\n\n\t.filters button.active {\n\t\tbackground: var(--tag-color, var(--accent-color, #3b82f6));\n\t\tborder-color: var(--tag-color, var(--accent-color, #3b82f6));\n\t\tcolor: white;\n\t}\n\n\t.loading, .empty {\n\t\tmax-width: 680px;\n\t\tmargin: 4rem auto;\n\t\ttext-align: center;\n\t\tcolor: var(--text-color, #64748b);\n\t}\n\n\t.empty p {\n\t\tmargin-top: 1rem;\n\t}\n\n\t.timeline {\n\t\tmax-width: 680px;\n\t\tmargin: 0 auto;\n\t}\n\n\t.entry {\n\t\tpadding: 1.5rem 0;\n\t\tborder-bottom: 1px solid var(--border-color, #e2e8f0);\n\t}\n\n\t.entry:last-child {\n\t\tborder-bottom: none;\n\t}\n\n\t.entry-meta {\n\t\tdisplay: flex;\n\t\talign-items: center;\n\t\tgap: 0.75rem;\n\t\tmargin-bottom: 0.625rem;\n\t}\n\n\t.entry-meta time {\n\t\tcolor: var(--text-color, #64748b);\n\t\tfont-size: 0.875rem;\n\t}\n\n\t.tag {\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tgap: 0.25rem;\n\t\tpadding: 0.1875rem 0.5rem;\n\t\tbackground: color-mix(in srgb, var(--tag-color) 12%, transparent);\n\t\tcolor: var(--tag-color);\n\t\tborder-radius: 999px;\n\t\tfont-size: 0.75rem;\n\t\tfont-weight: 600;\n\t}\n\n\t.entry h2 {\n\t\tfont-size: 1.25rem;\n\t\tfont-weight: 600;\n\t\tcolor: var(--heading-color, #0f172a);\n\t\tmargin: 0 0 0.5rem;\n\t}\n\n\t.entry-content {\n\t\tcolor: var(--text-color, #64748b);\n\t\tline-height: 1.7;\n\t\tfont-size: 0.9375rem;\n\t}\n\n\t.entry-content :global(strong) {\n\t\tcolor: var(--heading-color, #0f172a);\n\t\tfont-weight: 600;\n\t}\n\n\t.entry-content :global(code) {\n\t\tbackground: var(--code-bg, #f1f5f9);\n\t\tpadding: 0.125rem 0.375rem;\n\t\tborder-radius: 4px;\n\t\tfont-size: 0.875em;\n\t\tfont-family: ui-monospace, monospace;\n\t}\n\n\t.footer {\n\t\tmax-width: 680px;\n\t\tmargin: 3rem auto 0;\n\t\tpadding-top: 2rem;\n\t\tborder-top: 1px solid var(--border-color, #e2e8f0);\n\t\ttext-align: center;\n\t}\n\n\t.rss-button {\n\t\tdisplay: inline-flex;\n\t\talign-items: center;\n\t\tgap: 0.5rem;\n\t\tpadding: 0.625rem 1rem;\n\t\tbackground: var(--hover-bg, #f8fafc);\n\t\tborder: 1px solid var(--border-color, #e2e8f0);\n\t\tborder-radius: var(--radius, 6px);\n\t\tcolor: var(--text-color, #64748b);\n\t\tfont-size: 0.875rem;\n\t\ttext-decoration: none;\n\t\ttransition: all 0.2s;\n\t}\n\n\t.rss-button:hover {\n\t\tcolor: var(--accent-color, #f97316);\n\t\tborder-color: var(--accent-color, #f97316);\n\t}\n\n\t:global(.spin) {\n\t\tanimation: spin 1s linear infinite;\n\t}\n\n\t@keyframes spin {\n\t\tfrom { transform: rotate(0deg); }\n\t\tto { transform: rotate(360deg); }\n\t}\n</style>",
-	"design": [
-		{
-			"id": "bg-color",
-			"name": "Background",
-			"css_var": "--bg-color",
-			"value": "#ffffff",
-			"type": "color",
-			"description": "Page background color"
-		},
-		{
-			"id": "hover-bg",
-			"name": "Hover Background",
-			"css_var": "--hover-bg",
-			"value": "#f8fafc",
-			"type": "color",
-			"description": "Background on hover states"
-		},
-		{
-			"id": "accent-color",
-			"name": "Accent Color",
-			"css_var": "--accent-color",
-			"value": "#f97316",
-			"type": "color",
-			"description": "Primary accent color"
-		},
-		{
-			"id": "heading-color",
-			"name": "Heading Color",
-			"css_var": "--heading-color",
-			"value": "#0f172a",
-			"type": "color",
-			"description": "Color for headings"
-		},
-		{
-			"id": "text-color",
-			"name": "Text Color",
-			"css_var": "--text-color",
-			"value": "#64748b",
-			"type": "color",
-			"description": "Color for body text"
-		},
-		{
-			"id": "border-color",
-			"name": "Border Color",
-			"css_var": "--border-color",
-			"value": "#e2e8f0",
-			"type": "color",
-			"description": "Color for borders"
-		},
-		{
-			"id": "code-bg",
-			"name": "Code Background",
-			"css_var": "--code-bg",
-			"value": "#f1f5f9",
-			"type": "color",
-			"description": "Background for inline code"
-		},
-		{
-			"id": "font",
-			"name": "Font",
-			"css_var": "--font",
-			"value": "system-ui, sans-serif",
-			"type": "font",
-			"description": "Main font family"
-		},
-		{
-			"id": "radius",
-			"name": "Border Radius",
-			"css_var": "--radius",
-			"value": "6px",
-			"type": "radius",
-			"description": "Roundness of corners"
-		}
-	],
-	"content": [
-		{
-			"id": "title",
-			"name": "Title",
-			"type": "text",
-			"value": "Changelog",
-			"description": "Page title"
-		},
-		{
-			"id": "description",
-			"name": "Description",
-			"type": "text",
-			"value": "New updates and improvements to our product.",
-			"description": "Page description"
-		},
-		{
-			"id": "empty_text",
-			"name": "Empty State",
-			"type": "text",
-			"value": "No changelog entries yet.",
-			"description": "Text when no entries exist"
-		},
-		{
-			"id": "rss_button",
-			"name": "RSS Button",
-			"type": "text",
-			"value": "Subscribe via RSS",
-			"description": "RSS subscribe button text"
-		}
-	],
-	"data": {
-		"changelog": {
-			"schema": [
-				{
-					"name": "title",
-					"type": "text"
-				},
-				{
-					"name": "description",
-					"type": "text"
-				},
-				{
-					"name": "tag",
-					"type": "text"
-				},
-				{
-					"name": "date",
-					"type": "text"
-				}
-			],
-			"records": [
-				{
-					"id": "c1",
-					"title": "Dark mode is here",
-					"description": "You can now switch between light and dark themes. The setting is saved to your browser and respects your system preference by default.\n\nTo switch, click the **moon icon** in the top right corner.",
-					"tag": "new",
-					"date": "2024-12-15"
-				},
-				{
-					"id": "c2",
-					"title": "Faster page loads",
-					"description": "We've optimized our caching and reduced bundle sizes. Pages now load **40% faster** on average.",
-					"tag": "improved",
-					"date": "2024-12-10"
-				},
-				{
-					"id": "c3",
-					"title": "Fixed login issues on Safari",
-					"description": "Some users on Safari were experiencing issues with the login flow. This has been resolved.",
-					"tag": "fixed",
-					"date": "2024-12-05"
-				}
-			],
-			"icon": "lucide:folder"
-		}
-	}
+  "id": "changelog",
+  "name": "Changelog",
+  "description": "Publish dated product updates.",
+  "preview": "lucide:history",
+  "tags": [
+    "launch",
+    "updates",
+    "beginner"
+  ],
+  "kits": [
+    "launch",
+    "developer"
+  ],
+  "frontend_code": "<script>\n\timport Icon from '@iconify/svelte'\n\timport { onDestroy } from 'svelte'\n\timport content from '$content'\n\timport data from '$data'\n\n\tlet entries = $state([])\n\tlet loading = $state(true)\n\tlet load_error = $state('')\n\tlet action_error = $state('')\n\tlet retrying = $state(false)\n\tlet filter_tag = $state('all')\n\tlet disposed = false\n\tlet load_revision = 0\n\tconst feed_urls = new Set()\n\tconst feed_timers = new Set()\n\n\tconst tag_config = {\n\t\tnew: { label: 'New', icon: 'lucide:plus', color: '#166534' },\n\t\timproved: { label: 'Improved', icon: 'lucide:arrow-up-right', color: '#1d4ed8' },\n\t\tfixed: { label: 'Fixed', icon: 'lucide:check', color: '#92400e' }\n\t}\n\n\tfunction parse_date(value) {\n\t\tif (typeof value !== 'string' || !value.trim()) return null\n\t\tconst text = value.trim()\n\t\tconst parts = text.match(/^(\\d{4})-(\\d{2})-(\\d{2})(?:$|[T\\s])/)\n\t\tif (parts) {\n\t\t\tconst day = new Date(`${parts[1]}-${parts[2]}-${parts[3]}T00:00:00.000Z`)\n\t\t\tif (!Number.isFinite(day.getTime()) || day.getUTCFullYear() !== Number(parts[1]) || day.getUTCMonth() + 1 !== Number(parts[2]) || day.getUTCDate() !== Number(parts[3])) return null\n\t\t}\n\t\tconst parsed = new Date(text)\n\t\treturn Number.isFinite(parsed.getTime()) ? parsed : null\n\t}\n\n\tfunction receive_entries(items) {\n\t\tif (disposed) return\n\t\tload_revision += 1\n\t\tconst rows = [...new Map((Array.isArray(items) ? items : []).filter(item => item && typeof item.id === 'string' && item.id).map(item => [item.id, { ...item }])).values()]\n\t\tentries = rows.sort((a, b) => (parse_date(b.date)?.getTime() ?? -Infinity) - (parse_date(a.date)?.getTime() ?? -Infinity) || 0)\n\t\tloading = false\n\t\tload_error = ''\n\t}\n\n\tfunction load_failed() { if (!disposed) { load_revision += 1; loading = false; load_error = 'Could not load updates.' } }\n\tconst unsubscribe = data.changelog.subscribe(receive_entries, { all: true }, load_failed)\n\n\tasync function retry_load() {\n\t\tif (retrying || disposed) return\n\t\tretrying = true\n\t\tconst revision = load_revision\n\t\ttry { const rows = await data.changelog.list({ all: true }); if (!disposed && revision === load_revision) receive_entries(rows) }\n\t\tcatch { if (!disposed && revision === load_revision) load_failed() }\n\t\tfinally { if (!disposed) retrying = false }\n\t}\n\n\tfunction entry_title(entry) { return String(entry.title ?? '').trim() || 'Untitled update' }\n\n\tfunction normalize_tag(tag) { return typeof tag === 'string' ? tag.trim().toLowerCase() : '' }\n\tfunction get_tag_info(tag) {\n\t\tconst key = normalize_tag(tag)\n\t\treturn Object.hasOwn(tag_config, key) ? tag_config[key] : { label: key ? key[0].toUpperCase() + key.slice(1) : 'Update', icon: 'lucide:minus', color: '#525252' }\n\t}\n\n\tlet filtered_entries = $derived.by(() => filter_tag === 'all' ? entries : entries.filter(entry => normalize_tag(entry.tag) === filter_tag))\n\tlet filter_tags = $derived.by(() => [...new Set([...Object.keys(tag_config), ...entries.map(entry => normalize_tag(entry.tag)).filter(Boolean)])])\n\n\tfunction format_date(value) {\n\t\tconst date = parse_date(value)\n\t\tif (!date) return 'Date not set'\n\t\treturn date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', ...(/^\\d{4}-\\d{2}-\\d{2}$/.test(value.trim()) ? { timeZone: 'UTC' } : {}) })\n\t}\n\n\tfunction date_attribute(value) {\n\t\tconst date = parse_date(value)\n\t\treturn date ? (/^\\d{4}-\\d{2}-\\d{2}$/.test(value.trim()) ? value.trim() : date.toISOString()) : undefined\n\t}\n\n\tfunction escape_xml(value) {\n\t\treturn String(value ?? '').replace(/[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\ufffe\\uffff]/g, '').replace(/[&<>\"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&apos;' })[character])\n\t}\n\n\tfunction render_content(text) {\n\t\treturn escape_xml(text).split(/(`[^`\\n]+`)/g).map(part => {\n\t\t\tif (part.startsWith('`') && part.endsWith('`')) return `<code>${part.slice(1, -1)}</code>`\n\t\t\treturn part.replace(/\\*\\*([^*\\n]+)\\*\\*/g, '<strong>$1</strong>').replace(/\\*([^*\\n]+)\\*/g, '<em>$1</em>')\n\t\t}).join('').replace(/\\r?\\n/g, '<br>')\n\t}\n\n\tfunction feed_identity() {\n\t\ttry {\n\t\t\tconst url = new URL(window.location.href)\n\t\t\tif (['http:', 'https:'].includes(url.protocol)) { url.hash = 'changelog'; return url.href }\n\t\t} catch {}\n\t\treturn `urn:tinykit:changelog:${encodeURIComponent(content.title || 'Changelog')}`\n\t}\n\n\tfunction build_feed() {\n\t\tconst latest = entries.reduce((latest, entry) => { const date = parse_date(entry.date); return date ? Math.max(latest, date.getTime()) : latest }, -Infinity)\n\t\tconst updated = Number.isFinite(latest) ? latest : 0\n\t\tconst identity = feed_identity()\n\t\treturn `<?xml version=\"1.0\" encoding=\"UTF-8\"?>\\n<feed xmlns=\"http://www.w3.org/2005/Atom\">\\n<title>${escape_xml(content.title || 'Changelog')}</title>\\n<subtitle>${escape_xml(content.description)}</subtitle>\\n<id>${escape_xml(identity)}</id>\\n<author><name>${escape_xml(content.title || 'Changelog')}</name></author>\\n<updated>${new Date(updated).toISOString()}</updated>\\n${entries.map(entry => `<entry><title>${escape_xml(entry_title(entry))}</title><id>${escape_xml(identity)}:${escape_xml(encodeURIComponent(entry.id))}</id><updated>${(parse_date(entry.date) || new Date(0)).toISOString()}</updated><content type=\"text\">${escape_xml(entry.description)}</content><category term=\"${escape_xml(normalize_tag(entry.tag) || 'update')}\" /></entry>`).join('\\n')}\\n</feed>`\n\t}\n\n\tfunction download_feed() {\n\t\tif (disposed || !entries.length) return\n\t\taction_error = ''\n\t\tlet url = ''\n\t\tlet link = null\n\t\ttry {\n\t\t\turl = URL.createObjectURL(new Blob([build_feed()], { type: 'application/atom+xml;charset=utf-8' }))\n\t\t\tfeed_urls.add(url)\n\t\t\tlink = document.createElement('a')\n\t\t\tlink.href = url\n\t\t\tlink.download = 'changelog.atom'\n\t\t\tdocument.body.appendChild(link)\n\t\t\tlink.click()\n\t\t\tconst timer = setTimeout(() => { URL.revokeObjectURL(url); feed_urls.delete(url); feed_timers.delete(timer) }, 1000)\n\t\t\tfeed_timers.add(timer)\n\t\t} catch {\n\t\t\tif (url) { URL.revokeObjectURL(url); feed_urls.delete(url) }\n\t\t\taction_error = 'Could not download the feed. Please try again.'\n\t\t} finally { link?.remove() }\n\t}\n\n\tonDestroy(() => {\n\t\tdisposed = true\n\t\tunsubscribe?.()\n\t\tfor (const timer of feed_timers) clearTimeout(timer)\n\t\tfor (const url of feed_urls) URL.revokeObjectURL(url)\n\t\tfeed_timers.clear()\n\t\tfeed_urls.clear()\n\t})\n</script>\n\n<main class=\"page\">\n\t<header class=\"header\">\n\t\t<div>\n\t\t\t<h1>{content.title}</h1>\n\t\t\t{#if content.description}<p>{content.description}</p>{/if}\n\t\t</div>\n\t\t<Icon icon=\"lucide:history\" width={21} />\n\t</header>\n\n\t<div class=\"filters\" aria-label=\"Filter updates\">\n\t\t<button class:active={filter_tag === 'all'} aria-pressed={filter_tag === 'all'} onclick={() => filter_tag = 'all'}>All updates <span>{entries.length}</span></button>\n\t\t{#each filter_tags as tag (tag)}\n\t\t\t{@const info = get_tag_info(tag)}\n\t\t\t<button class:active={filter_tag === tag} aria-pressed={filter_tag === tag} onclick={() => filter_tag = tag}>{info.label}</button>\n\t\t{/each}\n\t</div>\n\n\t{#if load_error}\n\t\t<div class=\"notice\" role=\"alert\"><span>{load_error}</span><button onclick={retry_load} disabled={retrying}>{retrying ? 'Retrying…' : 'Retry'}</button></div>\n\t{/if}\n\t{#if action_error}<p class=\"notice\" role=\"alert\">{action_error}</p>{/if}\n\n\t{#if loading}\n\t\t<p class=\"empty\" role=\"status\">Loading updates…</p>\n\t{:else if filtered_entries.length === 0}\n\t\t<div class=\"empty\">\n\t\t\t<p>{filter_tag === 'all' ? content.empty_text : `No ${get_tag_info(filter_tag).label.toLowerCase()} updates yet.`}</p>\n\t\t\t{#if filter_tag !== 'all'}<button class=\"text-button\" onclick={() => filter_tag = 'all'}>Show all updates</button>{/if}\n\t\t</div>\n\t{:else}\n\t\t<div class=\"timeline\">\n\t\t\t{#each filtered_entries as entry (entry.id)}\n\t\t\t\t{@const tag = get_tag_info(entry.tag)}\n\t\t\t\t<article class=\"entry\">\n\t\t\t\t\t<div class=\"entry-meta\"><time datetime={date_attribute(entry.date)}>{format_date(entry.date)}</time><span class=\"tag\" style=\"--tag-color: {tag.color}\"><Icon icon={tag.icon} width={12} />{tag.label}</span></div>\n\t\t\t\t\t<h2>{entry_title(entry)}</h2>\n\t\t\t\t\t{#if entry.description}<div class=\"entry-content\">{@html render_content(entry.description)}</div>{/if}\n\t\t\t\t</article>\n\t\t\t{/each}\n\t\t</div>\n\t{/if}\n\n\t<footer class=\"footer\">\n\t\t<button class=\"feed-button\" onclick={download_feed} disabled={loading || !entries.length}><Icon icon=\"lucide:download\" width={15} />{content.rss_button}</button>\n\t\t<span>Atom feed · All updates</span>\n\t</footer>\n</main>\n\n<style>\n\t:global(*) { box-sizing: border-box; }\n\t:global(body) { margin: 0; background: var(--bg-color, #fafafa); font-family: var(--font, system-ui, sans-serif); color: var(--heading-color, #202020); }\n\tbutton { font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }\n\tbutton:disabled { cursor: default; opacity: .5; }\n\tbutton:focus-visible { outline: 2px solid var(--accent-color, #c2410c); outline-offset: 3px; }\n\t.page { width: min(100%, 736px); min-height: 100dvh; margin: 0 auto; padding: 2.5rem 1.5rem; }\n\t.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; }\n\t.header > :global(svg) { flex-shrink: 0; margin-top: .4rem; color: var(--text-color, #737373); }\n\th1 { font-size: 1.75rem; font-weight: 600; letter-spacing: -.025em; margin: 0; overflow-wrap: anywhere; }\n\t.header p { margin: .4rem 0 0; font-size: .9rem; line-height: 1.5; color: var(--text-color, #737373); overflow-wrap: anywhere; }\n\t.filters { display: flex; gap: .35rem; flex-wrap: wrap; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color, #e5e5e5); }\n\t.filters button { display: flex; align-items: center; gap: .4rem; min-height: 40px; padding: .35rem .65rem; border: 1px solid transparent; border-radius: var(--radius, 6px); background: transparent; color: var(--text-color, #737373); font-size: .8rem; overflow-wrap: anywhere; max-width: 100%; }\n\t.filters button:hover { background: var(--hover-bg, #f5f5f5); color: var(--heading-color, #202020); }\n\t.filters button.active { border-color: var(--border-color, #e5e5e5); background: var(--hover-bg, #f5f5f5); color: var(--heading-color, #202020); }\n\t.filters button span { font-size: .7rem; color: var(--text-color, #737373); font-variant-numeric: tabular-nums; }\n\t.empty { padding: 2.5rem 1rem; color: var(--text-color, #737373); text-align: center; font-size: .875rem; }\n\t.empty p { margin: 0 0 .5rem; }\n\t.notice { display: flex; justify-content: space-between; align-items: center; gap: 1rem; font-size: .875rem; color: var(--heading-color, #202020); border: 1px solid var(--border-color, #e5e5e5); border-radius: var(--radius, 6px); padding: .75rem; margin: 1rem 0; }\n\t.notice button, .text-button { flex-shrink: 0; background: transparent; border: 0; color: var(--accent-color, #c2410c); padding: .25rem; text-decoration: underline; text-underline-offset: 3px; font-size: .875rem; }\n\t.entry { padding: 1.5rem 0; border-bottom: 1px solid var(--border-color, #e5e5e5); }\n\t.entry:last-child { border: 0; }\n\t.entry-meta { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; margin-bottom: .6rem; }\n\t.entry-meta time { color: var(--text-color, #737373); font-size: .775rem; }\n\t.tag { display: inline-flex; align-items: center; gap: .25rem; padding: .15rem .4rem; font-size: .7rem; font-weight: 500; border-radius: 4px; background: color-mix(in srgb, var(--tag-color) 8%, transparent); color: var(--tag-color); max-width: 100%; overflow-wrap: anywhere; }\n\t.tag :global(svg) { flex-shrink: 0; }\n\t.entry h2 { font-size: 1.05rem; font-weight: 600; line-height: 1.4; margin: 0 0 .55rem; overflow-wrap: anywhere; }\n\t.entry-content { color: var(--text-color, #737373); font-size: .875rem; line-height: 1.75; overflow-wrap: anywhere; }\n\t.entry-content :global(strong) { color: var(--heading-color, #202020); font-weight: 600; }\n\t.entry-content :global(code) { padding: .1rem .25rem; border-radius: 3px; background: var(--code-bg, #f5f5f5); color: var(--heading-color, #202020); font: .9em ui-monospace, monospace; white-space: break-spaces; }\n\t.footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; border-top: 1px solid var(--border-color, #e5e5e5); margin-top: 1rem; padding-top: 1.25rem; }\n\t.footer > span { font-size: .75rem; color: var(--text-color, #737373); }\n\t.feed-button { display: inline-flex; align-items: center; gap: .4rem; border: 1px solid var(--border-color, #e5e5e5); border-radius: var(--radius, 6px); background: transparent; color: var(--heading-color, #202020); padding: .55rem .75rem; font-size: .8rem; }\n\t.feed-button:hover:not(:disabled) { background: var(--hover-bg, #f5f5f5); }\n\t@media (max-width: 480px) { .page { padding: 1.5rem 1rem; } .header { margin-bottom: 1rem; } .filters button { min-height: 40px; } .entry { padding: 1.25rem 0; } }\n\t@media (prefers-reduced-motion: reduce) { :global(*), :global(*::before), :global(*::after) { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }\n</style>\n",
+  "design": [
+    {
+      "id": "bg-color",
+      "name": "Background",
+      "css_var": "--bg-color",
+      "value": "#fafafa",
+      "type": "color",
+      "description": "Page background color"
+    },
+    {
+      "id": "hover-bg",
+      "name": "Hover Background",
+      "css_var": "--hover-bg",
+      "value": "#f5f5f5",
+      "type": "color",
+      "description": "Background on hover states"
+    },
+    {
+      "id": "accent-color",
+      "name": "Accent Color",
+      "css_var": "--accent-color",
+      "value": "#c2410c",
+      "type": "color",
+      "description": "Primary accent color"
+    },
+    {
+      "id": "heading-color",
+      "name": "Heading Color",
+      "css_var": "--heading-color",
+      "value": "#202020",
+      "type": "color",
+      "description": "Color for headings"
+    },
+    {
+      "id": "text-color",
+      "name": "Text Color",
+      "css_var": "--text-color",
+      "value": "#737373",
+      "type": "color",
+      "description": "Color for body text"
+    },
+    {
+      "id": "border-color",
+      "name": "Border Color",
+      "css_var": "--border-color",
+      "value": "#e5e5e5",
+      "type": "color",
+      "description": "Color for borders"
+    },
+    {
+      "id": "code-bg",
+      "name": "Code Background",
+      "css_var": "--code-bg",
+      "value": "#f5f5f5",
+      "type": "color",
+      "description": "Background for inline code"
+    },
+    {
+      "id": "font",
+      "name": "Font",
+      "css_var": "--font",
+      "value": "system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+      "type": "font",
+      "description": "Main font family"
+    },
+    {
+      "id": "radius",
+      "name": "Border Radius",
+      "css_var": "--radius",
+      "value": "6px",
+      "type": "radius",
+      "description": "Roundness of corners"
+    }
+  ],
+  "content": [
+    {
+      "id": "title",
+      "name": "Title",
+      "type": "text",
+      "value": "Changelog",
+      "description": "Page title"
+    },
+    {
+      "id": "description",
+      "name": "Description",
+      "type": "text",
+      "value": "Product updates, improvements, and fixes.",
+      "description": "Page description"
+    },
+    {
+      "id": "empty_text",
+      "name": "Empty Text",
+      "type": "text",
+      "value": "No changelog entries yet.",
+      "description": "Text when no entries exist"
+    },
+    {
+      "id": "rss_button",
+      "name": "RSS Button",
+      "type": "text",
+      "value": "Download feed",
+      "description": "Download current updates as an Atom feed"
+    }
+  ],
+  "data": {
+    "changelog": {
+      "schema": [
+        {
+          "name": "title",
+          "type": "text"
+        },
+        {
+          "name": "description",
+          "type": "text"
+        },
+        {
+          "name": "tag",
+          "type": "text"
+        },
+        {
+          "name": "date",
+          "type": "text"
+        }
+      ],
+      "records": [
+        {
+          "id": "c1",
+          "title": "Dark mode is here",
+          "description": "You can now switch between light and dark themes. The setting is saved to your browser and respects your system preference by default.\n\nTo switch, click the **moon icon** in the top right corner.",
+          "tag": "new",
+          "date": "2026-10-15"
+        },
+        {
+          "id": "c2",
+          "title": "Faster page loads",
+          "description": "Reduced the amount of data needed to load each page. Navigation and repeat visits now feel quicker.",
+          "tag": "improved",
+          "date": "2026-10-10"
+        },
+        {
+          "id": "c3",
+          "title": "Fixed login issues on Safari",
+          "description": "Some users on Safari were experiencing issues with the login flow. This has been resolved.",
+          "tag": "fixed",
+          "date": "2026-10-05"
+        }
+      ],
+      "icon": "lucide:folder"
+    }
+  }
 }

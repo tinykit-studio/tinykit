@@ -8,7 +8,7 @@
   import { project_service } from "$lib/services/project.svelte";
   import { kit_service } from "$lib/services/kit.svelte";
   import { auth, pb } from "$lib/pocketbase.svelte";
-  import { get_featured_kits_with_templates, type KitWithTemplates, type Template } from "$lib/templates";
+  import { get_template_preview_data, get_featured_kits_with_templates, type KitWithTemplates, type Template } from "$lib/templates";
   import { processCode, dynamic_iframe_srcdoc, generate_design_css } from "$lib/compiler/init";
 
   const kits = get_featured_kits_with_templates();
@@ -48,6 +48,7 @@
       content: template.content || [],
       design: template.design || [],
       project_id: "preview",
+      local_data: true,
       data_collections: template.data ? Object.keys(template.data) : []
     });
 
@@ -84,9 +85,7 @@
     if (!preview_iframe?.contentWindow || !preview_compiled) return;
 
     // Clone data to ensure it's postMessage-safe (avoids DataCloneError from Svelte 5 proxies)
-    const template_data = previewing_template?.data
-      ? JSON.parse(JSON.stringify(previewing_template.data))
-      : {};
+    const template_data = previewing_template ? get_template_preview_data(previewing_template) : {};
 
     preview_iframe.contentWindow.postMessage({
       event: "SET_APP",
@@ -634,7 +633,7 @@
               bind:this={preview_iframe}
               title="Template Preview"
               srcdoc={preview_srcdoc}
-              sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"
+              sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin allow-downloads"
               class="w-full h-full border-none"
             ></iframe>
           {/if}

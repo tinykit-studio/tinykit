@@ -7,11 +7,11 @@
 	import { type VariantProps, tv } from "tailwind-variants";
 
 	export const buttonVariants = tv({
-		base: "cursor-pointer inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius)] text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--builder-accent)] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+		base: "cursor-pointer inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius)] text-sm font-medium transition-[background-color,color,box-shadow,opacity] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--builder-bg-primary)] focus-visible:ring-[var(--builder-accent)] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
 		variants: {
 			variant: {
 				default:
-					"bg-[var(--builder-accent)] text-white hover:opacity-90 shadow-sm",
+					"bg-[var(--builder-accent)] text-[var(--builder-accent-text)] hover:bg-[var(--builder-accent-hover)] shadow-sm",
 				destructive: "bg-red-600 text-white hover:bg-red-700 shadow-sm",
 				outline:
 					"border border-[var(--builder-border)] bg-transparent text-[var(--builder-text-primary)] hover:bg-[var(--builder-bg-secondary)] shadow-sm",

@@ -92,12 +92,7 @@
 	}
 
 	function go_to_new_app() {
-		// First kit, or new-kit if none exist
-		if (kits.length > 0) {
-			goto(`/tinykit/new?kit=${kits[0].id}&domain=${encodeURIComponent(domain)}`)
-		} else {
-			goto(`/tinykit/new-kit?domain=${encodeURIComponent(domain)}`)
-		}
+		goto(`/tinykit/new?domain=${encodeURIComponent(domain)}`)
 	}
 </script>
 
@@ -217,9 +212,11 @@
 										<div class="font-medium text-[var(--builder-text-primary)] truncate">
 											{project.name || "Untitled"}
 										</div>
-										<div class="text-xs text-[var(--builder-text-muted)] truncate">
-											Updated {new Date(project.updated).toLocaleDateString()}
-										</div>
+										{#if project.updated && Number.isFinite(Date.parse(project.updated))}
+											<div class="text-xs text-[var(--builder-text-muted)] truncate">
+												Updated {new Date(project.updated).toLocaleDateString()}
+											</div>
+										{/if}
 									</div>
 									{#if selected_project_id === project.id}
 										<div class="p-1 rounded-full bg-[var(--builder-accent)]">

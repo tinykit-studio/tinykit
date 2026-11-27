@@ -4,15 +4,13 @@
  * Run automatically on npm install via postinstall
  */
 
-import { createWriteStream, existsSync, mkdirSync, chmodSync } from 'fs'
-import { pipeline } from 'stream/promises'
-import { createGunzip } from 'zlib'
-import { Extract } from 'unzipper'
+import { existsSync, mkdirSync, chmodSync } from 'fs'
+import { Open } from 'unzipper'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const PB_VERSION = '0.23.4'
+const PB_VERSION = '0.23.8'
 const PB_DIR = join(__dirname, '..', 'pocketbase')
 const PB_BINARY = join(PB_DIR, process.platform === 'win32' ? 'pocketbase.exe' : 'pocketbase')
 
@@ -57,11 +55,9 @@ async function download() {
 		throw new Error(`Failed to download: ${response.status} ${response.statusText}`)
 	}
 
-	// Extract zip
-	await pipeline(
-		response.body,
-		Extract({ path: PB_DIR })
-	)
+	// Await the archive's extraction promise before setting permissions or exiting.
+	const archive = await Open.buffer(Buffer.from(await response.arrayBuffer()))
+	await archive.extract({ path: PB_DIR })
 
 	// Make executable on Unix
 	if (process.platform !== 'win32') {

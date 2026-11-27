@@ -5,6 +5,7 @@
   import { Download, Upload, Code, Palette, FileText, Database } from "lucide-svelte";
   import { getProjectStore } from "../../project.svelte";
   import { onMount } from "svelte";
+  import { normalizeProjectImport } from "$lib/project-import";
 
   const { project_id } = getProjectContext();
   const store = getProjectStore();
@@ -101,13 +102,9 @@
 
     try {
       const text = await file.text();
-      const data = JSON.parse(text);
-
-      // Validate snapshot structure
-      if (!data.frontend_code && !data.design && !data.content) {
-        alert("Invalid snapshot file: missing required data");
-        return;
-      }
+      const raw = JSON.parse(text);
+      const data = normalizeProjectImport(raw, file.name);
+      if (store.project?.source_bundle || raw.source_bundle || raw.asset_files?.length || raw.source_asset_files?.length || raw.assets?.length) throw new Error('Use New app → Import app to restore exports with uploaded files or multiple source files.');
 
       if (
         !confirm(
@@ -119,19 +116,20 @@
 
       is_restoring = true;
 
-      // Restore directly using the snapshot data
+      await api.create_snapshot(project_id, 'Before importing from file');
       await api.restore_from_snapshot_data(project_id, {
-        frontend_code: data.frontend_code || "",
-        design: data.design || [],
-        content: data.content || [],
-        collections: data.collections || [],
+        frontend_code: data.frontend_code,
+        design: data.design,
+        content: data.content,
+        data: Object.hasOwn(raw, 'data') || Object.hasOwn(raw, 'collections') ? data.data : undefined,
+        source_bundle: null,
       });
 
       await on_snapshot_restored?.();
     } catch (err) {
       console.error("Failed to restore from file:", err);
       alert(
-        "Failed to restore from file. Make sure it's a valid snapshot JSON.",
+        err instanceof Error ? err.message : "Could not restore this file.",
       );
     } finally {
       is_restoring = false;
@@ -265,14 +263,14 @@
     </div>
     <div class="flex gap-2">
       <button
-        class="text-xs px-2 py-1.5 bg-[var(--builder-bg-tertiary)] hover:bg-[var(--builder-accent)] text-[var(--builder-text-secondary)] hover:text-white rounded transition-colors flex items-center gap-1"
+        class="text-xs px-2 py-1.5 bg-[var(--builder-bg-tertiary)] hover:bg-[var(--builder-accent)] text-[var(--builder-text-secondary)] hover:text-[var(--builder-accent-text)] rounded transition-colors flex items-center gap-1"
         onclick={trigger_file_upload}
         title="Restore from file"
       >
         <Upload class="w-3 h-3" />
       </button>
       <button
-        class="text-xs px-3 py-1.5 bg-[var(--builder-bg-tertiary)] hover:bg-[var(--builder-accent)] text-[var(--builder-text-secondary)] hover:text-white rounded transition-colors"
+        class="text-xs px-3 py-1.5 bg-[var(--builder-bg-tertiary)] hover:bg-[var(--builder-accent)] text-[var(--builder-text-secondary)] hover:text-[var(--builder-accent-text)] rounded transition-colors"
         onclick={create_snapshot_manual}
       >
         Save
@@ -351,14 +349,14 @@
               class="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 transition-opacity bg-[var(--builder-bg-secondary)] rounded px-1 py-1 snapshot-actions"
             >
               <button
-                class="text-xs px-2 py-1 bg-[var(--builder-bg-tertiary)] hover:bg-[var(--builder-accent)] text-[var(--builder-text-secondary)] hover:text-white rounded transition-colors flex items-center"
+                class="text-xs px-2 py-1 bg-[var(--builder-bg-tertiary)] hover:bg-[var(--builder-accent)] text-[var(--builder-text-secondary)] hover:text-[var(--builder-accent-text)] rounded transition-colors flex items-center"
                 onclick={() => download_snapshot(snapshot)}
                 title="Download snapshot"
               >
                 <Download class="w-3 h-3" />
               </button>
               <button
-                class="text-xs px-2 py-1 bg-[var(--builder-bg-tertiary)] hover:bg-[var(--builder-accent)] text-[var(--builder-text-secondary)] hover:text-white rounded transition-colors"
+                class="text-xs px-2 py-1 bg-[var(--builder-bg-tertiary)] hover:bg-[var(--builder-accent)] text-[var(--builder-text-secondary)] hover:text-[var(--builder-accent-text)] rounded transition-colors"
                 onclick={() => restore_snapshot(snapshot.id)}
                 disabled={is_restoring}
               >

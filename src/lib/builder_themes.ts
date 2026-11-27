@@ -23,13 +23,13 @@ export const builder_themes: BuilderTheme[] = [
 		id: 'tinykit',
 		name: 'tinykit',
 		colors: {
-			bg_primary: '#0d0d0d',
-			bg_secondary: '#1e1e1e',
-			bg_tertiary: '#2a2a2a',
+			bg_primary: '#101010',
+			bg_secondary: '#181818',
+			bg_tertiary: '#242424',
 			accent: '#22c55e',
-			text_primary: '#ffffff',
-			text_secondary: '#999999',
-			border: '#2a2a2a'
+			text_primary: '#ededed',
+			text_secondary: '#a1a1a1',
+			border: '#2b2b2b'
 		}
 	},
 	{
@@ -293,6 +293,16 @@ export function apply_builder_theme(theme: BuilderTheme) {
 	root.style.setProperty('--builder-text-primary', theme.colors.text_primary)
 	root.style.setProperty('--builder-text-secondary', theme.colors.text_secondary)
 	root.style.setProperty('--builder-border', theme.colors.border)
+	// Keep derived controls and text legible in every builder theme.
+	const rgb = theme.colors.accent.match(/[a-f\d]{2}/gi)?.map((channel) => {
+		const value = parseInt(channel, 16) / 255
+		return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+	})
+	const luminance = rgb ? 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2] : 0
+	root.style.setProperty('--builder-accent-text', luminance > 0.179 ? '#101a14' : '#ffffff')
+	root.style.setProperty('--builder-accent-hover', 'color-mix(in srgb, var(--builder-accent) 88%, var(--builder-text-primary))')
+	root.style.setProperty('--builder-bg-hover', theme.colors.bg_tertiary)
+	root.style.setProperty('--builder-text-muted', theme.colors.text_secondary)
 
 	// Update store for reactive components
 	current_builder_theme.set(theme)
